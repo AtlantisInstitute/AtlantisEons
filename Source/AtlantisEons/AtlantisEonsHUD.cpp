@@ -350,7 +350,7 @@ void AAtlantisEonsHUD::CompleteGameResume()
     if (MainMenuWidget)
     {
         UE_LOG(LogTemp, Warning, TEXT("HUD - COMPLETE RESUME: removing main menu"));
-        MainMenuWidget->RemoveFromViewport();
+        MainMenuWidget->RemoveFromParent();
         MainMenuWidget = nullptr; // Clear it completely
     }
     
