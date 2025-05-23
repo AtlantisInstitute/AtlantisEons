@@ -9,5 +9,17 @@
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}
+	],
+	"Plugins": [
+		{
+			"Name": "NodeToCode",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/865c44cc-4ff6-4fc1-9c19-6fbc6ac430eb"
+		},
+		{
+			"Name": "JSONParser",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/8eda577c5b594d6b990f91b8dec8a014"
+		}
 	]
 }
