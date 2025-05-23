@@ -80,6 +80,7 @@ EBTNodeResult::Type UBTTask_AttackPlayer::ExecuteTask(UBehaviorTreeComponent& Ow
     }
 
     // Double check the actual distance
+    UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Calculating distance to player"));
     float DistanceToPlayer = FVector::Distance(Zombie->GetActorLocation(), Player->GetActorLocation());
     bool bIsInAttackRange = DistanceToPlayer <= Zombie->GetAttackRange();
     bool bBlackboardInRange = Blackboard->GetValueAsBool(AZombieAIController::IsInAttackRangeKey);
@@ -87,11 +88,12 @@ EBTNodeResult::Type UBTTask_AttackPlayer::ExecuteTask(UBehaviorTreeComponent& Ow
     UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Distance=%.1f, InRange=%s, BlackboardInRange=%s"), 
            DistanceToPlayer, bIsInAttackRange ? TEXT("true") : TEXT("false"),
            bBlackboardInRange ? TEXT("true") : TEXT("false"));
+    UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Attack range set to %.1f"), Zombie->GetAttackRange());
     
     // Only attack if we're in range according to both our check and the blackboard
     if (!bIsInAttackRange || !bBlackboardInRange)
     {
-        UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Not in attack range"));
+        UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Not in attack range, distance: %.1f, attack range: %.1f"), DistanceToPlayer, Zombie->GetAttackRange());
         return EBTNodeResult::Failed;
     }
 
@@ -149,7 +151,7 @@ void UBTTask_AttackPlayer::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* No
 
     // Check if we're still in range during cooldown
     float DistanceToPlayer = FVector::Distance(Zombie->GetActorLocation(), Player->GetActorLocation());
-    bool bIsInAttackRange = DistanceToPlayer <= AttackRange;
+    bool bIsInAttackRange = DistanceToPlayer <= Zombie->GetAttackRange();
 
     // If we're out of range, abort the attack
     if (!bIsInAttackRange || !Blackboard->GetValueAsBool(AZombieAIController::IsInAttackRangeKey))
@@ -173,5 +175,10 @@ void UBTTask_AttackPlayer::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* No
         UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Attack cooldown finished at distance %.1f"), 
                DistanceToPlayer);
         FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
+    }
+    else
+    {
+        float DistanceToPlayer = FVector::Distance(Zombie->GetActorLocation(), Player->GetActorLocation());
+        UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Cooldown ticking, remaining time: %.2f seconds, current distance: %.1f"), MyMemory->RemainingCooldown, DistanceToPlayer);
     }
 }

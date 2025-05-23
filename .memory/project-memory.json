@@ -1,0 +1,163 @@
+{
+  "projectName": "AtlantisEons",
+  "created": "2025-05-23T09:50:24.246Z",
+  "lastUpdated": "2025-05-23T09:52:51.401Z",
+  "version": "1.0.0",
+  "sessions": [
+    {
+      "id": "23f110b6-68c3-4230-8c86-ede63ceb06a6",
+      "started": "2025-05-23T09:50:24.247Z",
+      "description": "Memory system setup and testing",
+      "actions": [],
+      "filesModified": [],
+      "insights": [],
+      "problems": [],
+      "solutions": []
+    },
+    {
+      "id": "19affcd9-78d5-4cb6-86e7-58f8f28f016d",
+      "started": "2025-05-23T09:52:51.363Z",
+      "description": "MCP Memory-Enhanced Analysis Session",
+      "actions": [],
+      "filesModified": [],
+      "insights": [
+        "6a3f5de8-f422-482c-af22-cfdd282a8900"
+      ],
+      "problems": [],
+      "solutions": []
+    }
+  ],
+  "insights": [
+    {
+      "id": "80c46ce1-25c2-40fa-acf1-7b88bf3d044a",
+      "timestamp": "2025-05-23T09:50:24.250Z",
+      "sessionId": "23f110b6-68c3-4230-8c86-ede63ceb06a6",
+      "type": "project-init",
+      "description": "Memory system initialized for AtlantisEons project",
+      "context": {
+        "sessionId": "23f110b6-68c3-4230-8c86-ede63ceb06a6",
+        "timestamp": "2025-05-23T09:50:24.250Z",
+        "projectType": "Unreal Engine 5.5 Game"
+      },
+      "relevance": 0.14285714285714285
+    },
+    {
+      "id": "c81ac964-91be-4902-b7d3-463e8005db6b",
+      "timestamp": "2025-05-23T09:51:36.000Z",
+      "type": "inventory-system",
+      "description": "Character inventory uses TArray with 30 slots and drag-drop functionality",
+      "context": {},
+      "relevance": 0.2857142857142857
+    },
+    {
+      "id": "6a3f5de8-f422-482c-af22-cfdd282a8900",
+      "timestamp": "2025-05-23T09:52:51.400Z",
+      "sessionId": "19affcd9-78d5-4cb6-86e7-58f8f28f016d",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
+    }
+  ],
+  "patterns": [
+    {
+      "id": "8ee153b1-0c24-48a5-9435-da6d8f67fb9f",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-05-23T09:52:51.401Z",
+      "lastSeen": "2025-05-23T09:52:51.401Z",
+      "confidence": 0.5
+    }
+  ],
+  "contextWindows": [
+    {
+      "id": "bca06dc2-e35d-44a0-958a-7a05ff4cd509",
+      "timestamp": "2025-05-23T09:51:27.752Z",
+      "data": {
+        "filePath": "/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/Source/AtlantisEons/AtlantisEonsCharacter.cpp",
+        "fileName": "AtlantisEonsCharacter.cpp",
+        "fileSize": 61277,
+        "lineCount": 1751,
+        "description": "Main character class with inventory and combat systems",
+        "timestamp": "2025-05-23T09:51:27.751Z",
+        "preview": "// Copyright Epic Games, Inc. All Rights Reserved.\n\n#include \"AtlantisEonsCharacter.h\"\n#include \"WBP_CharacterInfo.h\"\n#include \"Engine/LocalPlayer.h\"\n#include \"WBP_Main.h\"\n#include \"ZombieCharacter.h\"\n#include \"Camera/CameraComponent.h\"\n#include \"Kismet/KismetMathLibrary.h\"\n#include \"BP_SceneCapture.h\"\n#include \"Engine/DamageEvents.h\"\n#include \"Components/CapsuleComponent.h\"\n#include \"Components/InputComponent.h\"\n#include \"Components/Button.h\"\n#include \"Components/CanvasPanel.h\"\n#include \"Compon..."
+      },
+      "summary": "Context involving: filePath, fileName, fileSize",
+      "tags": []
+    }
+  ],
+  "keyClasses": {},
+  "importantFiles": {},
+  "developmentHistory": [
+    {
+      "id": "b6557c7a-0854-4331-8608-7706648ab865",
+      "timestamp": "2025-05-23T09:52:51.369Z",
+      "sessionId": "19affcd9-78d5-4cb6-86e7-58f8f28f016d",
+      "type": "server-start",
+      "description": "Memory-Enhanced MCP Server started",
+      "files": [
+        "memory-mcp-server.js"
+      ],
+      "impact": "low"
+    }
+  ],
+  "codePatterns": {},
+  "problemsSolved": [],
+  "bestPractices": [],
+  "technicalDebt": [],
+  "architecture": {
+    "mainCharacter": "AAtlantisEonsCharacter",
+    "gameMode": "AAtlantisEonsGameMode",
+    "gameInstance": "UAtlantisEonsGameInstance",
+    "hud": "AAtlantisEonsHUD",
+    "keySystemClasses": [
+      "AAtlantisEonsCharacter",
+      "AAtlantisEonsGameMode",
+      "AAtlantisEonsHUD",
+      "UAtlantisEonsGameInstance",
+      "AZombieCharacter",
+      "UDamageNumberSystem"
+    ]
+  },
+  "project_type": "Unreal Engine 5.5 Game",
+  "critical_tool_limitations": {
+    "run_terminal_cmd": {
+      "constraint": "NO newline characters allowed in command parameter",
+      "workaround": "Use edit_file for complex JSON data, then reference files",
+      "prevention": "Always check for \\n characters before using terminal commands"
+    }
+  },
+  "memory_system_integration": {
+    "local_path": "/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/.memory/",
+    "server_url": "http://localhost:9011",
+    "preferred_method": "Direct file creation using edit_file tool",
+    "file_naming": "descriptive-kebab-case.json format"
+  },
+  "development_environment": {
+    "platform": "macOS",
+    "engine_version": "Unreal Engine 5.5",
+    "build_command": "/Users/Shared/Epic Games/UE_5.5/Engine/Build/BatchFiles/Mac/Build.sh AtlantisEonsEditor Development Mac -Project=\"/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/AtlantisEons.uproject\" -WaitMutex -FromMsBuild",
+    "build_requirement": "Must use terminal for reliable compilation"
+  },
+  "architecture_patterns": {
+    "cpp_blueprint_integration": "Reference saved in cpp-blueprint-integration-context.json",
+    "inventory_system": "30-slot grid with thumbnail caching system",
+    "input_system": "Enhanced Input with Blueprint actions bound in C++",
+    "widget_system": "C++ data management with Blueprint presentation"
+  }
+}

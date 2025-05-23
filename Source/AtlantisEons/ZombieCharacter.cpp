@@ -7,6 +7,7 @@
 #include "AtlantisEonsCharacter.h"
 #include "DamageNumberSystem.h"
 #include "EngineUtils.h" // For TActorIterator
+#include "Engine/OverlapResult.h"  // Corrected include for FOverlapResult definition
 
 AZombieCharacter::AZombieCharacter()
 {
@@ -149,28 +150,30 @@ void AZombieCharacter::OnAttackHit()
     DrawDebugLine(GetWorld(), StartLocation, EndLocation, FColor::Red, false, 2.0f, 0, 3.0f);
     DrawDebugSphere(GetWorld(), StartLocation, SphereRadius, 12, FColor::Yellow, false, 2.0f);
     
-    // Look for the player in the world first as a direct approach
-    AAtlantisEonsCharacter* PlayerCharacter = nullptr;
-    for (TActorIterator<AAtlantisEonsCharacter> It(GetWorld()); It; ++It)
+    // Look for the player in the world
+    for (TActorIterator<AActor> It(GetWorld()); It; ++It)
     {
-        PlayerCharacter = *It;
+        AActor* Actor = *It;
+        if (!Actor) continue;
+        
+        // Try to cast to player character
+        AAtlantisEonsCharacter* PlayerCharacter = Cast<AAtlantisEonsCharacter>(Actor);
         if (PlayerCharacter)
         {
             // Check if player is within attack range
-            float DistanceToPlayer = FVector::Dist(GetActorLocation(), PlayerCharacter->GetActorLocation());
+            float DistanceToPlayer = FVector::Distance(GetActorLocation(), Actor->GetActorLocation());
             
-            UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Found player at distance %.1f"), DistanceToPlayer);
+            UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Found player"));
             
             if (DistanceToPlayer <= SphereRadius * 1.5f) // Give a bit extra range for reliable hits
             {
-                UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Player in DIRECT attack range. Dealing %f damage to %s"), 
-                       AttackDamage, *PlayerCharacter->GetName());
+                UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Player in DIRECT attack range"));
                 
-                // DIRECT APPROACH: Apply damage to the player directly
-                UGameplayStatics::ApplyDamage(PlayerCharacter, AttackDamage, GetController(), this, UDamageType::StaticClass());
+                // Apply damage to the player
+                UGameplayStatics::ApplyDamage(Actor, AttackDamage, GetController(), this, UDamageType::StaticClass());
                 
                 // Visual feedback
-                DrawDebugSphere(GetWorld(), PlayerCharacter->GetActorLocation(), 50.0f, 12, FColor::Red, false, 2.0f);
+                DrawDebugSphere(GetWorld(), Actor->GetActorLocation(), 50.0f, 12, FColor::Red, false, 2.0f);
                 
                 // Attempt to play hit react animation
                 PlayerCharacter->PlayHitReactMontage();
@@ -206,21 +209,28 @@ void AZombieCharacter::OnAttackHit()
                 PlayerCharacter = Cast<AAtlantisEonsCharacter>(HitActor);
                 if (PlayerCharacter)
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: OVERLAP hit. Dealing %f damage to %s"), 
-                           AttackDamage, *PlayerCharacter->GetName());
+                    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: OVERLAP hit"));
                     
                     // Apply damage to the player
-                    UGameplayStatics::ApplyDamage(PlayerCharacter, AttackDamage, GetController(), this, UDamageType::StaticClass());
+                    UGameplayStatics::ApplyDamage(static_cast<AActor*>(PlayerCharacter), AttackDamage, GetController(), this, UDamageType::StaticClass());
                     
                     // Visual feedback
-                    DrawDebugSphere(GetWorld(), HitActor->GetActorLocation(), 35.0f, 12, FColor::Green, false, 2.0f);
+                    DrawDebugSphere(GetWorld(), HitActor->GetActorLocation(), 50.0f, 12, FColor::Red, false, 2.0f);
                     
-                    // Attempt to play hit react animation on the player
+                    // Attempt to play hit react animation
                     PlayerCharacter->PlayHitReactMontage();
                     break; // Found and hit the player, no need to check other overlaps
                 }
             }
         }
+    }
+}
+
+void AZombieCharacter::AttackPlayer()
+{
+    if (!bIsDead && !bIsAttacking)
+    {
+        PerformAttack();
     }
 }
 
@@ -234,40 +244,28 @@ void AZombieCharacter::PlayHitReactMontage()
 
 void AZombieCharacter::ApplyDamage(float DamageAmount)
 {
-    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter::ApplyDamage: Amount=%f, Current Health=%f, Dead=%s"),
-        DamageAmount, CurrentHealth, bIsDead ? TEXT("Yes") : TEXT("No"));
+    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter::ApplyDamage"));
     
     // Exit early if already dead
-    if (bIsDead) 
+    if (bIsDead)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Already dead, ignoring damage"));
         return;
     }
-
-    // Play hit reaction if we took damage
+    
+    // Apply damage
     if (DamageAmount > 0.0f)
     {
-        PlayHitReactMontage();
-    }
-
-    if (CurrentHealth > 0.0f)
-    {
-        // Calculate new health
         float PreviousHealth = CurrentHealth;
         CurrentHealth = FMath::Max(CurrentHealth - DamageAmount, 0.0f);
         
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Damage applied: New Health = %f, Max Health = %f"), 
-            CurrentHealth, MaxHealth);
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Damage applied"));
         
         // NOTE: Damage numbers are now handled in TakeDamage_Implementation instead of here
-        // This prevents duplicate damage numbers from appearing
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter::ApplyDamage: Amount=%.6f, Current Health=%.6f, Dead=%s"),
-               DamageAmount, CurrentHealth, bIsDead ? TEXT("Yes") : TEXT("No"));
         
-        // Check if health is zero or less and zombie is not already dead
+        // Check if zombie has died
         if (CurrentHealth <= 0.0f)
         {
-            UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Health reached zero, calling HandleDeath"));
+            bIsDead = true;
             HandleDeath();
         }
     }
@@ -278,12 +276,6 @@ void AZombieCharacter::HandleDeath()
     UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: HandleDeath function entered. bIsDead: %d"), bIsDead ? 1 : 0);
     
     if (bIsDead) 
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Already dead, returning early"));
-        return;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Setting bIsDead to true and disabling movement"));
     bIsDead = true;
 
     // Disable movement
@@ -294,22 +286,25 @@ void AZombieCharacter::HandleDeath()
     if (DeathMontage)
     {
         PlayAnimMontage(DeathMontage);
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Playing death animation"));
-        
-        // Set a timer to destroy the actor after the death animation
+
+        // Set up timer to destroy the actor after animation
         float MontageLength = DeathMontage->GetPlayLength();
         FTimerHandle TimerHandle;
         GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
         {
-            UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Death animation finished, destroying actor"));
-            Destroy();
+            OnDeath();
         }, MontageLength, false);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: No death animation, destroying actor immediately"));
-        Destroy();
+        // If no death montage, call OnDeath immediately
+        OnDeath();
     }
+}
+
+void AZombieCharacter::OnDeath()
+{
+    HandleDeath();
 }
 
 // Keep track of damage event IDs we've already processed to prevent duplicate damage numbers
@@ -317,106 +312,32 @@ static TMap<uint32, float> ProcessedDamageEvents;
 
 float AZombieCharacter::TakeDamage_Implementation(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: TakeDamage called with damage amount: %f from %s"), 
-           DamageAmount, 
-           DamageCauser ? *DamageCauser->GetName() : TEXT("Unknown"));
-    
-    // Early out if damage is not applicable
-    if (DamageAmount <= 0.0f || bIsDead)
+    // Implement damage logic here, e.g., reduce health and check for death
+    if (bIsDead) return 0.0f;
+    CurrentHealth -= DamageAmount;
+    if (CurrentHealth <= 0.0f)
     {
-        return 0.0f;
+        CurrentHealth = 0.0f;
+        bIsDead = true;
+        OnDeath();
     }
-    
-    // Check if damage is coming from the player - we want to spawn damage numbers if it is
-    bool bDamageFromPlayer = false;
-    if (DamageCauser && DamageCauser->IsA(AAtlantisEonsCharacter::StaticClass()))
-    {
-        bDamageFromPlayer = true;
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter TakeDamage: Damage from player character"));
-    }
-    
-    // Handle damage numbers for player-caused damage only
-    if (bDamageFromPlayer)
-    {
-        // IMPORTANT: We use game frame to prevent duplicates within the same tick/frame
-        // This is more reliable than time-based deduplication
-        // Using instance variables (declared in header) instead of static ones
-        // This prevents false duplicate detection between different zombies
-        
-        uint64 CurrentFrame = GFrameCounter;
-        FVector CurrentDamageLocation = GetActorLocation();
-        
-        // Try to get precise hit location if available
-        if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
-        {
-            const FPointDamageEvent* PointDamageEvent = static_cast<const FPointDamageEvent*>(&DamageEvent);
-            if (PointDamageEvent)
-            {
-                CurrentDamageLocation = PointDamageEvent->HitInfo.ImpactPoint;
-            }
-        }
-        
-        // Check for duplicate hits within the same or very recent frames
-        bool bIsDuplicate = false;
-        if (CurrentFrame <= LastDamageFrame + 2 && // Allow for small frame differences
-            LastDamageCauser == DamageCauser && 
-            FMath::IsNearlyEqual(LastDamageAmount, DamageAmount, 0.1f) &&
-            FVector::DistSquared(LastDamageLocation, CurrentDamageLocation) < 10000.0f) // 100 units squared
-        {
-            bIsDuplicate = true;
-            UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter %s: Detected duplicate damage in frame %llu (last: %llu), SKIPPING damage number"),
-                   *GetName(), CurrentFrame, LastDamageFrame);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter %s: New damage event in frame %llu (last: %llu)"),
-                   *GetName(), CurrentFrame, LastDamageFrame);
-        }
-        
-        // Update tracking variables for next time
-        LastDamageFrame = CurrentFrame;
-        LastDamageCauser = DamageCauser;
-        LastDamageAmount = DamageAmount;
-        LastDamageLocation = CurrentDamageLocation;
-        
-        // Only spawn damage numbers for non-duplicate hits
-        if (!bIsDuplicate)
-        {
-            // Get damage number system instance
-            ADamageNumberSystem* DamageSystem = nullptr;
-            DamageSystem = ADamageNumberSystem::GetInstance(GetWorld());
-            
-            if (!DamageSystem)
-            {
-                TArray<AActor*> FoundActors;
-                UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADamageNumberSystem::StaticClass(), FoundActors);
-                
-                if (FoundActors.Num() > 0)
-                {
-                    DamageSystem = Cast<ADamageNumberSystem>(FoundActors[0]);
-                    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter TakeDamage: Found DamageNumberSystem: %s"), 
-                           *DamageSystem->GetName());
-                }
-            }
-            
-            if (DamageSystem)
-            {
-                // Draw debug sphere to visualize where the damage number will spawn
-                DrawDebugSphere(GetWorld(), CurrentDamageLocation, 10.0f, 8, FColor::Red, false, 2.0f, 0, 1.0f);
-                
-                // Spawn the damage number at the exact hit location
-                DamageSystem->SpawnDamageNumberAtLocation(this, CurrentDamageLocation, DamageAmount, false);
-                UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter TakeDamage: Spawned damage number at hit location for %.1f damage"), DamageAmount);
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("ZombieCharacter TakeDamage: Could not find DamageNumberSystem!"));
-            }
-        }
-    }
-    
-    // Apply the damage to health regardless of whether we spawned a number
-    ApplyDamage(DamageAmount);
-    
     return DamageAmount;
+}
+
+void AZombieCharacter::ShowDamageNumber(float DamageAmount, FVector Location, bool bIsCritical)
+{
+    if (ADamageNumberSystem* System = Cast<ADamageNumberSystem>(UGameplayStatics::GetActorOfClass(GetWorld(), ADamageNumberSystem::StaticClass())))
+    {
+        System->ShowDamage(DamageAmount, Location, bIsCritical);
+    }
+}
+
+void AZombieCharacter::Tick(float DeltaTime)
+{
+    Super::Tick(DeltaTime);
+}
+
+void AZombieCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+    Super::SetupPlayerInputComponent(PlayerInputComponent);
 }

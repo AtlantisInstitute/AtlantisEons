@@ -19,4 +19,4 @@ public:
     /** Function to handle resume button click */
     UFUNCTION(BlueprintCallable, Category = "Game")
     void HandleResumeClicked();
-};
+}; 

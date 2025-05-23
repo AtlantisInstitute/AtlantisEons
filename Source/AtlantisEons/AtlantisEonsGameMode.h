@@ -19,4 +19,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Game")
 	void RestartCurrentPlayer();
+	
+private:
+	// Timer for resetting movement in BeginPlay
+	FTimerHandle MovementResetTimer;
 };

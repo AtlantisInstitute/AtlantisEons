@@ -3,4 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine.h"
 
+// Removed include for WorldCollision.h to rely on module dependencies for FOverlapResult definition

@@ -8,6 +8,8 @@
 #include "EnhancedInputSubsystems.h"
 #include "AtlantisEonsHUD.generated.h"
 
+class UWBP_Main;
+
 UCLASS()
 class ATLANTISEONS_API AAtlantisEonsHUD : public AHUD
 {
@@ -21,8 +23,41 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI")
     TSubclassOf<class UUserWidget> MainMenuWidgetClass;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI")
+    TSubclassOf<class UUserWidget> CharacterInfoWidgetClass;
+    
+    /** The main UI widget class (WBP_Main) - set this in Blueprint */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI|Inventory")
+    TSubclassOf<class UWBP_Main> MainWidgetClass;
+    
+    /** The inventory widget class - set this in Blueprint */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI|Inventory", meta = (AllowPrivateAccess = "true"))
+    TSubclassOf<UUserWidget> InventoryWidgetClass;
+
+    UPROPERTY()
+    class UUserWidget* CharacterInfoWidget;
+
+    // Function to get the main widget (WBP_Main)
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    UWBP_Main* GetMainWidget() const;
+    
+    // Function to check if the inventory widget exists and is visible
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    bool IsInventoryWidgetVisible() const;
+    
+    // Function to show the inventory widget
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    bool ShowInventoryWidget();
+    
+    // Function to hide the inventory widget
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    void HideInventoryWidget();
+
     UFUNCTION(BlueprintCallable, Category = "UI")
     void ResumeGame();
+
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    void HideCharacterInfo();
     
     /**
      * Safe version of ResumeGame for use with UI buttons to prevent multiple firings.
@@ -60,17 +95,13 @@ public:
     UFUNCTION(BlueprintPure, Category = "UI")
     bool IsMainMenuVisible() const;
 
-    /** Show the inventory widget */
-    UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
-    bool ShowInventoryWidget();
-    
-    /** Hide the inventory widget */
-    UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
-    void HideInventoryWidget();
-    
-    /** Check if the inventory widget is visible */
-    UFUNCTION(BlueprintPure, Category = "UI|Inventory")
-    bool IsInventoryWidgetVisible() const;
+    /** Show the character info widget */
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    void ShowCharacterInfo();
+
+    /** Check if character info widget is visible */
+    UFUNCTION(BlueprintPure, Category = "UI")
+    bool IsCharacterInfoVisible() const;
     
     /** Get the inventory widget class */
     UFUNCTION(BlueprintPure, Category = "UI|Inventory")
@@ -79,10 +110,6 @@ public:
 protected:
     UPROPERTY()
     class UUserWidget* MainMenuWidget;
-    
-    /** The inventory widget class */
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Inventory", meta = (AllowPrivateAccess = "true"))
-    TSubclassOf<UUserWidget> InventoryWidgetClass;
     
     /** The currently active inventory widget */
     UPROPERTY()
@@ -97,4 +124,12 @@ protected:
     
     /** Timer handle for resume cooldown */
     FTimerHandle ResumeCooldownTimer;
+
+private:
+    // Main widget instance (WBP_Main)
+    UPROPERTY()
+    UWBP_Main* MainWidget;
+    
+    // Current input mode (game or UI)
+    bool bIsGameInputMode;
 };

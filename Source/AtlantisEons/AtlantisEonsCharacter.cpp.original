@@ -1,0 +1,1216 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#include "AtlantisEonsCharacter.h"
+#include "WBP_CharacterInfo.h"
+#include "Engine/LocalPlayer.h"
+#include "WBP_Main.h"
+#include "ZombieCharacter.h"
+#include "Camera/CameraComponent.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "BP_SceneCapture.h"
+#include "Engine/DamageEvents.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/InputComponent.h"
+#include "Components/Button.h"
+#include "Blueprint/WidgetTree.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Controller.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputMappingContext.h"
+#include "InputActionValue.h"
+#include "Particles/ParticleSystemComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Math/Vector.h"
+#include "Engine/World.h"
+#include "Components/ArrowComponent.h"
+#include "TimerManager.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/WidgetComponent.h"
+#include "GameFramework/PlayerStart.h"
+#include "Perception/AIPerceptionStimuliSourceComponent.h"
+#include "Perception/AISense_Sight.h"
+#include "GameFramework/Character.h"
+#include "Kismet/GameplayStatics.h"
+#include "AtlantisEonsHUD.h"
+#include "DamageNumberSystem.h"
+#include "DamageNumberWidget.h"
+#include "CollisionQueryParams.h"
+#include "PhysicsEngine/BodyInstance.h"
+#include "PhysicsEngine/PhysicsSettings.h"
+#include "DashAfterimage.h"
+
+DEFINE_LOG_CATEGORY(LogTemplateCharacter);
+
+//////////////////////////////////////////////////////////////////////////
+// AAtlantisEonsCharacter
+
+AAtlantisEonsCharacter::AAtlantisEonsCharacter()
+{
+    PrimaryActorTick.bCanEverTick = true;
+    
+    // Initialize gold amount
+    YourGold = 1000;
+    Gold = YourGold; // Ensure both Gold properties start with the same value
+
+    // Set size for collision capsule
+    GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
+
+    // Create a camera boom (pulls in towards the player if there is a collision)
+    CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+    CameraBoom->SetupAttachment(RootComponent);
+    CameraBoom->TargetArmLength = 900.0f; // 1.5x increased distance for a balanced battlefield view
+    CameraBoom->bUsePawnControlRotation = true;
+    CameraBoom->bDoCollisionTest = true;
+    CameraBoom->ProbeSize = 12.0f;
+    CameraBoom->bEnableCameraLag = true;
+    CameraBoom->bEnableCameraRotationLag = true;
+    CameraBoom->CameraLagSpeed = 15.0f;
+    CameraBoom->CameraRotationLagSpeed = 10.0f;
+    CameraBoom->CameraLagMaxDistance = 100.0f;
+    CameraBoom->SetRelativeRotation(FRotator(-75.0f, 0.0f, 0.0f));
+
+    // Create a follow camera
+    FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+    FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+    FollowCamera->bUsePawnControlRotation = false;
+
+    // Create equipment components
+    Helmet = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Helmet"));
+    Helmet->SetupAttachment(GetMesh(), FName(TEXT("head")));
+    Helmet->SetVisibility(false);
+
+    Weapon = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Weapon"));
+    Weapon->SetupAttachment(GetMesh(), FName(TEXT("hand_r")));
+    Weapon->SetVisibility(false);
+
+    Shield = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Shield"));
+    Shield->SetupAttachment(GetMesh(), FName(TEXT("hand_l")));
+    Shield->SetVisibility(false);
+
+    // Don't rotate when the controller rotates
+    bUseControllerRotationPitch = false;
+    bUseControllerRotationYaw = false;
+    bUseControllerRotationRoll = false;
+
+    // Configure character movement
+    UCharacterMovementComponent* CharMov = GetCharacterMovement();
+    if (CharMov)
+    {
+        CharMov->bOrientRotationToMovement = true;
+        CharMov->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
+        CharMov->JumpZVelocity = 700.f;
+        CharMov->AirControl = 0.35f;
+        CharMov->MaxWalkSpeed = 500.f;
+        CharMov->MinAnalogWalkSpeed = 20.f;
+        CharMov->BrakingDecelerationWalking = 2000.f;
+    }
+
+    // Initialize character stats
+    BaseHealth = 100.0f;
+    CurrentHealth = BaseHealth;
+    BaseMP = 100.0f;
+    CurrentMP = BaseMP;
+
+    // Initialize combat stats
+    BaseSTR = 10;
+    BaseDEX = 10;
+    BaseINT = 10;
+    BaseDefence = 10;
+    BaseDamage = 10;
+    
+    CurrentSTR = BaseSTR;
+    CurrentDEX = BaseDEX;
+    CurrentINT = BaseINT;
+    CurrentDefence = BaseDefence;
+    CurrentDamage = BaseDamage;
+
+    // Initialize inventory
+    InventoryItems.SetNum(30);
+    EquipmentSlots.SetNum(10);
+    InventoryToggleLock = false;
+    InventoryToggleLockDuration = 0.5f;
+
+    // Initialize combat flags
+    bCanAttack = true;
+    bIsAttacking = false;
+    bIsInventoryOpen = false;
+    AttackCooldown = 0.5f;
+    DamageAmount = 20.0f;
+    DamageSphereOffset = 100.0f;
+    AttackRange = 200.0f;
+    DefaultCameraLag = 15.0f;
+    DefaultCameraRotationLag = 10.0f;
+}
+
+void AAtlantisEonsCharacter::PostInitProperties()
+{
+    Super::PostInitProperties();
+
+    // Initialize attack variables
+    AttackCooldown = 1.0f;
+	bCanAttack = true;
+	AttackCooldown = 1.0f;
+}
+
+void AAtlantisEonsCharacter::SetInventoryToggleLock(bool bLock, float UnlockDelay)
+{
+    UE_LOG(LogTemp, Warning, TEXT("SetInventoryToggleLock called with bLock: %s, UnlockDelay: %f"),
+        bLock ? TEXT("true") : TEXT("false"), UnlockDelay);
+
+    bool bPrevLocked = bInventoryToggleLocked;
+    bInventoryToggleLocked = bLock;
+
+    UE_LOG(LogTemp, Warning, TEXT("Inventory toggle lock changed from %s to %s"),
+        bPrevLocked ? TEXT("Locked") : TEXT("Unlocked"),
+        bInventoryToggleLocked ? TEXT("Locked") : TEXT("Unlocked"));
+
+    if (UnlockDelay > 0.0f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Setting up unlock timer for %f seconds"), UnlockDelay);
+        GetWorld()->GetTimerManager().ClearTimer(InventoryToggleLockTimer);
+        GetWorld()->GetTimerManager().SetTimer(
+            InventoryToggleLockTimer,
+            FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::SetInventoryToggleLock, false, 0.0f),
+            UnlockDelay,
+            false
+        );
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No unlock delay, state will remain: %s"),
+            bInventoryToggleLocked ? TEXT("Locked") : TEXT("Unlocked"));
+    }
+
+    // Log current inventory state
+    UE_LOG(LogTemp, Warning, TEXT("Current inventory state - Open: %s, ToggleLocked: %s"),
+        bIsInventoryOpen ? TEXT("true") : TEXT("false"),
+        bInventoryToggleLocked ? TEXT("true") : TEXT("false"));
+}
+
+void AAtlantisEonsCharacter::ForceSetInventoryState(bool bNewIsOpen)
+{
+    UE_LOG(LogTemp, Warning, TEXT("ForceSetInventoryState called with bNewIsOpen: %s"), bNewIsOpen ? TEXT("true") : TEXT("false"));
+    
+    bool bPrevState = bIsInventoryOpen;
+    bIsInventoryOpen = bNewIsOpen;
+    
+    UE_LOG(LogTemp, Warning, TEXT("Character inventory state changed from %s to %s"), 
+        bPrevState ? TEXT("Open") : TEXT("Closed"),
+        bIsInventoryOpen ? TEXT("Open") : TEXT("Closed"));
+
+    // Log widget state
+    if (InventoryWidget)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("InventoryWidget exists, visibility: %s"), 
+            InventoryWidget->IsVisible() ? TEXT("Visible") : TEXT("Hidden"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("InventoryWidget is null!"));
+    }
+}
+
+void AAtlantisEonsCharacter::BeginPlay()
+{
+    // Call the base class  
+    Super::BeginPlay();
+
+    UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Starting input initialization"), *GetName());
+
+    // Initialize AI perception stimulus source
+    if (AIPerceptionStimuliSourceComponent)
+    {
+        AIPerceptionStimuliSourceComponent->RegisterForSense(UAISense_Sight::StaticClass());
+        AIPerceptionStimuliSourceComponent->RegisterWithPerceptionSystem();
+    }
+
+    // CRITICAL FIX: Explicitly load the IMC_Default.uasset input mapping context if not already set
+    if (!DefaultMappingContext)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - DefaultMappingContext is null, attempting to load from Content"), *GetName());
+        DefaultMappingContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/AtlantisEons/Input/IMC_Default"));
+        
+        if (DefaultMappingContext)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Successfully loaded IMC_Default"), *GetName());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - CRITICAL: Failed to load IMC_Default, input will not work!"), *GetName());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Using existing DefaultMappingContext"), *GetName());
+    }
+
+    // Set up input mapping on the player controller
+    APlayerController* PlayerController = Cast<APlayerController>(Controller);
+    if (PlayerController)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Got valid PlayerController, setting up input"), *GetName());
+        
+        // Clear keyboard focus from any widgets
+        if (GEngine && GEngine->GameViewport)
+        {
+            FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
+            FSlateApplication::Get().SetAllUserFocus(GEngine->GameViewport->GetGameViewportWidget());
+            UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Cleared slate keyboard focus"), *GetName());
+        }
+        
+        // Make sure we're in game mode with cursor hidden
+        FInputModeGameOnly GameOnlyMode;
+        PlayerController->SetInputMode(GameOnlyMode);
+        PlayerController->SetShowMouseCursor(false);
+        PlayerController->FlushPressedKeys();
+        
+        // Force-enable input for both controller and character
+        PlayerController->EnableInput(PlayerController);
+        EnableInput(PlayerController);
+        
+        UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Set input mode to game only, cursor hidden, input enabled"), *GetName());
+        
+        // Set up Enhanced Input Subsystem
+        if (ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(PlayerController->Player))
+        {
+            if (UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Got Enhanced Input Subsystem, setting up mapping context"), *GetName());
+                
+                // First clear any existing mappings
+                Subsystem->ClearAllMappings();
+                
+                // Add our default mapping context
+                if (DefaultMappingContext)
+                {
+                    Subsystem->AddMappingContext(DefaultMappingContext, 0);
+                    UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Successfully added mapping context"), *GetName());
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - CRITICAL: DefaultMappingContext is null, input will not work!"), *GetName());
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - Failed to get Enhanced Input Subsystem"), *GetName());
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - Failed to get Local Player"), *GetName());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - Failed to get Player Controller"), *GetName());
+    }
+
+    // Initialize UI components - disabled for now to fix input issues
+    // InitializeUI();
+    
+    // Spawn scene capture actor
+    SpawnSceneCapture();
+    
+    // Play background music
+    UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")), 1.0f, 1.0f, 0.0f, nullptr, nullptr, true);
+    
+    // Add a small delay to "wake up" the input system with a simulated input
+    FTimerHandle WakeupTimerHandle;
+    GetWorld()->GetTimerManager().SetTimer(
+        WakeupTimerHandle, 
+        [this]() { 
+            UE_LOG(LogTemp, Warning, TEXT("%s: Input system wakeup triggered"), *GetName());
+            AddMovementInput(FVector(1, 0, 0), 0.01f);
+            FTimerHandle SecondWakeupTimerHandle;
+            GetWorld()->GetTimerManager().SetTimer(
+                SecondWakeupTimerHandle, 
+                [this]() { AddMovementInput(FVector(-1, 0, 0), 0.01f); }, 
+                0.1f, 
+                false
+            );
+        }, 
+        0.5f, 
+        false
+    );
+}
+
+// BeginPlay is now BlueprintImplementableEvent
+void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+    Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+    UE_LOG(LogTemp, Warning, TEXT("Character - Setting up input bindings"));
+
+    if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Character - Successfully got Enhanced Input Component"));
+
+        // Moving
+        if (MoveAction)
+        {
+            EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AAtlantisEonsCharacter::Move);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Move action"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character - MoveAction is null! Movement won't work"));
+        }
+
+        // Looking
+        if (LookAction)
+        {
+            EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AAtlantisEonsCharacter::Look);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Look action"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character - LookAction is null! Camera control won't work"));
+        }
+
+        // Jumping
+        if (JumpAction)
+        {
+            EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::Jump);
+            EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &AAtlantisEonsCharacter::StopJumping);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Jump action"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character - JumpAction is null! Jumping won't work"));
+        }
+
+        // Melee Attack
+        if (MeleeAttackAction)
+        {
+            EnhancedInputComponent->BindAction(MeleeAttackAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::MeleeAttack);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound MeleeAttack action"));
+        }
+
+        // Pickup
+        if (PickupAction)
+        {
+            EnhancedInputComponent->BindAction(PickupAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::OnPickupPressed);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Pickup action"));
+        }
+
+        // Inventory toggle
+        if (InventoryAction)
+        {
+            EnhancedInputComponent->BindAction(InventoryAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::ToggleInventory);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Inventory action"));
+        }
+
+        // ESC key/Resume
+        if (ResumeAction)
+        {
+            EnhancedInputComponent->BindAction(ResumeAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::CloseInventoryIfOpen);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Resume/ESC action"));
+        }
+
+        // Debug damage (for testing)
+        if (DebugDamageAction)
+        {
+            EnhancedInputComponent->BindAction(DebugDamageAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::DebugDamage);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Debug Damage action"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Character - Failed to get Enhanced Input Component! No input will work"));
+    }
+}
+
+void AAtlantisEonsCharacter::Move(const FInputActionValue& Value)
+{
+    // Input is a Vector2D
+    FVector2D MovementVector = Value.Get<FVector2D>();
+
+    if (Controller != nullptr)
+    {
+        // Find out which way is forward
+        const FRotator Rotation = Controller->GetControlRotation();
+        const FRotator YawRotation(0, Rotation.Yaw, 0);
+
+        // Get forward and right vectors
+        const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+        const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+        // Add movement 
+        AddMovementInput(ForwardDirection, MovementVector.Y);
+        AddMovementInput(RightDirection, MovementVector.X);
+    }
+}
+
+void AAtlantisEonsCharacter::Look(const FInputActionValue& Value)
+{
+    // Input is a Vector2D
+    FVector2D LookAxisVector = Value.Get<FVector2D>();
+
+    if (Controller != nullptr)
+    {
+        // Apply the input to the controller rotation
+        AddControllerYawInput(LookAxisVector.X * CameraYawSensitivity);
+        AddControllerPitchInput(LookAxisVector.Y * CameraPitchSensitivity);
+    }
+}
+
+void AAtlantisEonsCharacter::Jump()
+{
+    Super::Jump();
+}
+
+void AAtlantisEonsCharacter::StopJumping()
+{
+    Super::StopJumping();
+}
+
+void AAtlantisEonsCharacter::InitializeUI()
+{
+    // DISABLED: Don't create any UI widgets at startup to ensure gameplay works first
+    UE_LOG(LogTemplateCharacter, Warning, TEXT("%s: InitializeUI disabled to focus on gameplay first"), *GetName());
+    
+    // Don't create the WBP_Main widget as it's causing cursor issues and blocking input
+    /*
+    // First check if an instance of WBP_Main already exists in the viewport
+    if (!Main)
+    {
+        // Look for an existing instance of WBP_Main before creating a new one
+        UWorld* World = GetWorld();
+        if (World)
+        {
+            bool bFoundExistingWidget = false;
+            for (TObjectIterator<UWBP_Main> Itr; Itr; ++Itr)
+            {
+                UWBP_Main* FoundWidget = *Itr;
+                if (FoundWidget && FoundWidget->IsInViewport())
+                {
+                    UE_LOG(LogTemplateCharacter, Warning, TEXT("%s: Found existing WBP_Main widget in viewport, using it"), *GetName());
+                    Main = FoundWidget;
+                    bFoundExistingWidget = true;
+                    break;
+                }
+            }
+            
+            // Create a new widget only if no existing widget was found
+            if (!bFoundExistingWidget)
+            {
+                Main = CreateWidget<UWBP_Main>(World, UWBP_Main::StaticClass());
+                if (Main)
+                {
+                    Main->AddToViewport();
+                    UE_LOG(LogTemplateCharacter, Log, TEXT("%s: Successfully created and added Main widget to viewport"), *GetName());
+                }
+                else
+                {
+                    UE_LOG(LogTemplateCharacter, Error, TEXT("%s: Failed to create Main widget"), *GetName());
+                    return;
+                }
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemplateCharacter, Error, TEXT("%s: Failed to get World reference for widget creation"), *GetName());
+            return;
+        }
+    }
+
+    // The CharacterInfo widget is now created and managed by WBP_Main
+    // Setup circular bars if Main widget exists
+    if (Main)
+    {
+        SetupCircularBars();
+    }
+    */
+}
+
+void AAtlantisEonsCharacter::SetupCircularBars()
+{
+    if (Main)
+    {
+        // Initialize HP and MP bars
+        SettingCircularBar_HP();
+        SettingCircularBar_MP();
+    }
+}
+
+void AAtlantisEonsCharacter::NotifyControllerChanged()
+{
+    Super::NotifyControllerChanged();
+}
+
+void AAtlantisEonsCharacter::PostInitializeComponents()
+{
+    Super::PostInitializeComponents();
+}
+
+void AAtlantisEonsCharacter::SpawnSceneCapture()
+{
+    // Get the game world
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to get World reference"), *GetName());
+        return;
+    }
+
+    // First, destroy any existing scene capture
+    if (SceneCapture)
+    {
+        SceneCapture->Destroy();
+        SceneCapture = nullptr;
+    }
+
+    // Spawn the scene capture actor
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+    // Position it in front of the character
+    FVector Location = GetActorLocation() + GetActorForwardVector() * 200.0f + FVector(0.0f, 0.0f, 100.0f);
+    FRotator Rotation = FRotator(0.0f, 180.0f, 0.0f); // Face the character
+
+    SceneCapture = World->SpawnActor<ABP_SceneCapture>(ABP_SceneCapture::StaticClass(), Location, Rotation, SpawnParams);
+    if (!SceneCapture)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to spawn SceneCapture actor"), *GetName());
+        return;
+    }
+
+    // Set the skeletal mesh first
+    USkeletalMeshComponent* MeshComponent = GetMesh();
+    if (!MeshComponent)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: Character mesh component is null"), *GetName());
+        SceneCapture->Destroy();
+        SceneCapture = nullptr;
+        return;
+    }
+
+    USkeletalMesh* CharacterMesh = MeshComponent->GetSkeletalMeshAsset();
+    if (!CharacterMesh)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: Character mesh asset is null"), *GetName());
+        SceneCapture->Destroy();
+        SceneCapture = nullptr;
+        return;
+    }
+
+    // Set up the mesh before attaching
+    SceneCapture->SetCharacterMesh(CharacterMesh);
+    
+    // Load and set the preview materials
+    UMaterialInterface* CloseUpMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/AtlantisEons/Materials/M_RT_CharacterPreview"));
+    UMaterialInterface* FullBodyMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/AtlantisEons/Materials/M_RT_CharacterPreview_FullBody"));
+
+    if (!CloseUpMaterial || !FullBodyMaterial)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to load preview materials"), *GetName());
+        SceneCapture->Destroy();
+        SceneCapture = nullptr;
+        return;
+    }
+
+    // Set materials
+    SceneCapture->SetHologramMaterial(FullBodyMaterial);
+    SceneCapture->UpdateMaterials();
+
+    // Make sure the mesh is visible
+    if (SceneCapture->SkeletalMesh)
+    {
+        SceneCapture->SkeletalMesh->SetVisibility(true);
+        SceneCapture->SkeletalMesh->SetHiddenInGame(false);
+        SceneCapture->SkeletalMesh->SetRenderCustomDepth(true);
+    }
+
+    // Now attach with relative transform
+    FAttachmentTransformRules AttachRules(EAttachmentRule::KeepRelative, true);
+    if (!SceneCapture->AttachToActor(this, AttachRules))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to attach SceneCapture to character"), *GetName());
+        SceneCapture->Destroy();
+        SceneCapture = nullptr;
+        return;
+    }
+
+    // Force multiple captures to ensure it updates
+    SceneCapture->UpdateMaterials();
+    SceneCapture->UpdateCapture();
+
+    // Store the timer handle as a member variable to prevent GC
+    if (DelayedCaptureTimer.IsValid())
+    {
+        World->GetTimerManager().ClearTimer(DelayedCaptureTimer);
+    }
+
+    // Set up a repeating timer to ensure capture updates
+    World->GetTimerManager().SetTimer(DelayedCaptureTimer, [this]()
+    {
+        if (IsValid(SceneCapture))
+        {
+            SceneCapture->UpdateMaterials();
+            SceneCapture->UpdateCapture();
+        }
+    }, 0.1f, true, 0.1f);
+}
+
+void AAtlantisEonsCharacter::RecoverHealth(int32 Amount)
+{
+    CurrentHealth = FMath::Min(CurrentHealth + Amount, BaseHealth);
+    SettingCircularBar_HP();
+}
+
+void AAtlantisEonsCharacter::RecoverHP(int32 Amount)
+{
+    CurrentHealth = FMath::Min(CurrentHealth + Amount, BaseHealth);
+    SettingCircularBar_HP();
+}
+
+void AAtlantisEonsCharacter::SettingCircularBar_MP()
+{
+    if (Main)
+    {
+        // Update MP bar progress
+        float MPPercentage = CurrentMP / (float)BaseMP;
+        if (MPBar)
+        {
+            MPBar->SetPercent(MPPercentage);
+        }
+    }
+}
+
+void AAtlantisEonsCharacter::ResetInvulnerability()
+{
+    // Implementation will be in Blueprint
+}
+
+FGenericTeamId AAtlantisEonsCharacter::GetGenericTeamId() const
+{
+    return TeamId;
+}
+
+void AAtlantisEonsCharacter::SetGenericTeamId(const FGenericTeamId& NewTeamId)
+{
+    TeamId = NewTeamId;
+}
+
+void AAtlantisEonsCharacter::UpdateAllStats()
+{
+    // Update all character stats based on equipment and status effects
+    int32 TotalSTR = BaseSTR;
+    int32 TotalDEX = BaseDEX;
+    int32 TotalINT = BaseINT;
+    int32 TotalDefence = BaseDefence;
+    int32 TotalDamage = BaseDamage;
+    
+    // TODO: Add equipment bonuses
+    
+    CurrentSTR = TotalSTR;
+    CurrentDEX = TotalDEX;
+    CurrentINT = TotalINT;
+    CurrentDefence = TotalDefence;
+    CurrentDamage = TotalDamage;
+}
+
+void AAtlantisEonsCharacter::SettingStore()
+{
+    // Initialize store UI and data
+    // TODO: Load store items and prices
+}
+
+void AAtlantisEonsCharacter::SetInventorySlot(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotWidgetRef)
+{
+    if (!ItemInfoRef || !InventorySlotWidgetRef) return;
+    
+    // Update the inventory slot widget with the item info
+    InventorySlotWidgetRef->UpdateSlot(ItemInfoRef);
+}
+
+bool AAtlantisEonsCharacter::PickingItem(int32 ItemIndex, int32 ItemStackNumber)
+{
+    // Find first empty inventory slot
+    // TODO: Implement inventory slot finding logic
+    
+    // Create new item info
+    UBP_ItemInfo* NewItem = NewObject<UBP_ItemInfo>();
+    if (!NewItem) return false;
+    
+    // Set item properties
+    // TODO: Load item data from data table
+    
+    return true;
+}
+
+void AAtlantisEonsCharacter::ContextMenuUse(UWBP_InventorySlot* InventorySlot)
+{
+    if (!InventorySlot) return;
+    
+    UBP_ItemInfo* ItemInfo = InventorySlot->GetInventoryItemInfoRef();
+    if (!ItemInfo) return;
+    
+    // Handle item use based on type
+    switch (ItemInfo->ItemType)
+    {
+        case EItemType::Equip:
+            ContextMenuUse_EquipItem(ItemInfo);
+            break;
+        case EItemType::Consume_HP:
+        case EItemType::Consume_MP:
+            ContextMenuUse_ConsumeItem(ItemInfo, InventorySlot, ItemInfo->RecoveryHP, ItemInfo->RecoveryMP, ItemInfo->ItemType);
+            break;
+        default:
+            break;
+    }
+}
+
+void AAtlantisEonsCharacter::ContextMenuThrow(UWBP_InventorySlot* InventorySlot)
+{
+    if (!InventorySlot) return;
+    
+    // Clear the inventory slot
+    InventorySlot->ClearSlot();
+}
+
+void AAtlantisEonsCharacter::ContextMenuUse_EquipItem(UBP_ItemInfo* ItemInfoRef)
+{
+    if (!ItemInfoRef) return;
+    
+    // Handle equipment based on slot type
+    // TODO: Implement equipment logic
+}
+
+void AAtlantisEonsCharacter::ContextMenuUse_ConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
+    int32 RecoverHP, int32 RecoverMP, EItemType ItemType)
+{
+    if (!ItemInfoRef || !InventorySlotRef) return;
+    
+    // Apply recovery effects
+    if (RecoverHP > 0)
+    {
+        RecoverHealth(RecoverHP);
+    }
+    
+    if (RecoverMP > 0)
+    {
+        this->RecoverMP(RecoverMP);
+    }
+    
+    // Remove one item from stack or clear slot if last item
+    int32 NewStackNumber = ItemInfoRef->StackNumber - 1;
+    if (NewStackNumber <= 0)
+    {
+        InventorySlotRef->ClearSlot();
+    }
+    else
+    {
+        ItemInfoRef->StackNumber = NewStackNumber;
+        InventorySlotRef->UpdateSlot(ItemInfoRef);
+    }
+}
+
+bool AAtlantisEonsCharacter::BuyingItem(int32 ItemIndex, int32 ItemStackNumber, int32 ItemPrice)
+{
+    // Check if player has enough gold
+    int32 TotalCost = ItemPrice * ItemStackNumber;
+    if (YourGold < TotalCost) return false;
+    
+    // Try to add item to inventory
+    if (PickingItem(ItemIndex, ItemStackNumber))
+    {
+        // Deduct gold on successful purchase - keep both Gold properties synchronized
+        YourGold -= TotalCost;
+        Gold = YourGold; // Keep Gold synchronized with YourGold
+        return true;
+    }
+    
+    return false;
+}
+
+void AAtlantisEonsCharacter::EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, const TSoftObjectPtr<UTexture2D>& Texture2D, int32 ItemIndex, UMaterialInterface* MaterialInterface, UMaterialInterface* MaterialInterface2)
+{
+    // Find the appropriate mesh component based on slot
+    UStaticMeshComponent* TargetComponent = nullptr;
+    switch (ItemEquipSlot)
+    {
+        case EItemEquipSlot::Head:
+            TargetComponent = HeadMesh;
+            break;
+        case EItemEquipSlot::Body:
+            TargetComponent = BodyMesh;
+            break;
+        case EItemEquipSlot::Weapon:
+            TargetComponent = WeaponMesh;
+            break;
+        case EItemEquipSlot::Accessory:
+            TargetComponent = AccessoryMesh;
+            break;
+        default:
+            return;
+    }
+
+    if (TargetComponent)
+    {
+        // Load and set the mesh
+        TargetComponent->SetStaticMesh(StaticMeshID.LoadSynchronous());
+        
+        // Apply materials if provided
+        if (MaterialInterface)
+            TargetComponent->SetMaterial(0, MaterialInterface);
+        if (MaterialInterface2)
+            TargetComponent->SetMaterial(1, MaterialInterface2);
+    }
+}
+
+void AAtlantisEonsCharacter::HandleDisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex)
+{
+    // Find and clear the appropriate mesh component
+    UStaticMeshComponent* TargetComponent = nullptr;
+    switch (ItemEquipSlot)
+    {
+        case EItemEquipSlot::Head:
+            TargetComponent = HeadMesh;
+            break;
+        case EItemEquipSlot::Body:
+            TargetComponent = BodyMesh;
+            break;
+        case EItemEquipSlot::Weapon:
+            TargetComponent = WeaponMesh;
+            break;
+        case EItemEquipSlot::Accessory:
+            TargetComponent = AccessoryMesh;
+            break;
+        default:
+            return;
+    }
+
+    if (TargetComponent)
+    {
+        TargetComponent->SetStaticMesh(nullptr);
+    }
+}
+
+void AAtlantisEonsCharacter::ProcessEquipItem(UBP_ItemInfo* ItemInfoRef)
+{
+    if (!ItemInfoRef) return;
+
+    // Get the item's equipment slot and mesh
+    EItemEquipSlot EquipSlot = ItemInfoRef->ItemEquipSlot;
+    TSoftObjectPtr<UStaticMesh> MeshID = ItemInfoRef->MeshID;
+    TSoftObjectPtr<UTexture2D> Thumbnail = ItemInfoRef->Thumbnail;
+    int32 ItemIndex = ItemInfoRef->ItemIndex;
+    UMaterialInterface* Material1 = ItemInfoRef->Material1;
+    UMaterialInterface* Material2 = ItemInfoRef->Material2;
+
+    // Equip the item
+    EquipItemInSlot(EquipSlot, MeshID, Thumbnail, ItemIndex, Material1, Material2);
+
+    // Update character stats
+    AddingCharacterStatus(ItemIndex);
+    UpdateAllStats();
+}
+
+void AAtlantisEonsCharacter::ProcessConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef, int32 RecoverHP, int32 RecoverMP, EItemType ItemType)
+{
+    if (!ItemInfoRef || !InventorySlotRef) return;
+
+    // Apply recovery effects
+    if (ItemType == EItemType::Consume_HP)
+    {
+        RecoverHealth(RecoverHP);
+    }
+    else if (ItemType == EItemType::Consume_MP)
+    {
+        this->RecoverMP(RecoverMP);
+    }
+
+    // Clear the inventory slot
+    InventorySlotRef->ClearSlot();
+}
+
+void AAtlantisEonsCharacter::DragAndDropExchangeItem(UBP_ItemInfo* FromInventoryItemRef, UWBP_InventorySlot* FromInventorySlotRef, UBP_ItemInfo* ToInventoryItemRef, UWBP_InventorySlot* ToInventorySlotRef)
+{
+    if (!FromInventorySlotRef || !ToInventorySlotRef) return;
+
+    // Store the items temporarily
+    UBP_ItemInfo* TempFirstItem = FromInventoryItemRef;
+    UBP_ItemInfo* TempSecondItem = ToInventoryItemRef;
+
+    // Clear both slots
+    FromInventorySlotRef->ClearSlot();
+    ToInventorySlotRef->ClearSlot();
+
+    // Set the items in their new slots
+    if (TempSecondItem)
+        SetInventorySlot(TempSecondItem, FromInventorySlotRef);
+    if (TempFirstItem)
+        SetInventorySlot(TempFirstItem, ToInventorySlotRef);
+
+    // Play sound effect
+    UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")), 1.0f, 1.0f, 0.0f, nullptr, nullptr, true);
+}
+
+void AAtlantisEonsCharacter::RecoverMP(int32 Amount)
+{
+    float RecoverAmount = static_cast<float>(Amount);
+    CurrentMP = FMath::Clamp(CurrentMP + RecoverAmount, 0.0f, BaseMP);
+    SettingCircularBar_MP();
+}
+
+void AAtlantisEonsCharacter::SettingCircularBar_HP()
+{
+    if (WBP_CharacterInfo)
+    {
+        float HPPercentage = static_cast<float>(CurrentHealth) / static_cast<float>(BaseHealth);
+        WBP_CharacterInfo->UpdateHPBar(HPPercentage);
+    }
+}
+
+UBP_ItemInfo* AAtlantisEonsCharacter::GetInventoryItemRef() const
+{
+    // Create a new item info instance
+    UBP_ItemInfo* NewItemInfo = NewObject<UBP_ItemInfo>();
+    return NewItemInfo;
+}
+
+AActor* AAtlantisEonsCharacter::FindClosestItem() const
+{
+    // Get all nearby items (BP_Item type actors)
+    TArray<AActor*> FoundItems;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AActor::StaticClass(), FoundItems);
+    
+    // Find the closest one within interaction range
+    const float InteractionRange = 200.0f;
+    AActor* ClosestItem = nullptr;
+    float ClosestDistance = InteractionRange;
+    
+    for (AActor* Item : FoundItems)
+    {
+        // Skip non-interactable items (should be more specific in actual implementation)
+        if (!Item->GetClass()->ImplementsInterface(UBP_ItemInterface::StaticClass()))
+        {
+            continue;
+        }
+        
+        float Distance = FVector::Distance(GetActorLocation(), Item->GetActorLocation());
+        if (Distance < ClosestDistance)
+        {
+            ClosestDistance = Distance;
+            ClosestItem = Item;
+        }
+    }
+    
+    return ClosestItem;
+}
+
+// Implementation of ForceEnableMovement
+void AAtlantisEonsCharacter::ForceEnableMovement()
+{
+    UE_LOG(LogTemp, Warning, TEXT("%s: ForceEnableMovement called"), *GetName());
+    
+    // Make sure movement component is working properly
+    UCharacterMovementComponent* MovementComp = GetCharacterMovement();
+    if (MovementComp)
+    {
+        // Enable movement
+        MovementComp->SetMovementMode(MOVE_Walking);
+        MovementComp->bOrientRotationToMovement = true;
+        MovementComp->MaxWalkSpeed = BaseMovementSpeed;
+        MovementComp->SetComponentTickEnabled(true);
+        
+        UE_LOG(LogTemp, Warning, TEXT("%s: CharacterMovement enabled, MaxWalkSpeed=%f"), 
+            *GetName(), MovementComp->MaxWalkSpeed);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("%s: Failed to get CharacterMovement component!"), *GetName());
+    }
+}
+
+void AAtlantisEonsCharacter::ResetCharacterInput()
+{
+    UE_LOG(LogTemp, Warning, TEXT("%s: ResetCharacterInput called"), *GetName());
+    
+    // Make sure we have a controller
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC)
+    {
+        UE_LOG(LogTemp, Error, TEXT("%s: No PlayerController found!"), *GetName());
+        return;
+    }
+    
+    // Make sure input is enabled for both character and controller
+    PC->EnableInput(PC);
+    EnableInput(PC);
+    
+    // Set game-only input mode with no cursor
+    FInputModeGameOnly GameOnlyMode;
+    PC->SetInputMode(GameOnlyMode);
+    PC->SetShowMouseCursor(false);
+    
+    // Clear keyboard focus from any widgets
+    if (GEngine && GEngine->GameViewport)
+    {
+        FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
+        FSlateApplication::Get().SetAllUserFocus(GEngine->GameViewport->GetGameViewportWidget());
+    }
+    
+    // Reapply input mapping context
+    if (ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(PC->Player))
+    {
+        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("%s: Clearing and re-adding input mapping context"), *GetName());
+            
+            // First clear any existing mappings
+            Subsystem->ClearAllMappings();
+            
+            // Add our default mapping context
+            if (DefaultMappingContext)
+            {
+                Subsystem->AddMappingContext(DefaultMappingContext, 0);
+                UE_LOG(LogTemp, Warning, TEXT("%s: Successfully added mapping context"), *GetName());
+            }
+            else
+            {
+                // Try to load the default context if it's not set
+                DefaultMappingContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/AtlantisEons/Input/IMC_Default"));
+                if (DefaultMappingContext)
+                {
+                    Subsystem->AddMappingContext(DefaultMappingContext, 0);
+                    UE_LOG(LogTemp, Warning, TEXT("%s: Loaded and added IMC_Default"), *GetName());
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("%s: DefaultMappingContext is null and couldn't be loaded!"), *GetName());
+                }
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("%s: Failed to get Enhanced Input Subsystem"), *GetName());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("%s: Failed to get Local Player"), *GetName());
+    }
+    
+    // Force movement component to be enabled
+    ForceEnableMovement();
+    
+    // Apply a small movement to "wake up" the input system
+    AddMovementInput(FVector(1, 0, 0), 0.01f);
+    GetWorld()->GetTimerManager().SetTimer(
+        CameraLagTimer, // Reusing an existing timer handle
+        [this]() { 
+            if (IsValid(this))
+            {
+                AddMovementInput(FVector(-1, 0, 0), 0.01f);
+            }
+        },
+        0.1f,
+        false
+    );
+}
+
+void AAtlantisEonsCharacter::MeleeAttack(const FInputActionValue& Value)
+{
+    UE_LOG(LogTemp, Warning, TEXT("%s: MeleeAttack called"), *GetName());
+    
+    // Only attack if we're not already attacking and the cooldown is over
+    if (!bIsAttacking && bCanAttack)
+    {
+        // Set attacking flag
+        bIsAttacking = true;
+        bCanAttack = false;
+        
+        // Play attack animation if montage exists
+        if (MeleeAttackMontage)
+        {
+            PlayAnimMontage(MeleeAttackMontage);
+            
+            // Face nearest enemy if any
+            FaceNearestEnemy();
+        }
+        
+        // Set up attack cooldown
+        GetWorld()->GetTimerManager().SetTimer(
+            AttackCooldownTimer,
+            FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::ResetAttack),
+            AttackCooldown,
+            false
+        );
+    }
+}
+
+void AAtlantisEonsCharacter::OnPickupPressed()
+{
+    UE_LOG(LogTemp, Warning, TEXT("%s: OnPickupPressed called"), *GetName());
+    
+    // Find the closest interactable item
+    AActor* ClosestItem = FindClosestItem();
+    
+    if (ClosestItem)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: Found closest item: %s"), *GetName(), *ClosestItem->GetName());
+        
+        // Attempt to interact with the item
+        // Note: This should be properly implemented in the blueprint via the FindingClosestItem function
+        // This is just a stub to make the C++ code compile
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s: No nearby items found"), *GetName());
+    }
+}
+
+void AAtlantisEonsCharacter::CloseInventory()
+{
+    if (bIsInventoryOpen)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("CloseInventory - Restoring default mapping context"));
+        
+        // Get the HUD
+        AAtlantisEonsHUD* HUD = Cast<AAtlantisEonsHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
+        if (!HUD)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to get HUD in CloseInventory"));
+            return;
+        }
+        
+        // Hide the inventory widget
+        HUD->HideInventoryWidget();
+        bIsInventoryOpen = false;
+        
+        // Restore all input mappings - FIX: Only clear mappings once
+        if (APlayerController* PC = Cast<APlayerController>(Controller))
+        {
+            if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+            {
+                // Clear all mappings first
+                Subsystem->ClearAllMappings();
+                
+                // Then add back the default mapping context
+                if (DefaultMappingContext)
+                {
+                    Subsystem->AddMappingContext(DefaultMappingContext, 0);
+                }
+            }
+        }
+        
+        // Re-enable character movement
+        if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+        {
+            MovementComp->SetMovementMode(MOVE_Walking);
+        }
+        
+        UE_LOG(LogTemp, Warning, TEXT("====== INVENTORY CLOSE: CloseInventory COMPLETED ======"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to get HUD"));
+    }
+}

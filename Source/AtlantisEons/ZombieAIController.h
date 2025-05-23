@@ -73,4 +73,32 @@ protected:
 
 private:
     void UpdateDebugVisualization();
+    
+    // Teleport protection properties
+    UPROPERTY()
+    FVector LastKnownPlayerLocation;
+    
+    UPROPERTY()
+    float LastPlayerLocationUpdateTime;
+    
+    UPROPERTY()
+    float TeleportDetectionThreshold;
+    
+    UPROPERTY()
+    float TeleportRecoveryDelay;
+    
+    UPROPERTY()
+    bool bIsInTeleportRecovery;
+    
+    UPROPERTY()
+    float TeleportRecoveryTimer;
+    
+    // Checks if player movement appears to be a teleport and handles it
+    bool IsPlayerTeleport(const FVector& NewLocation);
+    
+    // Handles recovery after a player teleport is detected
+    void HandlePlayerTeleport(const FVector& NewLocation);
+    
+    // Updates AI movement after teleport recovery
+    void UpdateMovementAfterTeleport();
 };

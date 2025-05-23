@@ -8,6 +8,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "Perception/AIPerceptionSystem.h"
+#include "Navigation/PathFollowingComponent.h"
 
 // Initialize static blackboard key names
 const FName AZombieAIController::PlayerKey("PlayerActor");
@@ -47,6 +48,14 @@ AZombieAIController::AZombieAIController()
 
     // Set team ID (team 2 for zombies)
     SetGenericTeamId(FGenericTeamId(2));
+    
+    // Teleport protection variables have been disabled for manual implementation
+    LastKnownPlayerLocation = FVector::ZeroVector;
+    LastPlayerLocationUpdateTime = 0.0f;
+    TeleportDetectionThreshold = 0.0f;  // Disabled
+    TeleportRecoveryDelay = 0.0f;       // Disabled
+    bIsInTeleportRecovery = false;
+    TeleportRecoveryTimer = 0.0f;
 
     // Add sight config to perception component
     if (AIPerceptionComponent)
@@ -141,6 +150,14 @@ void AZombieAIController::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
+    // Teleport/dash recovery code removed for manual implementation
+    // This previously made zombies confused when player used dash abilities
+    if (bIsInTeleportRecovery)
+    {
+        // Reset the flag so we don't get stuck in recovery mode
+        bIsInTeleportRecovery = false;
+    }
+
     // Debug perception every few seconds
     static float TimeSinceLastDebug = 0.0f;
     TimeSinceLastDebug += DeltaTime;
@@ -178,10 +195,19 @@ void AZombieAIController::Tick(float DeltaTime)
                     GetPawn()->GetActorLocation(),
                     SightConfig->SightRadius,
                     32,
-                    FColor::Red,
+                    bIsInTeleportRecovery ? FColor::Yellow : FColor::Red,  // Yellow during recovery
                     false,
                     2.1f
                 );
+            }
+            
+            // Debug teleport detection system
+            if (LastKnownPlayerLocation != FVector::ZeroVector)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Teleport Detection - Recovery: %s, Threshold: %.1f, Last Update: %.1f"),
+                    bIsInTeleportRecovery ? TEXT("Active") : TEXT("Inactive"),
+                    TeleportDetectionThreshold,
+                    GetWorld()->GetTimeSeconds() - LastPlayerLocationUpdateTime);
             }
         }
     }
@@ -305,7 +331,23 @@ void AZombieAIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus S
     // If we successfully sensed a hostile actor, update the blackboard
     if (Stimulus.WasSuccessfullySensed() && GetTeamAttitudeTowards(*Actor) == ETeamAttitude::Hostile)
     {
+        // Check for teleportation if we already have a last known location
+        if (LastKnownPlayerLocation != FVector::ZeroVector)
+        {
+            FVector NewLocation = Actor->GetActorLocation();
+            if (IsPlayerTeleport(NewLocation))
+            {
+                // Handle teleport - don't immediately update target location
+                HandlePlayerTeleport(NewLocation);
+                UE_LOG(LogTemp, Warning, TEXT("TELEPORT DETECTED - AI in recovery for %.1f seconds"), TeleportRecoveryDelay);
+                return;
+            }
+        }
+        
+        // Normal update
         BlackboardComponent->SetValueAsObject(PlayerKey, Actor);
+        LastKnownPlayerLocation = Actor->GetActorLocation();
+        LastPlayerLocationUpdateTime = GetWorld()->GetTimeSeconds();
         UE_LOG(LogTemp, Warning, TEXT("Updated blackboard with hostile actor: %s"), *Actor->GetName());
     }
     else if (!Stimulus.WasSuccessfullySensed())
@@ -330,4 +372,52 @@ void AZombieAIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus S
         UE_LOG(LogTemp, Warning, TEXT("Reactivating perception component"));
         PerceptionComp->Activate();
     }
+}
+
+bool AZombieAIController::IsPlayerTeleport(const FVector& NewLocation)
+{
+    // Don't detect teleports if we're still in recovery
+    if (bIsInTeleportRecovery)
+    {
+        return false;
+    }
+    
+    float TimeSinceLastUpdate = GetWorld()->GetTimeSeconds() - LastPlayerLocationUpdateTime;
+    if (TimeSinceLastUpdate <= 0.001f) // Avoid division by zero
+    {
+        return false;
+    }
+
+    // Calculate speed of movement
+    float Distance = FVector::Dist(LastKnownPlayerLocation, NewLocation);
+    float Speed = Distance / TimeSinceLastUpdate;
+    
+    // Log detection information
+    UE_LOG(LogTemp, Warning, TEXT("Movement Check - Distance: %.1f, Time: %.3f, Speed: %.1f"), 
+           Distance, TimeSinceLastUpdate, Speed);
+    
+    // Check if movement speed exceeds detection threshold
+    // Movement detection removed for manual implementation
+    return false; // Disabled teleport detection
+}
+
+void AZombieAIController::HandlePlayerTeleport(const FVector& NewLocation)
+{
+    // Teleport handling has been disabled for manual implementation
+    // This function previously made zombies confused when detecting player teleport/dash
+    
+    // Simply update the location without any special handling
+    LastKnownPlayerLocation = NewLocation;
+    LastPlayerLocationUpdateTime = GetWorld()->GetTimeSeconds();
+    
+    UE_LOG(LogTemp, Warning, TEXT("ZombieAIController HandlePlayerTeleport - Functionality disabled for manual implementation"));
+}
+
+void AZombieAIController::UpdateMovementAfterTeleport()
+{
+    // Function disabled - previously used to handle zombie confusion after player dash
+    bIsInTeleportRecovery = false;
+    
+    // Log that function is disabled
+    UE_LOG(LogTemp, Warning, TEXT("AZombieAIController::UpdateMovementAfterTeleport - Function disabled for manual implementation"));
 }

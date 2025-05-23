@@ -1,0 +1,16 @@
+{
+  "name": "Unreal Engine Analyzer",
+  "description": "Provides code analysis for Unreal Engine projects",
+  "rootPath": "/Users/danielvargas/Documents/Unreal Projects/AtlantisEons",
+  "capabilities": {
+    "fileSearch": true,
+    "codeAnalysis": true,
+    "blueprintAnalysis": true
+  },
+  "config": {
+    "projectType": "game",
+    "engineVersion": "5.5",
+    "gameGenre": "action-rpg",
+    "mainLanguage": "cpp"
+  }
+}

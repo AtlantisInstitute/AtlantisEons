@@ -51,6 +51,10 @@ public:
     // Initialize the widget with damage amount and color
     void InitWidget();
     
+    // Show damage at a specific location
+    UFUNCTION(BlueprintCallable, Category = "Damage", meta = (DisplayName = "Show Damage"))
+    void ShowDamage(float DamageAmount, FVector Location, bool bIsCritical = false);
+    
     // Static instance of the damage number system
     static ADamageNumberSystem* Instance;
     

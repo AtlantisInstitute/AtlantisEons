@@ -16,6 +16,6 @@ void UInventoryWidget::CloseInventory()
 {
     if (OwningCharacter)
     {
-        OwningCharacter->CloseInventory();
+        OwningCharacter->CloseInventoryImpl();
     }
 }

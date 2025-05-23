@@ -24,6 +24,16 @@ public:
     virtual FGenericTeamId GetGenericTeamId() const override { return TeamId; }
     virtual void SetGenericTeamId(const FGenericTeamId& InTeamId) override { TeamId = InTeamId; }
 
+    // Called every frame
+    virtual void Tick(float DeltaTime) override;
+
+    // Called to bind functionality to input
+    virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+    // Reference to the player character
+    UPROPERTY()
+    class AAtlantisEonsCharacter* PlayerCharacter;
+
     /** Combat Functions */
     UFUNCTION(BlueprintCallable, Category = "Zombie|Combat")
     void PerformAttack();
@@ -88,7 +98,6 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie|Combat")
     UAnimMontage* HitReactMontage;
 
-
     /** Apply damage to the zombie */
     UFUNCTION(BlueprintCallable, Category = "Zombie|Health")
     void ApplyDamage(float DamageAmount);
@@ -97,12 +106,23 @@ protected:
     UFUNCTION()
     void HandleDeath();
 
+    /** Attack the player when in range */
+    UFUNCTION()
+    void AttackPlayer();
+
+    /** Called when the zombie dies */
+    UFUNCTION()
+    void OnDeath();
+
     UFUNCTION(BlueprintNativeEvent, Category = "Zombie|Combat")
     float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser);
 
     /** Play hit reaction montage */
     UFUNCTION(BlueprintCallable, Category = "Zombie|Combat")
     void PlayHitReactMontage();
+
+    UFUNCTION(BlueprintCallable, Category = "Damage")
+    void ShowDamageNumber(float DamageAmount, FVector Location, bool bIsCritical = false);
 
 private:
     FGenericTeamId TeamId;

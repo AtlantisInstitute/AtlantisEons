@@ -52,10 +52,61 @@ AAtlantisEonsGameMode::AAtlantisEonsGameMode()
 void AAtlantisEonsGameMode::BeginPlay()
 {
     Super::BeginPlay();
-    UE_LOG(LogTemp, Warning, TEXT("GameMode BeginPlay"));
+    UE_LOG(LogTemp, Warning, TEXT("GameMode BeginPlay - FORCING PROPER PLAYER SPAWN"));
     
-    // We don't need to manually spawn the player here
-    // Unreal Engine handles the initial spawn automatically
+    // CRITICAL: Check if player already has a pawn, if not, spawn one
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (PC)
+    {
+        if (!PC->GetPawn())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("GameMode BeginPlay: No pawn found, spawning one now"));
+            RestartPlayer(PC);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("GameMode BeginPlay: Player already has pawn: %s"), *PC->GetPawn()->GetName());
+            
+            // Make sure player controller has proper input setup
+            FInputModeGameOnly GameOnlyMode;
+            PC->SetInputMode(GameOnlyMode);
+            PC->SetShowMouseCursor(false);
+            
+            // Enable input for player pawn
+            APawn* Pawn = PC->GetPawn();
+            if (Pawn)
+            {
+                PC->EnableInput(PC);
+                Pawn->EnableInput(PC);
+                
+                // If this is our character class, reset input
+                if (AAtlantisEonsCharacter* Character = Cast<AAtlantisEonsCharacter>(Pawn))
+                {
+                    Character->ResetCharacterInput();
+                    Character->ForceEnableMovement();
+                    
+                    // Apply a small movement to "wake up" the input system
+                    Character->AddMovementInput(FVector(1, 0, 0), 0.01f);
+                    GetWorld()->GetTimerManager().SetTimer(
+                        MovementResetTimer,
+                        [Character]()
+                        {
+                            if (Character)
+                            {
+                                Character->AddMovementInput(FVector(-1, 0, 0), 0.01f);
+                            }
+                        },
+                        0.1f,
+                        false
+                    );
+                }
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("GameMode BeginPlay: No PlayerController found!"));
+    }
 }
 
 void AAtlantisEonsGameMode::RestartPlayer(AController* NewPlayer)

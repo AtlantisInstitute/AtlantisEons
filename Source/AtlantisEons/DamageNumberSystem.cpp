@@ -676,3 +676,9 @@ void ADamageNumberSystem::SetDamageNumberWidgetClass(TSubclassOf<UDamageNumberWi
         DamageNumberWidgetClass = WidgetClass;
     }
 }
+
+void ADamageNumberSystem::ShowDamage(float DamageAmount, FVector Location, bool bIsCritical)
+{
+    // Stub implementation: log the damage for now, to be replaced with actual UI code
+    UE_LOG(LogTemp, Warning, TEXT("Damage: %f at %s, critical: %d"), DamageAmount, *Location.ToString(), bIsCritical ? 1 : 0);
+}

@@ -1,0 +1,10 @@
+Name,ItemIndex,ItemType,HealthBonus,SpeedBonus,Description,IconPath,MeshPath
+WoodenSword,1,Weapon,0,5,"A basic wooden sword",/Game/UI/Icons/T_WoodenSword,/Game/Meshes/Weapons/SM_WoodenSword
+LeatherHelmet,2,Helmet,10,0,"A basic leather helmet",/Game/UI/Icons/T_LeatherHelmet,/Game/Meshes/Armor/SM_LeatherHelmet
+WoodenShield,3,Shield,5,-5,"A basic wooden shield",/Game/UI/Icons/T_WoodenShield,/Game/Meshes/Shields/SM_WoodenShield
+IronSword,4,Weapon,0,10,"A sturdy iron sword",/Game/UI/Icons/T_IronSword,/Game/Meshes/Weapons/SM_IronSword
+IronHelmet,5,Helmet,20,0,"A sturdy iron helmet",/Game/UI/Icons/T_IronHelmet,/Game/Meshes/Armor/SM_IronHelmet
+IronShield,6,Shield,10,-10,"A sturdy iron shield",/Game/UI/Icons/T_IronShield,/Game/Meshes/Shields/SM_IronShield
+SteelSword,7,Weapon,0,15,"A high-quality steel sword",/Game/UI/Icons/T_SteelSword,/Game/Meshes/Weapons/SM_SteelSword
+SteelHelmet,8,Helmet,30,0,"A high-quality steel helmet",/Game/UI/Icons/T_SteelHelmet,/Game/Meshes/Armor/SM_SteelHelmet
+SteelShield,9,Shield,15,-15,"A high-quality steel shield",/Game/UI/Icons/T_SteelShield,/Game/Meshes/Shields/SM_SteelShield
