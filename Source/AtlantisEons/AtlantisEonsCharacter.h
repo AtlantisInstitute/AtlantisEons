@@ -3,19 +3,41 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ItemTypes.h"
 #include "GameFramework/Character.h"
-#include "Logging/LogMacros.h"
-#include "GenericTeamAgentInterface.h"
-#include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
-#include "Perception/AIPerceptionStimuliSourceComponent.h"
+#include "NiagaraComponent.h"
+#include "BP_ItemInterface.h"
+#include "GenericTeamAgentInterface.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Components/Image.h"
+#include "Components/ProgressBar.h"
+#include "BP_ItemInterface.h"
+#include "BP_ItemInfo.h"
+#include "WBP_Main.h"
+class UWBP_CharacterInfo;
+#include "WBP_GuideText.h"
+#include "WBP_InventorySlot.h"
+#include "BP_SceneCapture.h"
 
 #include "AtlantisEonsCharacter.generated.h"
+
+class USkeletalMeshComponent;
+class USceneComponent;
+class UCameraComponent;
+class UAnimMontage;
+class USoundBase;
+class UParticleSystem;
+class UMaterialInterface;
+class UTexture2D;
+class UWBP_Store;
 
 class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
+class ABP_SceneCapture;
 class UAIPerceptionStimuliSourceComponent;
 struct FInputActionValue;
 
@@ -23,11 +45,26 @@ class ADamageNumberSystem;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStatsUpdatedSignature);
 
-UCLASS(config=Game, Blueprintable)
+UCLASS(config=Game)
 class ATLANTISEONS_API AAtlantisEonsCharacter : public ACharacter, public IGenericTeamAgentInterface
 {
     GENERATED_BODY()
+
+public:
+
+    /** Camera boom positioning the camera behind the character */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
+    class USpringArmComponent* CameraBoom;
+
+    /** Follow camera */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
+    class UCameraComponent* FollowCamera;
+
+    /** AI Perception component */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI", meta = (AllowPrivateAccess = "true"))
+    class UAIPerceptionStimuliSourceComponent* AIPerceptionStimuliSourceComponent;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Health", meta = (AllowPrivateAccess = "true"))
     float CurrentHealth;
@@ -35,15 +72,146 @@ class ATLANTISEONS_API AAtlantisEonsCharacter : public ACharacter, public IGener
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Health", meta = (AllowPrivateAccess = "true"))
     float MaxHealth;
 
-    /** Camera boom positioning the camera behind the character */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
-    USpringArmComponent* CameraBoom;
+    UPROPERTY(BlueprintAssignable, Category = "Character|Stats")
+    FOnStatsUpdatedSignature OnStatsUpdated;
 
-    /** Follow camera */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
-    UCameraComponent* FollowCamera;
-    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
+    float BaseMovementSpeed = 600.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
+    float BaseHealth = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
+    int32 BaseSTR = 10;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
+    int32 BaseDEX = 10;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
+    int32 BaseINT = 10;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
+    int32 BaseDefence = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
+    int32 BaseDamage = 10;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Combat")
+    int32 CurrentSTR;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Combat")
+    int32 CurrentDEX;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Combat")
+    int32 CurrentINT;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Combat")
+    int32 CurrentDefence;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Combat")
+    int32 CurrentDamage;
+
+    // Inventory and Equipment
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    TArray<UBP_ItemInfo*> InventoryItems;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    TArray<UWBP_InventorySlot*> InventorySlotWidgets;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    TArray<UBP_ItemInfo*> EquipmentSlots;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    bool InventoryToggleLock;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    float InventoryToggleLockDuration;
+
+    FTimerHandle InventoryToggleLockTimer;
+
+    /** UI Components */
+    UPROPERTY(BlueprintReadWrite, Category = "UI")
+    class UWBP_Main* Main;
+
+    // UI Progress Bars
+    UPROPERTY(BlueprintReadWrite, Category = "UI|Circular Bar")
+    class UProgressBar* HPBar;
+
+    UPROPERTY(BlueprintReadWrite, Category = "UI|Circular Bar")
+    class UProgressBar* MPBar;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+    TSubclassOf<ADamageNumberSystem> DamageNumberSystemClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+    USoundBase* PickupSound;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Circular Bar")
+    UMaterialInstanceDynamic* CircularMP;
+
+    FORCEINLINE UInputMappingContext* GetDefaultMappingContext() { return DefaultMappingContext; }
+
+    UFUNCTION(BlueprintImplementableEvent, Category = "Character|Combat")
+    void PlayHitReactMontage();
+
+    /** Equipment Components */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+    UStaticMeshComponent* Helmet;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+    UStaticMeshComponent* Weapon;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+    UStaticMeshComponent* Shield;
+
+    /** Scene Capture Actor Reference */
+    UPROPERTY(BlueprintReadWrite, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+    class ABP_SceneCapture* SceneCapture;
+
+    /** Equipment Functions */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+    void EquipItem(EItemEquipSlot Slot, const TSoftObjectPtr<UStaticMesh>& MeshToEquip, UTexture2D* Thumbnail, 
+        int32 ItemIndex, UMaterialInterface* Material1 = nullptr, UMaterialInterface* Material2 = nullptr);
+
+    UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
+    void DisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex);
+
+    /** Helper function to get the game instance */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Game Instance")
+    UAtlantisEonsGameInstance* GetGameInstanceHelper() const;
+
+    /** Helper function to get item info */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
+    bool GetItemInfo(int32 ItemIndex, FStructure_ItemInfo& OutItemInfo) const;
+
+    /** Add status effects to character based on equipped item */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Stats")
+    void AddingCharacterStatus(int32 ItemIndex);
+
+    /** Remove status effects from character based on unequipped item */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Stats")
+    void SubtractingCharacterStatus(int32 ItemIndex);
+
 protected:
+    /** UI Components */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
+    class UWBP_InventorySlot* WBP_InventorySlot_0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
+    class UWBP_InventorySlot* WBP_InventorySlot_1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
+    class UWBP_InventorySlot* WBP_InventorySlot_2;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
+    class UWBP_InventorySlot* WBP_InventorySlot_3;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
+    class UProgressBar* CircularBarHP;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
+    class UProgressBar* CircularBarMP;
+
     /** MappingContext */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
     class UInputMappingContext* DefaultMappingContext;
@@ -52,45 +220,39 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
     class UInputAction* MeleeAttackAction;
 
-    /** Jump Input Action */
+    /** Movement Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-    UInputAction* JumpAction;
-
-    /** Move Input Action */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-    UInputAction* MoveAction;
+    class UInputAction* MoveAction;
 
     /** Look Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-    UInputAction* LookAction;
+    class UInputAction* LookAction;
 
-    /** Dodge Input Action */
+    /** Pickup Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-    UInputAction* DodgeAction;
+    class UInputAction* PickupAction;
 
+    /** Jump Input Action */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+    class UInputAction* JumpAction;
 
+    /** Animation montage for the melee attack action */
+    // Combat state
+    bool bIsInvulnerable = false;
+    bool bCanAttack;
+    bool bIsAttacking;
 
-    /** Dodge properties */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Dodge", meta = (AllowPrivateAccess = "true"))
-    float DodgeDistance = 200.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Dodge", meta = (AllowPrivateAccess = "true"))
-    float DodgeCooldown = 1.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Dodge", meta = (AllowPrivateAccess = "true"))
-    float DodgeInvulnerabilityDuration = 0.5f;
-
-    /** Animation montage for the dodge action */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    UAnimMontage* TwinSword_Dodge_F_Montage;
+    // Timer handles
+    FTimerHandle AttackCooldownTimer;
+    FTimerHandle DashCooldownTimer;
+    FTimerHandle InvulnerabilityTimer;
+    FTimerHandle DashTimer;
+    FTimerHandle CameraLagTimer;
+    FTimerHandle CameraRotationLagTimer;
 
     /** Melee attack animation montage */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     UAnimMontage* MeleeAttackMontage;
-
-    /** Dodge trail effect */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|VFX", meta = (AllowPrivateAccess = "true"))
-    UParticleSystem* DodgeTrailEffect;
 
     /** Invulnerability effect */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|VFX", meta = (AllowPrivateAccess = "true"))
@@ -100,12 +262,7 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|VFX", meta = (AllowPrivateAccess = "true"))
     UMaterialInterface* InvulnerabilityMaterial;
 
-    /** Camera settings for dodge */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Camera", meta = (AllowPrivateAccess = "true"))
-    float DodgeCameraLag = 0.3f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Camera", meta = (AllowPrivateAccess = "true"))
-    float DodgeCameraRotationLag = 0.1f;
+    // Camera settings for dodge removed for manual implementation
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Camera", meta = (AllowPrivateAccess = "true"))
     float DefaultCameraLag = 0.0f;
@@ -146,7 +303,7 @@ protected:
     bool bInventoryToggleLocked;
     
     /** Timer handle for the inventory toggle lock */
-    FTimerHandle InventoryToggleLockTimer;
+
     
     /** Unlocks the inventory toggle after a delay */
     void UnlockInventoryToggle();
@@ -163,13 +320,7 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
     float DamageAmount;
 
-    /** Force applied during dodge */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
-    float DodgeForce;
-
-    /** Threshold at which to stop dodge movement */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
-    float DodgeStopThreshold;
+    // Dodge movement properties removed for manual implementation
 
     /** Radius of the damage sphere */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
@@ -183,44 +334,58 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
     float AttackRange;
 
+    UPROPERTY(BlueprintReadWrite, Category = "Inventory")
+    bool bInventoryNeedsUpdate;
+
     virtual void PostInitProperties() override;
 
-
-
-    /** AI Perception Stimuli Source */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI", meta = (AllowPrivateAccess = "true"))
-    UAIPerceptionStimuliSourceComponent* StimuliSource;
-
 private:
-    FTimerHandle DodgeCooldownTimer;
-    FTimerHandle InvulnerabilityTimer;
-    FTimerHandle RespawnTimerHandle;
-    FTimerHandle AttackCooldownTimer;
-    bool bCanDodge = true;
-    bool bIsInvulnerable = false;
-    bool bCanAttack = true;
-    bool bIsDodging = false;
-    bool bIsAttacking = false;
     bool bHealthDelegateBound = false;
 
     /** Stored original materials for invulnerability effect */
     TArray<UMaterialInterface*> OriginalMaterials;
+
     /** Active particle system components */
-    UPROPERTY()
-    UParticleSystemComponent* InvulnerabilityPSC;
 
-    float AttackCooldown = 0.5f;
+float AttackCooldown = 0.5f;
 
-    /** Delay before respawning */
-    UPROPERTY(EditAnywhere, Category = "Character|Health", meta = (AllowPrivateAccess = "true"))
-    float RespawnDelay = 3.0f;
+/** Called when the game starts or when spawned */
+virtual void BeginPlay() override;
 
-protected:
-    // Team ID for AI perception
-    FGenericTeamId TeamId;
+UPROPERTY()
+class ABP_SceneCapture* BP_SceneCapture;
 
-    /** Called when the game starts or when spawned */
-    virtual void BeginPlay() override;
+UPROPERTY()
+class UWBP_Main* MainWidget;
+
+UPROPERTY()
+class UWBP_GuideText* GuideTextWidget;
+
+UPROPERTY()
+class UMaterialInstanceDynamic* CircularHPMaterial;
+
+UPROPERTY()
+class UMaterialInstanceDynamic* CircularMPMaterial;
+
+// UI initialization functions
+void InitializeUI();
+void SetupCircularBars();
+public:
+    UFUNCTION(BlueprintCallable, Category = "Character|Preview")
+    ABP_SceneCapture* GetSceneCapture() const { return BP_SceneCapture; }
+
+    UFUNCTION(BlueprintCallable, Category = "Character|Input")
+    UInputMappingContext* GetDefaultMappingContext() const { return DefaultMappingContext; }
+
+    void SpawnSceneCapture();
+
+// Input handling
+virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+// Item pickup functions
+void OnPickupPressed();
+AActor* FindClosestItem() const;
+void PickupItem(int32 ItemIndex, int32 StackNumber);
 
     /** Called for movement input */
     void Move(const FInputActionValue& Value);
@@ -228,22 +393,31 @@ protected:
     /** Called for looking input */
     void Look(const FInputActionValue& Value);
 
+    /** Called when controller changes */
+    virtual void NotifyControllerChanged() override;
+
+    /** Called for jumping */
+    virtual void Jump() override;
+
+    /** Called for stopping jump */
+    virtual void StopJumping() override;
+
     /** Called for dodge input */
-    void Dodge(const FInputActionValue& Value);
+    // Dodge function removed for manual implementation
 
     /** Called for melee attack input */
     void MeleeAttack(const FInputActionValue& Value);
 
-    /** Called when dodge cooldown expires */
-    UFUNCTION()
-    void ResetDodge();
+// ... (rest of the code remains the same)
+    // Dash and dodge reset functions removed for manual implementation in Unreal Engine
 
     /** Called when invulnerability period expires */
     UFUNCTION()
     void ResetInvulnerability();
 
+public:
     /** Called when attack cooldown expires */
-    UFUNCTION()
+    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
     void ResetAttack();
 
     /** Apply visual effects for invulnerability */
@@ -256,15 +430,15 @@ protected:
     void StoreOriginalMaterials();
 
     /** Apply damage to the character */
-    UFUNCTION(BlueprintCallable, Category = "Character|Health")
-    void ApplyDamage(float InDamageAmount);
+    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+    void ApplyCharacterDamage(float Amount);
 
     /** Handle character death */
-    UFUNCTION()
+    UFUNCTION(BlueprintImplementableEvent, Category = "Character")
     void HandleDeath();
 
-    /** Reset character after death */
-    UFUNCTION()
+public:
+    UFUNCTION(BlueprintImplementableEvent, Category = "Character")
     void ResetCharacter();
 
     /** Toggle the inventory open/closed */
@@ -275,94 +449,263 @@ protected:
     UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
     void OpenInventory();
 
-public:
     /** Close the inventory */
     UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
     void CloseInventory();
 
-    /** Respawn the character */
+    UFUNCTION(BlueprintCallable, Category = "Inventory")
+    void UpdateInventorySlots();
+
     UFUNCTION()
+    void DelayedUpdateInventorySlots();
+
+    UFUNCTION(BlueprintCallable, Category = "Inventory")
+    void ForceUpdateInventorySlotsAfterDelay();
+
+    AAtlantisEonsCharacter();
+    virtual ~AAtlantisEonsCharacter() = default;
+
+    virtual void PostInitializeComponents() override;
+
+    void UpdateCharacterPreview();
+
+    UFUNCTION(BlueprintImplementableEvent, Category = "Character")
     void RespawnCharacter();
 
-    /** Debug function to apply damage */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Debug")
     void DebugDamage(const FInputActionValue& Value);
 
-    virtual void NotifyControllerChanged() override;
-
-    virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-
-    UFUNCTION()
+    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
     void FaceNearestEnemy();
 
-    UFUNCTION(BlueprintCallable, Category = "Combat")
+    // ... (rest of the code remains the same)
+    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
     void OnMeleeAttackNotify();
 
-    UFUNCTION(BlueprintCallable, Category = "Debug")
+    UFUNCTION(BlueprintImplementableEvent, Category = "Debug")
     void ApplyDebugDamage();
 
-public:
+    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+    void ShowDamageNumber(float InDamageAmount, FVector Location, bool bIsCritical = false);
+
     UFUNCTION(BlueprintPure, Category = "Health")
     float GetCurrentHealth() const { return CurrentHealth; }
 
-    UFUNCTION(BlueprintPure, Category = "Health")
-    float GetMaxHealth() const { return MaxHealth; }
-    
-    UFUNCTION(BlueprintPure, Category = "UI|Inventory")
-    bool IsInventoryOpen() const { return bIsInventoryOpen; }
-    
-    /** Get the inventory widget class type for identification purposes */
-    UFUNCTION(BlueprintPure, Category = "UI|Inventory")
-    TSubclassOf<UUserWidget> GetInventoryWidgetClass() const { return InventoryWidgetClass; }
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    float GetBaseHealth() const { return BaseHealth; }
 
-    /**
-     * Locks or unlocks the inventory toggle functionality for a short period
-     * Used to prevent inventory from being toggled when main menu is closing
-     */
-    UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
-    void SetInventoryToggleLock(bool bLock, float UnlockDelay = 0.5f);
-    
-    /**
-     * Forcibly sets the inventory state without checking current state
-     * Used to ensure state consistency in edge cases
-     */
-    UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
-    void ForceSetInventoryState(bool bNewIsOpen);
-    
-    /**
-     * Directly closes the inventory if it's currently open
-     * Used for ESC key and other direct close actions without toggling
-     */
-    UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
-    void CloseInventoryIfOpen(const FInputActionValue& Value);
+    UFUNCTION(BlueprintImplementableEvent, Category = "Stats")
+    void SetBaseHealth(float NewBaseHealth);
 
-    AAtlantisEonsCharacter();
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    float GetBaseMovementSpeed() const { return BaseMovementSpeed; }
+
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    int32 GetCurrentSTR() const { return CurrentSTR; }
+
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    int32 GetCurrentDEX() const { return CurrentDEX; }
+
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    int32 GetCurrentINT() const { return CurrentINT; }
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    int32 YourGold;
+    
+    // Gold property that mirrors YourGold for compatibility with store system
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    int32 Gold;
+
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    int32 GetYourGold() 
+    { 
+        // Keep Gold synchronized with YourGold
+        Gold = YourGold;
+        return YourGold; 
+    }
+
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    int32 GetCurrentMP() const { return CurrentMP; }
+
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    int32 GetMaxMP() const { return MaxMP; }
+
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    int32 GetCurrentDefence() const { return CurrentDefence; }
+
+UFUNCTION(BlueprintPure, Category = "Character|Stats")
+int32 GetCurrentDamage() const { return CurrentDamage; }
+
+UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+void UpdateAllStats();
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+void SettingStore();
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+void SetInventorySlot(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotWidgetRef);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+bool PickingItem(int32 ItemIndex, int32 ItemStackNumber);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+void ContextMenuUse(UWBP_InventorySlot* InventorySlot);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+void ContextMenuThrow(UWBP_InventorySlot* InventorySlot);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+void ContextMenuUse_EquipItem(UBP_ItemInfo* ItemInfoRef);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+void ContextMenuUse_ConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
+    int32 RecoverHP, int32 RecoverMP, EItemType ItemType);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+bool BuyingItem(int32 ItemIndex, int32 ItemStackNumber, int32 ItemPrice);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, const TSoftObjectPtr<UTexture2D>& Texture2D, int32 ItemIndex, UMaterialInterface* MaterialInterface, UMaterialInterface* MaterialInterface2);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void HandleDisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void ProcessEquipItem(UBP_ItemInfo* ItemInfoRef);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void ProcessConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
+    int32 RecoverHP, int32 RecoverMP, EItemType ItemType);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+void DragAndDropExchangeItem(UBP_ItemInfo* FromInventoryItemRef, UWBP_InventorySlot* FromInventorySlotRef,
+    UBP_ItemInfo* ToInventoryItemRef, UWBP_InventorySlot* ToInventorySlotRef);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+void RecoverHealth(int32 Amount);
+
+UFUNCTION(BlueprintCallable, Category = "Character Status")
+void RecoverHP(int32 RecoverHP);
+
+UFUNCTION(BlueprintCallable, Category = "Character Status")
+void RecoverMP(int32 Amount);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+void SettingCircularBar_MP();
+
+UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+void SettingCircularBar_HP();
+
+UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+UBP_ItemInfo* GetInventoryItemRef() const;
+
+UFUNCTION(BlueprintPure, Category = "Character|Inventory")
+bool IsInventoryOpen() const { return bIsInventoryOpen; }
+
+UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+UStaticMeshComponent* HeadMesh;
+
+UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+UStaticMeshComponent* BodyMesh;
+
+UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+UStaticMeshComponent* WeaponMesh;
+
+UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+UStaticMeshComponent* AccessoryMesh;
+
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Status")
+int32 CurrentMP;
+
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Status")
+int32 BaseMP;
+
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+int32 MaxMP;
+
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Main")
+class UWBP_CharacterInfo* WBP_CharacterInfo;
+
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Store")
+class UWBP_Store* WBP_Store;
+
+UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Character")
+class ABP_Item* FindingClosestItem();
+
+/**
+ * Used to prevent inventory from being toggled when main menu is closing
+ */
+UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
+void SetInventoryToggleLock(bool bLock, float UnlockDelay = 0.0f);
+
+/**
+ * Forcibly sets the inventory state without checking current state
+ * Used to ensure state consistency in edge cases
+ */
+UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
+void ForceSetInventoryState(bool bNewIsOpen);
+
+/**
+ * Directly closes the inventory if it's currently open
+ * Used for ESC key and other direct close actions without toggling
+ */
+UFUNCTION(BlueprintImplementableEvent, Category = "UI|Inventory")
+void CloseInventoryIfOpen(const FInputActionValue& Value);
 
     // IGenericTeamAgentInterface
-    virtual FGenericTeamId GetGenericTeamId() const override { return TeamId; }
-    virtual void SetGenericTeamId(const FGenericTeamId& NewTeamId) { TeamId = NewTeamId; }
+    virtual FGenericTeamId GetGenericTeamId() const override;
+    virtual void SetGenericTeamId(const FGenericTeamId& NewTeamId) override;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
-    UAIPerceptionStimuliSourceComponent* AIPerceptionStimuliSourceComponent;
+private:
+    UPROPERTY()
+    FGenericTeamId TeamId;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
+    UPROPERTY()
+    FTimerHandle DelayedCaptureTimer;
+
+    UPROPERTY()
+    FTimerHandle InventoryUpdateTimer;
+
+    UPROPERTY(VisibleAnywhere, Category = "Stats")
     bool bIsDead = false;
 
+public:
+    /** Implementation of inventory closing */
+    UFUNCTION()
+    void CloseInventoryImpl();
 
-/** Animation montage for hit reaction */
-UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Combat")
-UAnimMontage* HitReactMontage;
+    /** Returns CameraBoom subobject **/
+    FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 
-/** Called when the character takes damage */
-virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+    /** Returns FollowCamera subobject **/
+    FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
-/** Returns CameraBoom subobject **/
-FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
-/** Returns FollowCamera subobject **/
-FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
-/** Returns DefaultMappingContext **/
-FORCEINLINE class UInputMappingContext* GetDefaultMappingContext() const { return DefaultMappingContext; }
+    UFUNCTION(BlueprintCallable, Category = "Character|Movement")
+    void ForceEnableMovement();
 
-/** Play hit reaction montage */
-UFUNCTION(BlueprintCallable, Category = "Character|Combat")
-void PlayHitReactMontage();
+    /** 
+     * Resets and reinitializes character input and movement settings
+     * Use this function when resuming from menus to ensure input works correctly
+     */
+    UFUNCTION(BlueprintCallable, Category = "Character|Input")
+    void ResetCharacterInput();
+
+    // Helper function to create hardcoded item data for testing
+    FStructure_ItemInfo CreateHardcodedItemData(int32 ItemIndex);
+
+    // Helper function to add an item to the inventory
+    bool AddItemToInventory(UBP_ItemInfo* ItemInfo);
+
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    void SetMainWidget(UWBP_Main* NewWidget);
+
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    UWBP_Main* GetMainWidget() const { return MainWidget; }
+
+    // Context Menu Event Handlers - these are called by inventory slots via events
+    UFUNCTION()
+    void OnContextMenuUse(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot);
+
+    UFUNCTION()
+    void OnContextMenuThrow(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot);
 };
