@@ -2,94 +2,147 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Components/Image.h"
-#include "Components/TextBlock.h"
 #include "Components/Button.h"
+#include "Components/TextBlock.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
-#include "Components/SizeBox.h"
+#include "ItemTypes.h"
+#include "UniversalDataTableReader.h"
 #include "WBP_StorePopup.generated.h"
 
+/**
+ * Store popup widget for purchase confirmation and quantity selection
+ */
 UCLASS()
 class ATLANTISEONS_API UWBP_StorePopup : public UUserWidget
 {
     GENERATED_BODY()
 
+protected:
+    virtual void NativeConstruct() override;
+
 public:
-    // Variables
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Store")
+    // Item data
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
     int32 ItemIndex;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Store")
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
     int32 StackNumber;
 
-    UFUNCTION(BlueprintPure, Category = "Store")
-    FText GetText_StackNumber() const;
+    // New item data structure
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FStructure_ItemInfo ItemInfo;
 
-    UFUNCTION(BlueprintPure, Category = "Store")
-    FText GetText_TotalPrice();
+    // Selected quantity for purchase
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 SelectedQuantity = 1;
 
-    // All widget bindings are made optional to avoid conflicts with Blueprint definitions
-    
-    // UI Elements - Main Structure
-    // The names need to match exactly what's in the Blueprint, so we're renaming the C++ properties
+    // UI Elements for new system
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    USizeBox* SizeBox_0;  // Previously PopupBackground
-
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UTextBlock* TextBlock_0;  // Previously Text - "Are you sure.."
+    UTextBlock* ItemNameText;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UImage* Image_ItemThumbnail;  // Previously ItemThumbnail
-
-    // Stack Counter Elements
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UOverlay* Overlay_StackCounter;  // Previously OverlayStackCounter
+    UTextBlock* ItemDescriptionText;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UImage* Image_StackCounterBG;  // Previously StackCounterBackground
+    UTextBlock* QuantityText;
+
+    // USER CONFIRMED: The actual quantity widget name in Blueprint
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* Quantity;
+
+    // USER CONFIRMED: The actual item thumbnail widget name in Blueprint
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* ItemThumbnail;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UTextBlock* TextBlock_StackCounter;  // Previously StackCounterText - "000"
+    UTextBlock* UnitPriceText;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UButton* Button_Up;  // Previously UpButton
+    UImage* ItemThumbnailImage;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UButton* Button_Down;  // Previously DownButton
-
-    // Gold Display
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UImage* Image_GoldCoin;  // Previously GoldCoin
+    UButton* IncreaseQuantityButton;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UTextBlock* TextBlock_GoldAmount;  // Previously GoldText - "99,999,999"
-    
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UTextBlock* TotalPriceText;  // For showing the total price of the stack
+    UButton* DecreaseQuantityButton;
 
-    // Buttons
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UButton* CancelButton;
+    UButton* ConfirmPurchaseButton;
 
+    // UI Elements with proper BindWidget tags
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UButton* OKButton;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UImage* SideBorder;
+    UButton* ConfirmButton;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UImage* Image_0;
+    UButton* CancelButton;
 
-    // Button Events
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UButton* Button_Up;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UButton* Button_Down;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* TextBlock_StackCounter;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* TextBlock_GoldAmount;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* TotalPriceText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* Image_ItemThumbnail;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UOverlay* Overlay_StackCounter;
+
+    // Alternative UI element names (in case Blueprint uses different naming)
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UButton* ButtonOK;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UButton* ButtonCancel;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UButton* UpButton;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UButton* DownButton;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* StackCounterText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* GoldAmountText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* PriceText;
+
+    // USER CONFIRMED: The actual price widget name in Blueprint
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* Price;
+
+    // New button event handlers
+    UFUNCTION()
+    void OnIncreaseQuantityClicked();
+
+    UFUNCTION()
+    void OnDecreaseQuantityClicked();
+
+    UFUNCTION()
+    void OnConfirmPurchaseClicked();
+
+    // Button event handlers
     UFUNCTION()
     void OnOKButtonClicked();
 
     UFUNCTION()
     void OnCancelButtonClicked();
-    
-    // Use OKButton as ConfirmButton for WBP_Main to reference
-    UPROPERTY()
-    UButton* ConfirmButton;
 
     UFUNCTION()
     void OnUpButtonClicked();
@@ -97,13 +150,39 @@ public:
     UFUNCTION()
     void OnDownButtonClicked();
 
-    UFUNCTION()
+    // Blueprint callable functions
+    UFUNCTION(BlueprintCallable, Category = "Store")
     void UpdateItemDisplay();
-    
-    // Update item details from the selected store item
+
     UFUNCTION(BlueprintCallable, Category = "Store")
     void UpdateItemDetails(int32 InItemIndex);
 
-protected:
-    virtual void NativeConstruct() override;
+    UFUNCTION(BlueprintPure, Category = "Store")
+    FText GetText_StackNumber() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Store")
+    FText GetText_TotalPrice();
+
+    // New display update methods
+    UFUNCTION(BlueprintCallable, Category = "Store")
+    void UpdateQuantityDisplay();
+
+    UFUNCTION(BlueprintCallable, Category = "Store")
+    void UpdatePriceDisplay();
+
+private:
+    // Helper function to bind buttons safely
+    void BindButtonSafely(UButton* Button, FScriptDelegate& Delegate);
+    
+    // Helper function to update UI text safely
+    void UpdateTextSafely(UTextBlock* TextBlock, const FText& NewText);
+    
+    // Helper function to setup button bindings
+    void SetupButtonBindings();
+    
+    // Helper function to update price displays
+    void UpdatePriceDisplays();
+    
+    // Helper function to get total price
+    int32 GetTotalPrice();
 };

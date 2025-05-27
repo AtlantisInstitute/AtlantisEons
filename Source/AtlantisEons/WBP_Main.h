@@ -62,6 +62,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Inventory")
     class UWBP_Inventory* GetInventoryWidget() const { return WBP_Inventory; }
 
+    // Get the character info widget
+    UFUNCTION(BlueprintCallable, Category = "Character")
+    class UWBP_CharacterInfo* GetCharacterInfoWidget() const { return WBP_CharacterInfo; }
+
 protected:
     UFUNCTION()
     virtual void NativePreConstruct() override;
@@ -74,7 +78,7 @@ protected:
 
     // Store widget
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
-    class UWBP_Store* WBP_Store;
+    class UWBP_Store* StoreWidget;
     
     // Store popup widget - optional binding
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))

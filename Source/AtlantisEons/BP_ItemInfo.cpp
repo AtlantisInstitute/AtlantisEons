@@ -1,5 +1,6 @@
 #include "BP_ItemInfo.h"
 #include "BlueprintItemTypes.h"
+#include "StoreSystemFix.h"
 
 UBP_ItemInfo::UBP_ItemInfo()
 {
@@ -98,6 +99,21 @@ FStructure_ItemInfo UBP_ItemInfo::CreateHardcodedItemData(int32 InItemIndex)
 
 void UBP_ItemInfo::GetItemTableRow(bool& Find, Structure_ItemInfo& ItemInfoStructure)
 {
+    // Use the robust StoreSystemFix to get item data - this handles the ItemIndex mapping correctly
+    FStructure_ItemInfo StoreItemInfo;
+    bool bStoreFound = UStoreSystemFix::GetItemData(ItemIndex, StoreItemInfo);
+    
+    if (bStoreFound && StoreItemInfo.bIsValid)
+    {
+        ItemInfoStructure = StoreItemInfo;
+        Find = true;
+        UE_LOG(LogTemp, Display, TEXT("✅ GetItemTableRow: Successfully found item %d using StoreSystemFix: '%s'"), ItemIndex, *StoreItemInfo.ItemName);
+        return;
+    }
+    
+    // Fallback to the original method if StoreSystemFix fails
+    UE_LOG(LogTemp, Warning, TEXT("GetItemTableRow: StoreSystemFix failed for item %d, trying fallback method"), ItemIndex);
+    
     // Get the data table
     static const FString TablePath = TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList");
     UDataTable* ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, *TablePath));
@@ -110,25 +126,51 @@ void UBP_ItemInfo::GetItemTableRow(bool& Find, Structure_ItemInfo& ItemInfoStruc
         return;
     }
 
-    // Create the row name with proper format and ensure it's not empty
-    FString RowName = FString::Printf(TEXT("Item_%d"), FMath::Max(0, ItemIndex));
+    // Try multiple row name formats to find the correct one
+    TArray<FString> RowNamePatterns = {
+        FString::FromInt(ItemIndex),                    // "7" (numeric format used by store system)
+        FString::Printf(TEXT("Item_%d"), ItemIndex),    // "Item_7" (prefixed format)
+        FString::Printf(TEXT("%d"), ItemIndex)          // Explicit numeric format
+    };
     
-    // Get the row structure with proper context
-    static const FString ContextString(TEXT("UBP_ItemInfo::GetItemTableRow"));
-    FStructure_ItemInfo* Row = ItemDataTable->FindRow<FStructure_ItemInfo>(*RowName, ContextString, true);
+    FStructure_ItemInfo* Row = nullptr;
+    FString FoundRowName;
+    
+    // Try each pattern until we find a match
+    for (const FString& RowName : RowNamePatterns)
+    {
+        static const FString ContextString(TEXT("UBP_ItemInfo::GetItemTableRow"));
+        Row = ItemDataTable->FindRow<FStructure_ItemInfo>(*RowName, ContextString, false);
+        if (Row)
+        {
+            FoundRowName = RowName;
+            UE_LOG(LogTemp, Display, TEXT("GetItemTableRow: Found item %d using row name pattern: %s"), ItemIndex, *RowName);
+            break;
+        }
+    }
     
     if (Row)
     {
         ItemInfoStructure = *Row;
         Find = true;
-        UE_LOG(LogTemp, Display, TEXT("Successfully found item data for index %d in data table"), ItemIndex);
+        UE_LOG(LogTemp, Display, TEXT("✅ Successfully found item data for index %d using row name: %s"), ItemIndex, *FoundRowName);
         return;
     }
     
-    // If not found in data table, use hardcoded data
+    // If not found in data table, log the attempted patterns and use hardcoded data
+    FString AttemptedPatterns;
+    for (int32 i = 0; i < RowNamePatterns.Num(); i++)
+    {
+        AttemptedPatterns += RowNamePatterns[i];
+        if (i < RowNamePatterns.Num() - 1)
+        {
+            AttemptedPatterns += TEXT(", ");
+        }
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("❌ Item %d not found in data table. Tried patterns: [%s]. Using hardcoded data."), ItemIndex, *AttemptedPatterns);
     ItemInfoStructure = CreateHardcodedItemData(ItemIndex);
     Find = true;
-    UE_LOG(LogTemp, Warning, TEXT("Using hardcoded data for item index: %d"), ItemIndex);
 }
 
 UDataTable* UBP_ItemInfo::GetItemDataTable() const

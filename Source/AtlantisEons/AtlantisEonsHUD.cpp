@@ -76,7 +76,6 @@ void AAtlantisEonsHUD::ShowCharacterInfo()
                     if (AAtlantisEonsCharacter* Character = Cast<AAtlantisEonsCharacter>(PC->GetPawn()))
                     {
                         CharacterInfoWBP->Character = Character;
-                        CharacterInfoWBP->InitializeCharacterPreview();
                         CharacterInfoWBP->UpdateAllStats();
                     }
                 }

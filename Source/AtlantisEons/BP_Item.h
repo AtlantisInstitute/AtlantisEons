@@ -85,6 +85,7 @@ private:
     void HideItemNamePopUp();
     void UpdateItemNamePosition();
     void SetDefaultItemInfo();
+    void SetDefaultMesh();
 
     FStreamableManager StreamableManager;
 

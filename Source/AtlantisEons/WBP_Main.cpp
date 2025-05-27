@@ -120,28 +120,19 @@ void UWBP_Main::NativeConstruct()
     {
         if (WBP_CharacterInfo)
         {
-            // Set character with detailed logging
-            UE_LOG(LogTemp, Warning, TEXT("%s: Setting Character = %s on WBP_CharacterInfo = %s"), 
+            // Set the character reference using the new function that also initializes equipment slots
+            UE_LOG(LogTemp, Warning, TEXT("%s: Setting character reference for %s on WBP_CharacterInfo = %s"), 
                 *GetName(), *Character->GetName(), *WBP_CharacterInfo->GetName());
             
-            WBP_CharacterInfo->Character = Character;
+            // CRITICAL: Set the character's WBP_CharacterInfo property first
+            Character->WBP_CharacterInfo = WBP_CharacterInfo;
+            UE_LOG(LogTemp, Warning, TEXT("%s: Set Character->WBP_CharacterInfo property"), *GetName());
             
-            // Double-check if the reference was properly set
-            if (WBP_CharacterInfo->Character == Character)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("%s: Character reference set successfully"), *GetName());
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("%s: Character reference NOT set correctly - assignment failed"), *GetName());
-            }
+            WBP_CharacterInfo->SetCharacterReference(Character);
             
             // Verify the widget's type and functionality
             UE_LOG(LogTemp, Warning, TEXT("%s: CharacterInfo widget class is: %s"), *GetName(), *WBP_CharacterInfo->GetClass()->GetName());
             
-            // Make sure we call these functions in this order
-            WBP_CharacterInfo->InitializeCharacterPreview();
-            WBP_CharacterInfo->UpdateAllStats();
             UE_LOG(LogTemp, Warning, TEXT("%s: Initial widget setup complete"), *GetName());
         }
         else
@@ -299,6 +290,21 @@ void UWBP_Main::Switcher2()
 
     // Switch to inventory (index 1)
     WidgetSwitcher->SetActiveWidgetIndex(1);
+    
+    // Initialize character preview in inventory if the widget is available
+    if (WBP_Inventory)
+    {
+        // Get the current player character
+        AAtlantisEonsCharacter* Character = Cast<AAtlantisEonsCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0));
+        if (Character)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("WBP_Main::Switcher2() - Character found for inventory"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("WBP_Main::Switcher2() - No character found for inventory"));
+        }
+    }
 }
 
 void UWBP_Main::Switcher3()
@@ -348,10 +354,10 @@ void UWBP_Main::UpdateCharacterInfo()
 void UWBP_Main::SetupPopupNavigation()
 {
     // Even if we don't have a popup, we can still set up the store button
-    if (WBP_Store && WBP_Store->BuyButton)
+    if (StoreWidget && StoreWidget->BuyButton)
     {
         UE_LOG(LogTemp, Warning, TEXT("%s: Setting up Store BuyButton"), *GetName());
-        WBP_Store->BuyButton->OnClicked.AddDynamic(this, &UWBP_Main::HandleStoreItemPurchase);
+        StoreWidget->BuyButton->OnClicked.AddDynamic(this, &UWBP_Main::HandleStoreItemPurchase);
     }
     
     // Only set up popup navigation if we have the popup widget
@@ -397,10 +403,10 @@ void UWBP_Main::HandlePopupNavigation(bool bShowPopup)
         UE_LOG(LogTemp, Warning, TEXT("%s: Showing store popup"), *GetName());
         
         // Update popup content if needed
-        if (WBP_Store)
+        if (StoreWidget)
         {
             // Get selected item and update popup
-            int32 SelectedItem = WBP_Store->GetSelectedItemIndex();
+            int32 SelectedItem = StoreWidget->GetSelectedItemIndex();
             WBP_StorePopup->UpdateItemDetails(SelectedItem);
         }
     }
@@ -426,9 +432,9 @@ void UWBP_Main::HandleStoreConfirmPurchase()
     UE_LOG(LogTemp, Warning, TEXT("%s: Store Confirm button clicked"), *GetName());
     
     // Process the purchase
-    if (WBP_Store)
+    if (StoreWidget)
     {
-        WBP_Store->PurchaseSelectedItem();
+        StoreWidget->PurchaseSelectedItem();
     }
     
     // Hide the popup

@@ -5,410 +5,574 @@
 #include "Engine/DataTable.h"
 #include "AtlantisEonsCharacter.h"
 #include "WBP_Main.h"
+#include "DataTableDiagnostic.h"
+#include "StoreSystemFix.h"
+#include "TextureDiagnostic.h"
+#include "UniversalItemLoader.h"
 
 void UWBP_StorePopup::NativeConstruct()
 {
-    // Always call parent implementation first
     Super::NativeConstruct();
-    UE_LOG(LogTemp, Display, TEXT("%s: Starting NativeConstruct"), *GetName());
 
-    // Initialize basic properties with safe values
-    ItemIndex = 0;
-    StackNumber = 1;
-    
-    // Safely check buttons and bind events only if valid
-    if (OKButton != nullptr)
-    {
-        UE_LOG(LogTemp, Display, TEXT("%s: OKButton is valid, binding click event"), *GetName());
-        OKButton->OnClicked.AddDynamic(this, &UWBP_StorePopup::OnOKButtonClicked);
-        // Ensure ConfirmButton reference is set
-        if (ConfirmButton == nullptr) ConfirmButton = OKButton;
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: OKButton is nullptr, events will not be bound"), *GetName());
-    }
-    
-    if (CancelButton != nullptr)
-    {
-        UE_LOG(LogTemp, Display, TEXT("%s: CancelButton is valid, binding click event"), *GetName());
-        CancelButton->OnClicked.AddDynamic(this, &UWBP_StorePopup::OnCancelButtonClicked);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: CancelButton is nullptr, events will not be bound"), *GetName());
-    }
-    
-    if (Button_Up != nullptr)
-    {
-        UE_LOG(LogTemp, Display, TEXT("%s: Button_Up is valid, binding click event"), *GetName());
-        Button_Up->OnClicked.AddDynamic(this, &UWBP_StorePopup::OnUpButtonClicked);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Button_Up is nullptr, events will not be bound"), *GetName());
-    }
-    
-    if (Button_Down != nullptr)
-    {
-        UE_LOG(LogTemp, Display, TEXT("%s: Button_Down is valid, binding click event"), *GetName());
-        Button_Down->OnClicked.AddDynamic(this, &UWBP_StorePopup::OnDownButtonClicked);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Button_Down is nullptr, events will not be bound"), *GetName());
-    }
+    // Initialize basic properties with proper defaults
+    if (ItemIndex == 0) ItemIndex = 1; // Default to item 1 if not set
+    if (StackNumber == 0) StackNumber = 1; // Default stack
+    if (SelectedQuantity == 0) SelectedQuantity = 1; // Default selected quantity
 
-    // Log widget status for text blocks
-    UE_LOG(LogTemp, Display, TEXT("%s: TextBlock_StackCounter is %s"), *GetName(), 
-        TextBlock_StackCounter != nullptr ? TEXT("valid") : TEXT("nullptr"));
-    UE_LOG(LogTemp, Display, TEXT("%s: TextBlock_GoldAmount is %s"), *GetName(), 
-        TextBlock_GoldAmount != nullptr ? TEXT("valid") : TEXT("nullptr"));
-    UE_LOG(LogTemp, Display, TEXT("%s: TotalPriceText is %s"), *GetName(), 
-        TotalPriceText != nullptr ? TEXT("valid") : TEXT("nullptr"));
+    // Setup button bindings with proper fallbacks
+    SetupButtonBindings();
     
-    // Try to safely update item display
-    try
+    // Update item display
+    UpdateItemDisplay();
+    
+    // Force update quantity and price displays
+    UpdateQuantityDisplay();
+    UpdatePriceDisplay();
+}
+
+void UWBP_StorePopup::SetupButtonBindings()
+{
+    // Bind OK/Confirm button (try multiple names)
+    UButton* OKBtn = OKButton ? OKButton : (ButtonOK ? ButtonOK : ConfirmButton);
+    if (OKBtn)
     {
-        UpdateItemDisplay();
-        UE_LOG(LogTemp, Display, TEXT("%s: UpdateItemDisplay completed successfully"), *GetName());
-    }
-    catch(const std::exception& e)
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Exception in UpdateItemDisplay: %s"), *GetName(), UTF8_TO_TCHAR(e.what()));
-    }
-    catch(...)
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Unknown exception in UpdateItemDisplay"), *GetName());
+        OKBtn->OnClicked.Clear();
+        OKBtn->OnClicked.AddDynamic(this, &UWBP_StorePopup::OnOKButtonClicked);
+        ConfirmButton = OKBtn; // Set reference for WBP_Main
     }
     
-    UE_LOG(LogTemp, Display, TEXT("%s: NativeConstruct completed"), *GetName());
+    // Bind Cancel button
+    UButton* CancelBtn = CancelButton ? CancelButton : ButtonCancel;
+    if (CancelBtn)
+    {
+        CancelBtn->OnClicked.Clear();
+        CancelBtn->OnClicked.AddDynamic(this, &UWBP_StorePopup::OnCancelButtonClicked);
+    }
+    
+    // Bind Up button
+    UButton* UpBtn = Button_Up ? Button_Up : UpButton;
+    if (UpBtn)
+    {
+        UpBtn->OnClicked.Clear();
+        UpBtn->OnClicked.AddDynamic(this, &UWBP_StorePopup::OnUpButtonClicked);
+    }
+    
+    // Bind Down button
+    UButton* DownBtn = Button_Down ? Button_Down : DownButton;
+    if (DownBtn)
+    {
+        DownBtn->OnClicked.Clear();
+        DownBtn->OnClicked.AddDynamic(this, &UWBP_StorePopup::OnDownButtonClicked);
+    }
 }
 
 void UWBP_StorePopup::UpdateItemDisplay()
 {
-    // Basic logging
-    UE_LOG(LogTemp, Display, TEXT("%s: UpdateItemDisplay - Starting for ItemIndex=%d"), *GetName(), ItemIndex);
-
-    // Demo/fallback data for testing when data table is not loading correctly
-    static Structure_ItemInfo FallbackItemInfo;
-    
-    // Check that the user provided a valid item index
-    if (ItemIndex < 0)
+    // Update item name
+    if (ItemNameText)
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Invalid item index %d"), *GetName(), ItemIndex);
+        ItemNameText->SetText(FText::FromString(ItemInfo.ItemName));
+    }
+
+    // Update item description
+    if (ItemDescriptionText)
+    {
+        ItemDescriptionText->SetText(FText::FromString(ItemInfo.ItemDescription));
+    }
+
+    // Update the confirmed ItemThumbnail widget using Universal Item Loader
+    if (ItemThumbnail)
+    {
+        UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
+        if (LoadedTexture)
+        {
+            ItemThumbnail->SetBrushFromTexture(LoadedTexture);
+        }
+    }
+
+    // Update legacy thumbnail images using Universal Item Loader
+    if (ItemThumbnailImage)
+    {
+        UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
+        if (LoadedTexture)
+        {
+            ItemThumbnailImage->SetBrushFromTexture(LoadedTexture);
+        }
+    }
+
+    if (Image_ItemThumbnail)
+    {
+        UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
+        if (LoadedTexture)
+        {
+            Image_ItemThumbnail->SetBrushFromTexture(LoadedTexture);
+        }
+    }
+
+    // Update price displays
+    UpdatePriceDisplay();
+}
+
+void UWBP_StorePopup::UpdateQuantityDisplay()
+{
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Updating quantity display to %d"), SelectedQuantity);
+    
+    // Ensure SelectedQuantity is valid
+    if (SelectedQuantity <= 0)
+    {
+        SelectedQuantity = 1;
+        UE_LOG(LogTemp, Warning, TEXT("StorePopup: Fixed invalid SelectedQuantity, set to 1"));
+    }
+    
+    FString QuantityString = FString::Printf(TEXT("%d"), SelectedQuantity);
+    
+    // Update the confirmed quantity widget first
+    if (Quantity)
+    {
+        Quantity->SetText(FText::FromString(QuantityString));
+        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set Quantity widget to %s"), *QuantityString);
+    }
+    
+    // Update the new system quantity text
+    if (QuantityText)
+    {
+        QuantityText->SetText(FText::FromString(QuantityString));
+        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set QuantityText to %s"), *QuantityString);
+    }
+    
+    // Update legacy stack counter text
+    if (TextBlock_StackCounter)
+    {
+        TextBlock_StackCounter->SetText(FText::FromString(QuantityString));
+        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set TextBlock_StackCounter to %s"), *QuantityString);
+    }
+    
+    // Update alternative stack counter text
+    if (StackCounterText)
+    {
+        StackCounterText->SetText(FText::FromString(QuantityString));
+        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set StackCounterText to %s"), *QuantityString);
+    }
+    
+    // Try to find and update any text block that might be showing quantity
+    // Expanded list of possible widget names based on common Blueprint naming patterns
+    TArray<FString> PossibleQuantityWidgetNames = {
+        TEXT("Quantity"),                    // USER CONFIRMED: This is the actual widget name
+        TEXT("Text_Quantity"),
+        TEXT("TextBlock_Quantity"), 
+        TEXT("Quantity_Text"),
+        TEXT("QuantityDisplay"),
+        TEXT("StackDisplay"),
+        TEXT("CountText"),
+        TEXT("NumberText"),
+        TEXT("Text_StackNumber"),
+        TEXT("TextBlock_StackNumber"),
+        TEXT("StackNumber_Text"),
+        TEXT("Text_Count"),
+        TEXT("TextBlock_Count"),
+        TEXT("Count_Text"),
+        TEXT("Text_Amount"),
+        TEXT("TextBlock_Amount"),
+        TEXT("Amount_Text"),
+        TEXT("Text_Num"),
+        TEXT("TextBlock_Num"),
+        TEXT("Num_Text"),
+        TEXT("Text_Stack"),
+        TEXT("TextBlock_Stack"),
+        TEXT("Stack_Text"),
+        TEXT("QuantityLabel"),
+        TEXT("StackLabel"),
+        TEXT("CountLabel"),
+        TEXT("NumberLabel"),
+        TEXT("AmountLabel")
+    };
+    
+    int32 WidgetsUpdated = 0;
+    for (const FString& WidgetName : PossibleQuantityWidgetNames)
+    {
+        if (UTextBlock* QuantityWidget = Cast<UTextBlock>(GetWidgetFromName(*WidgetName)))
+        {
+            QuantityWidget->SetText(FText::FromString(QuantityString));
+            WidgetsUpdated++;
+            UE_LOG(LogTemp, Log, TEXT("StorePopup: Set %s to %s"), *WidgetName, *QuantityString);
+        }
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Updated %d quantity widgets"), WidgetsUpdated);
+    
+    // Also update the legacy StackNumber for backwards compatibility
+    StackNumber = SelectedQuantity;
+    
+    // Force a widget refresh
+    if (GetRootWidget())
+    {
+        GetRootWidget()->InvalidateLayoutAndVolatility();
+    }
+}
+
+void UWBP_StorePopup::UpdatePriceDisplay()
+{
+    int32 UnitPrice = ItemInfo.Price > 0 ? ItemInfo.Price : 100;
+    int32 TotalPrice = UnitPrice * SelectedQuantity;
+    
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Updating price - Unit: %d, Qty: %d, Total: %d"), UnitPrice, SelectedQuantity, TotalPrice);
+    
+    // Update unit price displays
+    FText UnitPriceTextValue = FText::FromString(FString::Printf(TEXT("%d"), UnitPrice));
+    if (UnitPriceText)
+    {
+        UnitPriceText->SetText(UnitPriceTextValue);
+        UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Set UnitPriceText to %d"), UnitPrice);
+    }
+    
+    // Update total price displays
+    FText TotalPriceTextValue = FText::FromString(FString::Printf(TEXT("%d"), TotalPrice));
+    
+    if (TotalPriceText)
+    {
+        TotalPriceText->SetText(TotalPriceTextValue);
+        UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Set TotalPriceText to %d"), TotalPrice);
+    }
+    
+    if (PriceText)
+    {
+        PriceText->SetText(TotalPriceTextValue);
+        UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Set PriceText to %d"), TotalPrice);
+    }
+    
+    // USER CONFIRMED: Update the actual Price widget
+    if (Price)
+    {
+        Price->SetText(TotalPriceTextValue);
+        UE_LOG(LogTemp, Warning, TEXT("StorePopup: ✅ Set Price widget to %d"), TotalPrice);
+    }
+    
+    if (TextBlock_GoldAmount)
+    {
+        TextBlock_GoldAmount->SetText(TotalPriceTextValue);
+        UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Set TextBlock_GoldAmount to %d"), TotalPrice);
+    }
+    
+    if (GoldAmountText)
+    {
+        GoldAmountText->SetText(TotalPriceTextValue);
+        UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Set GoldAmountText to %d"), TotalPrice);
+    }
+    
+    // Try to find and update any text block that might be showing price
+    // Comprehensive list of possible price widget names
+    TArray<FString> PossiblePriceWidgetNames = {
+        TEXT("Price"),                       // USER CONFIRMED: This is the actual widget name
+        TEXT("Text_Price"),
+        TEXT("TextBlock_Price"),
+        TEXT("Price_Text"),
+        TEXT("PriceDisplay"),
+        TEXT("TotalPrice"),
+        TEXT("Text_TotalPrice"),
+        TEXT("TextBlock_TotalPrice"),
+        TEXT("TotalPrice_Text"),
+        TEXT("Cost"),
+        TEXT("Text_Cost"),
+        TEXT("TextBlock_Cost"),
+        TEXT("Cost_Text"),
+        TEXT("Gold"),
+        TEXT("Text_Gold"),
+        TEXT("TextBlock_Gold"),
+        TEXT("Gold_Text"),
+        TEXT("Amount"),
+        TEXT("Text_Amount"),
+        TEXT("TextBlock_Amount"),
+        TEXT("Amount_Text"),
+        TEXT("PriceLabel"),
+        TEXT("CostLabel"),
+        TEXT("GoldLabel"),
+        TEXT("AmountLabel")
+    };
+    
+    int32 PriceWidgetsUpdated = 0;
+    for (const FString& WidgetName : PossiblePriceWidgetNames)
+    {
+        if (UTextBlock* PriceWidget = Cast<UTextBlock>(GetWidgetFromName(*WidgetName)))
+        {
+            PriceWidget->SetText(TotalPriceTextValue);
+            PriceWidgetsUpdated++;
+            UE_LOG(LogTemp, Warning, TEXT("StorePopup: ✅ Set %s to %d"), *WidgetName, TotalPrice);
+        }
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Price display updated - %s costs %d each, %d total (Updated %d price widgets)"), *ItemInfo.ItemName, UnitPrice, TotalPrice, PriceWidgetsUpdated);
+}
+
+void UWBP_StorePopup::OnIncreaseQuantityClicked()
+{
+    int32 MaxQuantity = ItemInfo.bIsStackable ? 99 : 1;
+    if (SelectedQuantity < MaxQuantity)
+    {
+        SelectedQuantity++;
+        UpdateQuantityDisplay();
+        UpdatePriceDisplay();
+    }
+}
+
+void UWBP_StorePopup::OnDecreaseQuantityClicked()
+{
+    if (SelectedQuantity > 1)
+    {
+        SelectedQuantity--;
+        UpdateQuantityDisplay();
+        UpdatePriceDisplay();
+    }
+}
+
+void UWBP_StorePopup::OnConfirmPurchaseClicked()
+{
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Confirm purchase - item %d, qty %d"), ItemInfo.ItemIndex, SelectedQuantity);
+
+    // Get player character
+    ACharacter* PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+    if (!PlayerCharacter)
+    {
+        UE_LOG(LogTemp, Error, TEXT("StorePopup: No player character"));
         return;
     }
-    
-    // Create a default (empty) item info in case data table access fails
-    Structure_ItemInfo LocalItemInfo;
-    LocalItemInfo.ItemIndex = ItemIndex;
-    LocalItemInfo.StackNumber = 1;
-    LocalItemInfo.Price = 100; // Fallback price
-    
-    // Pointer to use throughout the function - start with our local fallback
-    Structure_ItemInfo* ItemInfo = &LocalItemInfo;
-    
-    // Attempt to load the data table
-    UDataTable* ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, 
-                           TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList.Table_ItemList")));
-    
-    // Log data table status
-    if (ItemDataTable)
+
+    AAtlantisEonsCharacter* Character = Cast<AAtlantisEonsCharacter>(PlayerCharacter);
+    if (!Character)
     {
-        UE_LOG(LogTemp, Display, TEXT("%s: Successfully loaded item data table"), *GetName());
-        
-        if (ItemDataTable->GetRowStruct())
-        {
-            UE_LOG(LogTemp, Display, TEXT("%s: Data table row structure: %s"), 
-                   *GetName(), *ItemDataTable->GetRowStruct()->GetName());
-        }
-        
-        // Try to retrieve the item data using FindRowUnchecked (avoids structure type mismatch)
-        FString RowName = FString::FromInt(ItemIndex);
-        void* RowData = ItemDataTable->FindRowUnchecked(*RowName);
-        
-        if (RowData)
-        {
-            // Successfully found the row - update local data with row index for UI elements
-            UE_LOG(LogTemp, Display, TEXT("%s: Found item data for index %d"), *GetName(), ItemIndex);
-            LocalItemInfo.ItemName = FString::Printf(TEXT("Item %d"), ItemIndex);
-            LocalItemInfo.Price = 100 * (ItemIndex + 1); // Price based on index for testing
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("%s: Item index %d not found in data table"), *GetName(), ItemIndex);
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to load item data table"), *GetName());
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("%s: Successfully found ItemInfo for index %d"), *GetName(), ItemIndex);
-    
-    // Update thumbnail if it exists
-    if (Image_ItemThumbnail != nullptr)
-    {
-        try
-        {
-            if (!ItemInfo->ItemThumbnail.IsNull())
-            {
-                UTexture2D* LoadedTexture = nullptr;
-                
-                // Try loading thumbnail texture with error handling
-                try
-                {
-                    LoadedTexture = ItemInfo->ItemThumbnail.LoadSynchronous();
-                    if (LoadedTexture != nullptr)
-                    {
-                        Image_ItemThumbnail->SetBrushFromTexture(LoadedTexture);
-                        UE_LOG(LogTemp, Display, TEXT("%s: Successfully set thumbnail texture"), *GetName());
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to load thumbnail texture"), *GetName());
-                    }
-                }
-                catch(...)
-                {
-                    UE_LOG(LogTemp, Error, TEXT("%s: Exception while loading thumbnail texture"), *GetName());
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Display, TEXT("%s: Item has no thumbnail"), *GetName());
-            }
-        }
-        catch(...)
-        {
-            UE_LOG(LogTemp, Error, TEXT("%s: Exception while checking item thumbnail"), *GetName());
-        }
+        UE_LOG(LogTemp, Error, TEXT("StorePopup: Failed to cast to AtlantisEonsCharacter"));
+        return;
     }
 
-    // Update stack counter visibility based on item type
-    if (Overlay_StackCounter != nullptr)
+    // Calculate total cost
+    int32 TotalCost = ItemInfo.Price * SelectedQuantity;
+    
+    // Check if player has enough gold
+    if (Character->Gold < TotalCost)
     {
-        try
-        {
-            switch (ItemInfo->ItemType)
-            {
-                case EItemType::Consume_HP:
-                case EItemType::Consume_MP:
-                    Overlay_StackCounter->SetVisibility(ESlateVisibility::Visible);
-                    break;
-                default:
-                    Overlay_StackCounter->SetVisibility(ESlateVisibility::Collapsed);
-                    break;
-            }
-            UE_LOG(LogTemp, Display, TEXT("%s: Updated stack counter visibility for ItemType %d"), 
-                   *GetName(), static_cast<int32>(ItemInfo->ItemType));
-        }
-        catch(...)
-        {
-            UE_LOG(LogTemp, Error, TEXT("%s: Exception while updating stack counter visibility"), *GetName());
-        }
+        UE_LOG(LogTemp, Warning, TEXT("StorePopup: Insufficient gold. Need %d, have %d"), TotalCost, Character->Gold);
+        // Could show an error message here
+        return;
     }
 
-    // Update gold text
-    if (TextBlock_GoldAmount != nullptr)
+    // Deduct gold
+    Character->Gold -= TotalCost;
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Deducted %d gold. Remaining: %d"), TotalCost, Character->Gold);
+
+    // Add items to inventory
+    for (int32 i = 0; i < SelectedQuantity; i++)
     {
-        try
-        {
-            FString PriceString = FString::Printf(TEXT("%d"), ItemInfo->Price);
-            FText PriceText = FText::FromString(PriceString);
-            TextBlock_GoldAmount->SetText(PriceText);
-            UE_LOG(LogTemp, Display, TEXT("%s: Updated gold text to %d"), *GetName(), ItemInfo->Price);
-        }
-        catch(...)
-        {
-            UE_LOG(LogTemp, Error, TEXT("%s: Exception while updating gold text"), *GetName());
-        }
+        Character->PickingItem(ItemInfo.ItemIndex, 1);
     }
-    
-    // Also update TotalPriceText if it exists
-    if (TotalPriceText != nullptr)
+
+    // Update main UI
+    if (Character->Main)
     {
-        try
-        {
-            FString PriceString = FString::Printf(TEXT("%d"), ItemInfo->Price);
-            FText PriceText = FText::FromString(PriceString);
-            TotalPriceText->SetText(PriceText);
-            UE_LOG(LogTemp, Display, TEXT("%s: Updated total price text to %d"), *GetName(), ItemInfo->Price);
-        }
-        catch(...)
-        {
-            UE_LOG(LogTemp, Error, TEXT("%s: Exception while updating total price text"), *GetName());
-        }
+        Character->Main->UpdateDisplayedGold();
+        Character->Main->buying = false;
     }
-    
-    UE_LOG(LogTemp, Display, TEXT("%s: UpdateItemDisplay completed successfully"), *GetName());
+
+    // Close popup
+    RemoveFromParent();
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Purchase completed"));
 }
 
 void UWBP_StorePopup::OnOKButtonClicked()
 {
-    UE_LOG(LogTemp, Warning, TEXT("%s: OnOKButtonClicked"), *GetName());
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Purchase - Item %d, Qty %d"), ItemIndex, StackNumber);
     
-    if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+    // Validate item index and stack number
+    if (ItemIndex < 0 || StackNumber <= 0)
     {
-        if (AAtlantisEonsCharacter* Character = Cast<AAtlantisEonsCharacter>(PC->GetCharacter()))
+        UE_LOG(LogTemp, Error, TEXT("StorePopup: Invalid params - Index: %d, Qty: %d"), ItemIndex, StackNumber);
+        RemoveFromParent();
+        return;
+    }
+    
+    // Get player character
+    APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+    if (!PC)
+    {
+        UE_LOG(LogTemp, Error, TEXT("StorePopup: No player controller"));
+        RemoveFromParent();
+        return;
+    }
+
+    AAtlantisEonsCharacter* Character = Cast<AAtlantisEonsCharacter>(PC->GetCharacter());
+    if (!Character)
+    {
+        UE_LOG(LogTemp, Error, TEXT("StorePopup: No player character"));
+        RemoveFromParent();
+        return;
+    }
+
+    UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Player has %d gold"), Character->YourGold);
+
+    // Get item information using the corrected StoreSystemFix instead of UniversalDataTableReader
+    FStructure_ItemInfo ItemInfo;
+    bool bFoundItemData = UStoreSystemFix::GetItemData(ItemIndex, ItemInfo);
+    
+    if (!bFoundItemData || !ItemInfo.bIsValid)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("StorePopup: No item data, using fallback pricing"));
+        ItemInfo.ItemIndex = ItemIndex;
+        ItemInfo.Price = 100 * FMath::Max(1, ItemIndex); // Fallback pricing
+        ItemInfo.ItemName = FString::Printf(TEXT("Item %d"), ItemIndex);
+        ItemInfo.bIsValid = true;
+        ItemInfo.bIsStackable = true;
+        ItemInfo.StackNumber = 1;
+    }
+    
+    // Calculate total price using REAL data table price
+    int32 TotalPrice = ItemInfo.Price * StackNumber;
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: %s - Unit: %d, Qty: %d, Total: %d"), *ItemInfo.ItemName, ItemInfo.Price, StackNumber, TotalPrice);
+    
+    // Check if character has enough gold
+    if (Character->YourGold < TotalPrice)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("StorePopup: Insufficient gold - Need: %d, Have: %d"), TotalPrice, Character->YourGold);
+        RemoveFromParent();
+        return;
+    }
+    
+    // Set main widget buying state
+    if (UWBP_Main* MainWidget = Character->Main)
+    {
+        MainWidget->buying = true;
+    }
+    
+    // Attempt to add items to inventory
+    int32 SuccessfullyAdded = 0;
+    bool bInventoryFull = false;
+    
+    for (int32 i = 0; i < StackNumber; ++i)
+    {
+        bool bAdded = Character->PickingItem(ItemIndex, 1);
+        if (bAdded)
         {
-            if (UWBP_Main* MainWidget = Character->Main)
-            {
-                MainWidget->buying = true;
-            }
-            
-            // Get item data
-            UDataTable* ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList.Table_ItemList")));
-            if (!ItemDataTable)
-            {
-                UE_LOG(LogTemp, Error, TEXT("%s: Failed to load Item Data Table"), *GetName());
-                return;
-            }
-            
-            FName RowName = FName(*FString::FromInt(ItemIndex));
-            Structure_ItemInfo* ItemInfo = ItemDataTable->FindRow<Structure_ItemInfo>(RowName, TEXT(""));
-            if (!ItemInfo)
-            {
-                UE_LOG(LogTemp, Error, TEXT("%s: Failed to find item info for item index %d"), *GetName(), ItemIndex);
-                return;
-            }
-            
-            // Calculate total price based on stack number
-            int32 TotalPrice = ItemInfo->Price * StackNumber;
-            
-            // Check if character has enough gold
-            if (Character->YourGold >= TotalPrice)
-            {
-                // Deduct gold
-                Character->YourGold -= TotalPrice;
-                UE_LOG(LogTemp, Warning, TEXT("%s: Purchased item for %d gold. Remaining gold: %d"), *GetName(), TotalPrice, Character->YourGold);
-                
-                // Add items to inventory
-                for (int32 i = 0; i < StackNumber; ++i)
-                {
-                    // Use PickingItem instead of AddItemToInventory
-                    Character->PickingItem(ItemIndex, 1);
-                }
-                
-                // Close popup
-                RemoveFromParent();
-                
-                // If we're in a main widget, update displayed gold
-                if (UPanelWidget* Panel = GetParent())
-                {
-                    // Need to get the parent user widget, not just the panel
-                    if (UUserWidget* ParentUserWidget = Cast<UUserWidget>(Panel->GetOuter()))
-                    {
-                        if (UWBP_Main* MainWidget = Cast<UWBP_Main>(ParentUserWidget))
-                        {
-                            MainWidget->UpdateDisplayedGold();
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // Not enough gold
-                UE_LOG(LogTemp, Warning, TEXT("%s: Not enough gold to purchase item. Need %d gold but only have %d"), *GetName(), TotalPrice, Character->YourGold);
-                
-                // TODO: Show message to player - could be implemented with another popup widget
-                // For now we'll just close this popup
-                RemoveFromParent();
-            }
+            SuccessfullyAdded++;
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("StorePopup: Inventory full at item %d/%d"), i + 1, StackNumber);
+            bInventoryFull = true;
+            break;
         }
     }
+    
+    if (SuccessfullyAdded == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("StorePopup: No items added to inventory"));
+        RemoveFromParent();
+        return;
+    }
+    
+    // Deduct gold for successfully added items using REAL price
+    int32 ActualCost = ItemInfo.Price * SuccessfullyAdded;
+    Character->YourGold -= ActualCost;
+    Character->Gold = Character->YourGold; // Keep Gold synchronized
+    
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Purchase complete! Added %d items, spent %d gold. Remaining: %d"), SuccessfullyAdded, ActualCost, Character->YourGold);
+    
+    // Update displayed gold in UI
+    if (UWBP_Main* MainWidget = Character->Main)
+    {
+        MainWidget->UpdateDisplayedGold();
+        MainWidget->buying = false; // Reset buying state
+    }
+    
+    // Force update inventory display
+    Character->UpdateInventorySlots();
+    
+    // Show feedback for partial purchases
+    if (bInventoryFull && SuccessfullyAdded < StackNumber)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("StorePopup: Partial purchase - %d/%d items added"), SuccessfullyAdded, StackNumber);
+    }
+    
+    // Close popup
+    RemoveFromParent();
 }
 
 void UWBP_StorePopup::OnCancelButtonClicked()
 {
+    UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Cancel clicked"));
     RemoveFromParent();
 }
 
 void UWBP_StorePopup::OnUpButtonClicked()
 {
-    // Increment stack number with a maximum of 99
-    StackNumber = FMath::Min(StackNumber + 1, 99);
+    UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Up clicked - Current: %d"), SelectedQuantity);
     
-    // Update the displayed stack number
-    if (TextBlock_StackCounter)
+    int32 MaxQuantity = ItemInfo.bIsStackable ? 99 : 1;
+    
+    if (SelectedQuantity < MaxQuantity)
     {
-        TextBlock_StackCounter->SetText(GetText_StackNumber());
+        SelectedQuantity++;
+        StackNumber = SelectedQuantity; // Keep legacy variable in sync
+        
+        UE_LOG(LogTemp, Log, TEXT("StorePopup: Increased quantity to %d"), SelectedQuantity);
+        
+        // Update displays
+        UpdateQuantityDisplay();
+        UpdatePriceDisplay();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Already at max quantity %d"), MaxQuantity);
     }
 }
 
 void UWBP_StorePopup::OnDownButtonClicked()
 {
-    // Decrement stack number with a minimum of 1
-    StackNumber = FMath::Max(StackNumber - 1, 1);
+    UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Down clicked - Current: %d"), SelectedQuantity);
     
-    // Update the displayed stack number
-    if (TextBlock_StackCounter)
+    if (SelectedQuantity > 1)
     {
-        TextBlock_StackCounter->SetText(GetText_StackNumber());
+        SelectedQuantity--;
+        StackNumber = SelectedQuantity; // Keep legacy variable in sync
+        
+        UE_LOG(LogTemp, Log, TEXT("StorePopup: Decreased quantity to %d"), SelectedQuantity);
+        
+        // Update displays
+        UpdateQuantityDisplay();
+        UpdatePriceDisplay();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Already at minimum quantity 1"));
     }
 }
 
 FText UWBP_StorePopup::GetText_StackNumber() const
 {
-    return UKismetTextLibrary::Conv_IntToText(StackNumber, false, true, 1, 324);
+    return FText::AsNumber(SelectedQuantity);
 }
 
 FText UWBP_StorePopup::GetText_TotalPrice()
 {
-    UDataTable* ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList.Table_ItemList")));
-    
-    if (ItemDataTable)
-    {
-        FName RowName = FName(*UKismetStringLibrary::Conv_IntToString(ItemIndex));
-        Structure_ItemInfo* ItemInfo = ItemDataTable->FindRow<Structure_ItemInfo>(RowName, TEXT(""));
-        
-        if (ItemInfo)
-        {
-            int32 TotalPrice = ItemInfo->Price * StackNumber;
-            return UKismetTextLibrary::Conv_IntToText(TotalPrice);
-        }
-    }
-    
-    return FText::FromString("0");
+    int32 TotalPrice = ItemInfo.Price * SelectedQuantity;
+    return FText::AsNumber(TotalPrice);
 }
 
 void UWBP_StorePopup::UpdateItemDetails(int32 InItemIndex)
 {
-    // Set the item index and update the display
     ItemIndex = InItemIndex;
-    StackNumber = 1; // Reset stack number to 1 for new item
+    StackNumber = 1; // Reset stack number for new item
     
-    UE_LOG(LogTemp, Warning, TEXT("%s: Updating item details for index %d"), *GetName(), ItemIndex);
+    UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Updating details for ItemIndex=%d"), ItemIndex);
     
-    // Update the item display
     UpdateItemDisplay();
-    
-    // Make sure the stack counter text is updated - safeguard with pointer check
-    if (TextBlock_StackCounter != nullptr)
+}
+
+void UWBP_StorePopup::UpdateTextSafely(UTextBlock* TextBlock, const FText& NewText)
+{
+    if (TextBlock)
     {
-        TextBlock_StackCounter->SetText(GetText_StackNumber());
+        TextBlock->SetText(NewText);
     }
-    
-    // Get the price text once to avoid multiple calls
-    FText priceText = GetText_TotalPrice();
-    
-    // Update total price text if it exists - use nullptr check instead of IsValid
-    if (TextBlock_GoldAmount != nullptr)
-    {
-        TextBlock_GoldAmount->SetText(priceText);
-    }
-    
-    // Also update TotalPriceText if it exists - use nullptr check
-    if (TotalPriceText != nullptr)
-    {
-        TotalPriceText->SetText(priceText);
-    }
-    
-    // If we have OKButton/ConfirmButton make sure they point to the same button
-    if (IsValid(OKButton) && !IsValid(ConfirmButton))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Setting OKButton as ConfirmButton"), *GetName());
-        ConfirmButton = OKButton;
-    }
+}
+
+int32 UWBP_StorePopup::GetTotalPrice()
+{
+    return ItemInfo.Price * SelectedQuantity;
 }

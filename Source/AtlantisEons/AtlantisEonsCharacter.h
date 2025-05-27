@@ -19,7 +19,6 @@
 class UWBP_CharacterInfo;
 #include "WBP_GuideText.h"
 #include "WBP_InventorySlot.h"
-#include "BP_SceneCapture.h"
 
 #include "AtlantisEonsCharacter.generated.h"
 
@@ -37,7 +36,6 @@ class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
-class ABP_SceneCapture;
 class UAIPerceptionStimuliSourceComponent;
 struct FInputActionValue;
 
@@ -164,10 +162,6 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
     UStaticMeshComponent* Shield;
 
-    /** Scene Capture Actor Reference */
-    UPROPERTY(BlueprintReadWrite, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
-    class ABP_SceneCapture* SceneCapture;
-
     /** Equipment Functions */
     UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
     void EquipItem(EItemEquipSlot Slot, const TSoftObjectPtr<UStaticMesh>& MeshToEquip, UTexture2D* Thumbnail, 
@@ -193,18 +187,18 @@ public:
     void SubtractingCharacterStatus(int32 ItemIndex);
 
 protected:
-    /** UI Components */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
-    class UWBP_InventorySlot* WBP_InventorySlot_0;
+    /** Equipment Slot UI Components */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Equipment Slots")
+    class UWBP_InventorySlot* HeadSlot;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
-    class UWBP_InventorySlot* WBP_InventorySlot_1;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Equipment Slots")
+    class UWBP_InventorySlot* WeaponSlot;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
-    class UWBP_InventorySlot* WBP_InventorySlot_2;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Equipment Slots")
+    class UWBP_InventorySlot* SuitSlot;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
-    class UWBP_InventorySlot* WBP_InventorySlot_3;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Equipment Slots")
+    class UWBP_InventorySlot* CollectableSlot;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
     class UProgressBar* CircularBarHP;
@@ -353,9 +347,6 @@ float AttackCooldown = 0.5f;
 virtual void BeginPlay() override;
 
 UPROPERTY()
-class ABP_SceneCapture* BP_SceneCapture;
-
-UPROPERTY()
 class UWBP_Main* MainWidget;
 
 UPROPERTY()
@@ -371,13 +362,8 @@ class UMaterialInstanceDynamic* CircularMPMaterial;
 void InitializeUI();
 void SetupCircularBars();
 public:
-    UFUNCTION(BlueprintCallable, Category = "Character|Preview")
-    ABP_SceneCapture* GetSceneCapture() const { return BP_SceneCapture; }
-
     UFUNCTION(BlueprintCallable, Category = "Character|Input")
     UInputMappingContext* GetDefaultMappingContext() const { return DefaultMappingContext; }
-
-    void SpawnSceneCapture();
 
 // Input handling
 virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -417,7 +403,7 @@ void PickupItem(int32 ItemIndex, int32 StackNumber);
 
 public:
     /** Called when attack cooldown expires */
-    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     void ResetAttack();
 
     /** Apply visual effects for invulnerability */
@@ -466,8 +452,6 @@ public:
     virtual ~AAtlantisEonsCharacter() = default;
 
     virtual void PostInitializeComponents() override;
-
-    void UpdateCharacterPreview();
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Character")
     void RespawnCharacter();
@@ -539,6 +523,9 @@ int32 GetCurrentDamage() const { return CurrentDamage; }
 UFUNCTION(BlueprintCallable, Category = "Character|Stats")
 void UpdateAllStats();
 
+UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+void RefreshStatsDisplay();
+
 UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
 void SettingStore();
 
@@ -576,6 +563,33 @@ void ProcessEquipItem(UBP_ItemInfo* ItemInfoRef);
 UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
 void ProcessConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
     int32 RecoverHP, int32 RecoverMP, EItemType ItemType);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void UpdateEquipmentSlotUI(EItemEquipSlot EquipSlot, UBP_ItemInfo* ItemInfo);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void ClearEquipmentSlotUI(EItemEquipSlot EquipSlot);
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void UpdateAllEquipmentSlotsUI();
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void InitializeEquipmentSlotReferences();
+
+UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+void OnEquipmentSlotClicked(EItemEquipSlot EquipSlot);
+
+UFUNCTION()
+void OnHeadSlotClicked(int32 SlotIndex);
+
+UFUNCTION()
+void OnWeaponSlotClicked(int32 SlotIndex);
+
+UFUNCTION()
+void OnSuitSlotClicked(int32 SlotIndex);
+
+UFUNCTION()
+void OnCollectableSlotClicked(int32 SlotIndex);
 
 UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
 void DragAndDropExchangeItem(UBP_ItemInfo* FromInventoryItemRef, UWBP_InventorySlot* FromInventorySlotRef,

@@ -50,6 +50,9 @@ class ATLANTISEONS_API UWBP_InventorySlot : public UUserWidget
 
 public:
     EInventorySlotType GetInventorySlotType() const { return SlotType; }
+    
+    UFUNCTION(BlueprintCallable, Category = "Inventory")
+    void SetInventorySlotType(EInventorySlotType NewSlotType) { SlotType = NewSlotType; }
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")

@@ -6,6 +6,7 @@
 #include "Components/Button.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"
 #include "WBP_InventorySlot.h"
 #include "WBP_ItemDescription.h"
 #include "BP_Item.h"

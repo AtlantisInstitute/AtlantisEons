@@ -123,6 +123,10 @@ public:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UImage* BottomBorder4;
 
+    // Open purchase popup
+    UFUNCTION(BlueprintCallable, Category = "Store")
+    void OpenPurchasePopup(const FStructure_ItemInfo& ItemInfo);
+
 protected:
     virtual void NativeConstruct() override;
 
@@ -147,7 +151,10 @@ protected:
 
     // Store element management
     UFUNCTION()
-    void AddingStoreElement(int32 Index, UWBP_StoreItemElement* WBPStoreItemElementRef);
+    void AddingStoreElement(const FStructure_ItemInfo& ItemInfo);
+    
+    // Legacy method for backward compatibility
+    bool AddingStoreElement(int32 ItemIndex, UWBP_StoreItemElement* WBPStoreItemElementRef);
     
     // Handle item selection
     UFUNCTION()
@@ -156,6 +163,10 @@ protected:
 private:
     void InitializeStoreElements();
     void UpdateElementVisibility(uint8 EquipSlotType);
+    
+    // Helper methods for store initialization
+    FStructure_ItemInfo CreateFallbackItemData(int32 ItemIndex);
+    void PopulateStoreElementUI(UWBP_StoreItemElement* Element, const FStructure_ItemInfo& ItemInfo);
     
     // Currently selected item index
     UPROPERTY()

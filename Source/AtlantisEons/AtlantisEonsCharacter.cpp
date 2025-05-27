@@ -7,7 +7,6 @@
 #include "ZombieCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "BP_SceneCapture.h"
 #include "Engine/DamageEvents.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
@@ -58,6 +57,8 @@
 #include "WBP_StorePopup.h"
 #include "Components/StaticMeshComponent.h"
 #include "BP_Item.h"
+#include "StoreSystemFix.h"
+#include "UniversalItemLoader.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -68,8 +69,8 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
 {
     PrimaryActorTick.bCanEverTick = true;
     
-    // Initialize gold amount
-    YourGold = 1000;
+    // Initialize gold amount - increased for testing store purchases
+    YourGold = 100000000;  // 100 million gold for testing
     Gold = YourGold; // Ensure both Gold properties start with the same value
 
     // Set size for collision capsule
@@ -94,7 +95,7 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
     FollowCamera->bUsePawnControlRotation = false;
 
-    // Create equipment components
+    // Create equipment components with proper socket attachments
     Helmet = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Helmet"));
     Helmet->SetupAttachment(GetMesh(), FName(TEXT("head")));
     Helmet->SetVisibility(false);
@@ -331,9 +332,6 @@ void AAtlantisEonsCharacter::BeginPlay()
 
     // Initialize UI components - disabled for now to fix input issues
     // InitializeUI();
-    
-    // Spawn scene capture actor
-    SpawnSceneCapture();
     
     // Play background music
     UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")), 1.0f, 1.0f, 0.0f, nullptr, nullptr, true);
@@ -573,40 +571,6 @@ void AAtlantisEonsCharacter::PostInitializeComponents()
     Super::PostInitializeComponents();
 }
 
-void AAtlantisEonsCharacter::SpawnSceneCapture()
-{
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to get World in SpawnSceneCapture"), *GetName());
-        return;
-    }
-
-    // Check if we already have a scene capture
-    if (SceneCapture)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: SceneCapture already exists, destroying old one"), *GetName());
-        SceneCapture->Destroy();
-        SceneCapture = nullptr;
-    }
-
-    // Spawn the scene capture actor - no longer used but kept for compatibility
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.Owner = this;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-    
-    SceneCapture = World->SpawnActor<ABP_SceneCapture>(ABP_SceneCapture::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-    
-    if (!SceneCapture)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to spawn SceneCapture"), *GetName());
-        return;
-    }
-
-    // Dummy implementation - the actual functionality has been removed
-    UE_LOG(LogTemp, Warning, TEXT("%s: Scene capture system has been disabled"), *GetName());
-}
-
 void AAtlantisEonsCharacter::RecoverHealth(int32 Amount)
 {
     CurrentHealth = FMath::Min(CurrentHealth + Amount, BaseHealth);
@@ -649,20 +613,100 @@ void AAtlantisEonsCharacter::SetGenericTeamId(const FGenericTeamId& NewTeamId)
 
 void AAtlantisEonsCharacter::UpdateAllStats()
 {
-    // Update all character stats based on equipment and status effects
+    // Start with base stats
     int32 TotalSTR = BaseSTR;
     int32 TotalDEX = BaseDEX;
     int32 TotalINT = BaseINT;
     int32 TotalDefence = BaseDefence;
     int32 TotalDamage = BaseDamage;
+    float TotalHealth = BaseHealth;
+    int32 TotalMP = BaseMP;
     
-    // TODO: Add equipment bonuses
+    // Add equipment bonuses from all equipped items
+    for (int32 i = 0; i < EquipmentSlots.Num(); ++i)
+    {
+        if (EquipmentSlots[i])
+        {
+            bool bFound = false;
+            FStructure_ItemInfo ItemData;
+            EquipmentSlots[i]->GetItemTableRow(bFound, ItemData);
+            
+            if (bFound)
+            {
+                TotalSTR += ItemData.STR;
+                TotalDEX += ItemData.DEX;
+                TotalINT += ItemData.INT;
+                TotalDefence += ItemData.Defence;
+                TotalDamage += ItemData.Damage;
+                TotalHealth += ItemData.HP;
+                TotalMP += ItemData.MP;
+                
+                UE_LOG(LogTemp, Log, TEXT("Equipment bonus from '%s': STR+%d, DEX+%d, INT+%d, DEF+%d, DMG+%d, HP+%d, MP+%d"), 
+                       *ItemData.ItemName, ItemData.STR, ItemData.DEX, ItemData.INT, 
+                       ItemData.Defence, ItemData.Damage, ItemData.HP, ItemData.MP);
+            }
+        }
+    }
     
+    // Update current stats
     CurrentSTR = TotalSTR;
     CurrentDEX = TotalDEX;
     CurrentINT = TotalINT;
     CurrentDefence = TotalDefence;
     CurrentDamage = TotalDamage;
+    
+    // Update health and MP maximums
+    float PreviousMaxHealth = MaxHealth;
+    MaxHealth = TotalHealth;
+    
+    // Adjust current health proportionally if max health changed
+    if (PreviousMaxHealth > 0.0f && MaxHealth != PreviousMaxHealth)
+    {
+        float HealthRatio = CurrentHealth / PreviousMaxHealth;
+        CurrentHealth = FMath::Min(MaxHealth * HealthRatio, MaxHealth);
+    }
+    
+    // Update MP maximum
+    int32 PreviousMaxMP = MaxMP;
+    MaxMP = TotalMP;
+    
+    // Adjust current MP proportionally if max MP changed
+    if (PreviousMaxMP > 0 && MaxMP != PreviousMaxMP)
+    {
+        float MPRatio = static_cast<float>(CurrentMP) / static_cast<float>(PreviousMaxMP);
+        CurrentMP = FMath::Min(FMath::RoundToInt(MaxMP * MPRatio), MaxMP);
+    }
+    
+    // Clamp values to valid ranges
+    CurrentHealth = FMath::Clamp(CurrentHealth, 0.0f, MaxHealth);
+    CurrentMP = FMath::Clamp(CurrentMP, 0, MaxMP);
+    
+    // Broadcast stat changes
+    OnStatsUpdated.Broadcast();
+    
+    // Update character info widget if it exists
+    if (WBP_CharacterInfo)
+    {
+        WBP_CharacterInfo->UpdateAllStats();
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Stats updated - STR: %d, DEX: %d, INT: %d, DEF: %d, DMG: %d, HP: %.1f/%.1f, MP: %d/%d"), 
+           CurrentSTR, CurrentDEX, CurrentINT, CurrentDefence, CurrentDamage, CurrentHealth, MaxHealth, CurrentMP, MaxMP);
+}
+
+void AAtlantisEonsCharacter::RefreshStatsDisplay()
+{
+    // Force update the character info widget display
+    if (WBP_CharacterInfo)
+    {
+        WBP_CharacterInfo->UpdateAllStats();
+    }
+    
+    // Update circular bars
+    SettingCircularBar_HP();
+    SettingCircularBar_MP();
+    
+    UE_LOG(LogTemp, Log, TEXT("Stats display refreshed"));
 }
 
 void AAtlantisEonsCharacter::SettingStore()
@@ -767,34 +811,31 @@ bool AAtlantisEonsCharacter::PickingItem(int32 ItemIndex, int32 ItemStackNumber)
     // Ensure we have at least 1 item to add
     int32 ActualStackNumber = FMath::Max(1, ItemStackNumber);
     
-    UE_LOG(LogTemp, Display, TEXT("%s: PickingItem called - ItemIndex: %d, Requested: %d, Using: %d"), 
-        *GetName(), ItemIndex, ItemStackNumber, ActualStackNumber);
-    
     // Get item info from data table or hardcoded data
     FStructure_ItemInfo ItemInfo;
     
-    // Try to get from game instance first
-    UAtlantisEonsGameInstance* GameInstance = Cast<UAtlantisEonsGameInstance>(GetGameInstance());
-    if (!GameInstance)
+    // Try to get from store system first (most reliable)
+    bool bFoundItemData = UStoreSystemFix::GetItemData(ItemIndex, ItemInfo);
+    
+    if (!bFoundItemData)
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Game instance not found, using hardcoded item data"), *GetName());
-        ItemInfo = CreateHardcodedItemData(ItemIndex);
-    }
-    else
-    {
-        // Get from game instance
-        if (!GameInstance->GetItemInfo(ItemIndex, ItemInfo))
+        // Try to get from game instance as fallback
+        UAtlantisEonsGameInstance* GameInstance = Cast<UAtlantisEonsGameInstance>(GetGameInstance());
+        if (GameInstance && GameInstance->GetItemInfo(ItemIndex, ItemInfo))
         {
-            UE_LOG(LogTemp, Warning, TEXT("%s: Item not found in game instance, using hardcoded data"), *GetName());
-            ItemInfo = CreateHardcodedItemData(ItemIndex);
+            bFoundItemData = true;
         }
+    }
+    
+    if (!bFoundItemData)
+    {
+        ItemInfo = CreateHardcodedItemData(ItemIndex);
     }
     
     // Create a new item info object directly from C++ class
     UBP_ConcreteItemInfo* NewItemInfo = NewObject<UBP_ConcreteItemInfo>(this);
     if (!NewItemInfo)
     {
-        UE_LOG(LogTemp, Error, TEXT("%s: Failed to create new item info object"), *GetName());
         return false;
     }
     
@@ -804,39 +845,21 @@ bool AAtlantisEonsCharacter::PickingItem(int32 ItemIndex, int32 ItemStackNumber)
     // IMPORTANT: Set the stack number AFTER copying to ensure it doesn't get overridden
     NewItemInfo->StackNumber = ActualStackNumber;
     
-    UE_LOG(LogTemp, Display, TEXT("%s: Created item info - Name: %s, Stack: %d, Valid: %s"), 
-        *GetName(), *NewItemInfo->ItemName, NewItemInfo->StackNumber, NewItemInfo->bIsValid ? TEXT("true") : TEXT("false"));
-    
-    // Try to load the thumbnail if not already set
+    // Load thumbnail using Universal Item Loader for consistency with store system
     if (NewItemInfo->ThumbnailBrush.GetResourceObject() == nullptr)
     {
-        TArray<FString> ThumbnailPaths = {
-            FString::Printf(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_Item_%d"), ItemIndex),
-            FString::Printf(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_%s"), *ItemInfo.ItemName.Replace(TEXT(" "), TEXT(""))),
-            TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicHealingPotion"),
-            TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicManaPotion"),
-            TEXT("/Engine/EditorResources/S_Actor")
-        };
-        
-        for (const FString& Path : ThumbnailPaths)
+        UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
+        if (LoadedTexture)
         {
-            UE_LOG(LogTemp, Display, TEXT("%s: Trying to load thumbnail from: %s"), *GetName(), *Path);
-            UTexture2D* LoadedTexture = Cast<UTexture2D>(StaticLoadObject(UTexture2D::StaticClass(), nullptr, *Path));
-            if (LoadedTexture)
-            {
-                NewItemInfo->Thumbnail = LoadedTexture;
-                
-                FSlateBrush NewBrush;
-                NewBrush.SetResourceObject(LoadedTexture);
-                NewBrush.ImageSize = FVector2D(64.0f, 64.0f);
-                NewBrush.DrawAs = ESlateBrushDrawType::Image;
-                NewBrush.Tiling = ESlateBrushTileType::NoTile;
-                NewBrush.Mirroring = ESlateBrushMirrorType::NoMirror;
-                NewItemInfo->ThumbnailBrush = NewBrush;
-                
-                UE_LOG(LogTemp, Display, TEXT("%s: Successfully loaded thumbnail from: %s"), *GetName(), *Path);
-                break;
-            }
+            NewItemInfo->Thumbnail = LoadedTexture;
+            
+            FSlateBrush NewBrush;
+            NewBrush.SetResourceObject(LoadedTexture);
+            NewBrush.ImageSize = FVector2D(64.0f, 64.0f);
+            NewBrush.DrawAs = ESlateBrushDrawType::Image;
+            NewBrush.Tiling = ESlateBrushTileType::NoTile;
+            NewBrush.Mirroring = ESlateBrushMirrorType::NoMirror;
+            NewItemInfo->ThumbnailBrush = NewBrush;
         }
     }
     
@@ -844,13 +867,13 @@ bool AAtlantisEonsCharacter::PickingItem(int32 ItemIndex, int32 ItemStackNumber)
     bool bAdded = AddItemToInventory(NewItemInfo);
     if (bAdded)
     {
-        UE_LOG(LogTemp, Display, TEXT("%s: Successfully added item to inventory"), *GetName());
+        UE_LOG(LogTemp, Log, TEXT("✅ Added %s to inventory"), *ItemInfo.ItemName);
         // Force update inventory slots
         UpdateInventorySlots();
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Failed to add item to inventory"), *GetName());
+        UE_LOG(LogTemp, Warning, TEXT("❌ Failed to add item to inventory"));
     }
     
     return bAdded;
@@ -959,8 +982,209 @@ void AAtlantisEonsCharacter::ContextMenuUse_EquipItem(UBP_ItemInfo* ItemInfoRef)
 {
     if (!ItemInfoRef) return;
     
-    // Handle equipment based on slot type
-    // TODO: Implement equipment logic
+    // Get item information from the data table
+    bool bFound = false;
+    FStructure_ItemInfo ItemData;
+    ItemInfoRef->GetItemTableRow(bFound, ItemData);
+    
+    if (!bFound)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ContextMenuUse_EquipItem: Failed to get item data for item index %d"), ItemInfoRef->ItemIndex);
+        return;
+    }
+    
+    // Verify this is an equipable item
+    if (ItemData.ItemType != EItemType::Equip)
+    {
+        return;
+    }
+    
+    // Debug: Log the equipment slot value from data table
+    UE_LOG(LogTemp, Warning, TEXT("ContextMenuUse_EquipItem: Item '%s' has ItemEquipSlot = %d"), 
+           *ItemData.ItemName, static_cast<int32>(ItemData.ItemEquipSlot));
+    
+    // HOTFIX: Correct equipment slots for specific items that have wrong data table values
+    // Comprehensive weapon detection based on item names and known indices
+    bool bIsWeapon = false;
+    bool bIsShield = false;
+    bool bIsHelmet = false;
+    bool bIsBodyArmor = false;
+    
+    // Check by item index (known weapon items)
+    if (ItemInfoRef->ItemIndex == 7 || ItemInfoRef->ItemIndex == 11 || ItemInfoRef->ItemIndex == 12 || 
+        ItemInfoRef->ItemIndex == 13 || ItemInfoRef->ItemIndex == 14 || ItemInfoRef->ItemIndex == 15 || 
+        ItemInfoRef->ItemIndex == 16)
+    {
+        bIsWeapon = true;
+    }
+    // Check by item name patterns for weapons
+    else if (ItemData.ItemName.Contains(TEXT("Sword")) || ItemData.ItemName.Contains(TEXT("Axe")) || 
+             ItemData.ItemName.Contains(TEXT("Pistol")) || ItemData.ItemName.Contains(TEXT("Rifle")) || 
+             ItemData.ItemName.Contains(TEXT("Spike")) || ItemData.ItemName.Contains(TEXT("Laser")) ||
+             ItemData.ItemName.Contains(TEXT("Blade")) || ItemData.ItemName.Contains(TEXT("Gun")) ||
+             ItemData.ItemName.Contains(TEXT("Weapon")) || ItemData.ItemName.Contains(TEXT("Bow")) ||
+             ItemData.ItemName.Contains(TEXT("Staff")) || ItemData.ItemName.Contains(TEXT("Wand")) ||
+             ItemData.ItemName.Contains(TEXT("Hammer")) || ItemData.ItemName.Contains(TEXT("Mace")) ||
+             ItemData.ItemName.Contains(TEXT("Spear")) || ItemData.ItemName.Contains(TEXT("Dagger")) ||
+             ItemData.ItemName.Contains(TEXT("Katana")) || ItemData.ItemName.Contains(TEXT("Scythe")))
+    {
+        bIsWeapon = true;
+    }
+    // Check for shields/accessories
+    else if (ItemInfoRef->ItemIndex == 17 || ItemInfoRef->ItemIndex == 18 ||
+             ItemData.ItemName.Contains(TEXT("Shield")) || ItemData.ItemName.Contains(TEXT("Buckler")))
+    {
+        bIsShield = true;
+    }
+    // Check for helmets/head gear
+    else if (ItemInfoRef->ItemIndex == 19 || ItemInfoRef->ItemIndex == 20 || ItemInfoRef->ItemIndex == 21 || ItemInfoRef->ItemIndex == 22 ||
+             ItemData.ItemName.Contains(TEXT("Helmet")) || ItemData.ItemName.Contains(TEXT("Hat")) || 
+             ItemData.ItemName.Contains(TEXT("Cap")) || ItemData.ItemName.Contains(TEXT("Crown")) ||
+             ItemData.ItemName.Contains(TEXT("Mask")) || ItemData.ItemName.Contains(TEXT("Hood")))
+    {
+        bIsHelmet = true;
+    }
+    // Check for body armor
+    else if (ItemInfoRef->ItemIndex == 23 || ItemInfoRef->ItemIndex == 24 || ItemInfoRef->ItemIndex == 25 || ItemInfoRef->ItemIndex == 26 ||
+             ItemData.ItemName.Contains(TEXT("Suit")) || ItemData.ItemName.Contains(TEXT("Armor")) || 
+             ItemData.ItemName.Contains(TEXT("Chestplate")) || ItemData.ItemName.Contains(TEXT("Vest")) ||
+             ItemData.ItemName.Contains(TEXT("Robe")) || ItemData.ItemName.Contains(TEXT("Tunic")))
+    {
+        bIsBodyArmor = true;
+    }
+    
+    // Apply the corrections
+    if (bIsWeapon)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Weapon;
+        UE_LOG(LogTemp, Warning, TEXT("HOTFIX: Corrected '%s' (Index: %d) to Weapon slot"), *ItemData.ItemName, ItemInfoRef->ItemIndex);
+    }
+    else if (bIsShield)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Accessory;
+        UE_LOG(LogTemp, Warning, TEXT("HOTFIX: Corrected '%s' (Index: %d) to Accessory slot"), *ItemData.ItemName, ItemInfoRef->ItemIndex);
+    }
+    else if (bIsHelmet)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Head;
+        UE_LOG(LogTemp, Warning, TEXT("HOTFIX: Corrected '%s' (Index: %d) to Head slot"), *ItemData.ItemName, ItemInfoRef->ItemIndex);
+    }
+    else if (bIsBodyArmor)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Body;
+        UE_LOG(LogTemp, Warning, TEXT("HOTFIX: Corrected '%s' (Index: %d) to Body slot"), *ItemData.ItemName, ItemInfoRef->ItemIndex);
+    }
+    
+    // Check if the item has a valid equipment slot
+    if (ItemData.ItemEquipSlot == EItemEquipSlot::None)
+    {
+        return;
+    }
+    
+    // FIXED: Correct equipment slot index calculation
+    // Equipment slots array: [0]=Head, [1]=Body, [2]=Weapon, [3]=Accessory
+    // Enum values: None=0, Head=1, Body=2, Weapon=3, Accessory=4
+    int32 EquipSlotIndex = -1;
+    switch (ItemData.ItemEquipSlot)
+    {
+        case EItemEquipSlot::Head:
+            EquipSlotIndex = 0;
+            break;
+        case EItemEquipSlot::Body:
+            EquipSlotIndex = 1;
+            break;
+        case EItemEquipSlot::Weapon:
+            EquipSlotIndex = 2;
+            break;
+        case EItemEquipSlot::Accessory:
+            EquipSlotIndex = 3;
+            break;
+        default:
+            return;
+    }
+    
+    // Check if there's already an item equipped in this slot
+    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num() && EquipmentSlots[EquipSlotIndex])
+    {
+        // Unequip the current item first - move it back to inventory
+        UBP_ItemInfo* CurrentEquippedItem = EquipmentSlots[EquipSlotIndex];
+        if (CurrentEquippedItem)
+        {
+            // Find an empty inventory slot for the unequipped item
+            bool bFoundEmptySlot = false;
+            for (int32 i = 0; i < InventoryItems.Num(); ++i)
+            {
+                if (!InventoryItems[i])
+                {
+                    InventoryItems[i] = CurrentEquippedItem;
+                    bFoundEmptySlot = true;
+                    break;
+                }
+            }
+            
+            if (!bFoundEmptySlot)
+            {
+                return; // No space to unequip current item
+            }
+            
+            // Handle visual unequipping
+            HandleDisarmItem(ItemData.ItemEquipSlot, CurrentEquippedItem->MeshID, CurrentEquippedItem->ItemIndex);
+            
+            // Clear equipment slot UI
+            ClearEquipmentSlotUI(ItemData.ItemEquipSlot);
+            
+            // Remove stat bonuses from the unequipped item
+            SubtractingCharacterStatus(CurrentEquippedItem->ItemIndex);
+        }
+    }
+    
+    // Find the item in the inventory and remove it
+    bool bRemovedFromInventory = false;
+    for (int32 i = 0; i < InventoryItems.Num(); ++i)
+    {
+        if (InventoryItems[i] == ItemInfoRef)
+        {
+            InventoryItems[i] = nullptr;
+            bRemovedFromInventory = true;
+            break;
+        }
+    }
+    
+    if (!bRemovedFromInventory)
+    {
+        return;
+    }
+    
+    // Equip the new item
+    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num())
+    {
+        EquipmentSlots[EquipSlotIndex] = ItemInfoRef;
+        
+        // Handle visual equipping
+        EquipItemInSlot(ItemData.ItemEquipSlot, ItemData.StaticMeshID, ItemData.ItemThumbnail, 
+                       ItemInfoRef->ItemIndex, nullptr, nullptr);
+        
+        // Apply stat bonuses from the equipped item
+        AddingCharacterStatus(ItemInfoRef->ItemIndex);
+        
+        // Update inventory display
+        UpdateInventorySlots();
+        
+        // Update equipment slot UI
+        UpdateEquipmentSlotUI(ItemData.ItemEquipSlot, ItemInfoRef);
+        
+        // Update character stats
+        UpdateAllStats();
+        
+        // Force refresh the stats display
+        RefreshStatsDisplay();
+        
+        UE_LOG(LogTemp, Log, TEXT("✅ Successfully equipped '%s' in %s slot"), 
+               *ItemData.ItemName, 
+               ItemData.ItemEquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
+               ItemData.ItemEquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
+               ItemData.ItemEquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
+    }
 }
 
 void AAtlantisEonsCharacter::ContextMenuUse_ConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
@@ -1028,28 +1252,40 @@ void AAtlantisEonsCharacter::EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const
 {
     // Find the appropriate mesh component based on slot
     UStaticMeshComponent* TargetComponent = nullptr;
+    FString SlotName;
+    
     switch (ItemEquipSlot)
     {
         case EItemEquipSlot::Head:
-            TargetComponent = HeadMesh;
+            TargetComponent = Helmet;
+            SlotName = TEXT("Head");
             break;
         case EItemEquipSlot::Body:
             TargetComponent = BodyMesh;
+            SlotName = TEXT("Body");
             break;
         case EItemEquipSlot::Weapon:
-            TargetComponent = WeaponMesh;
+            TargetComponent = Weapon;
+            SlotName = TEXT("Weapon");
             break;
         case EItemEquipSlot::Accessory:
-            TargetComponent = AccessoryMesh;
+            TargetComponent = Shield;
+            SlotName = TEXT("Shield/Accessory");
             break;
         default:
+            UE_LOG(LogTemp, Warning, TEXT("EquipItemInSlot: Unknown equipment slot %d"), static_cast<int32>(ItemEquipSlot));
             return;
     }
 
     if (TargetComponent)
     {
         // Load and set the mesh
-        TargetComponent->SetStaticMesh(StaticMeshID.LoadSynchronous());
+        UStaticMesh* LoadedMesh = StaticMeshID.LoadSynchronous();
+        if (LoadedMesh)
+        {
+            TargetComponent->SetStaticMesh(LoadedMesh);
+            TargetComponent->SetVisibility(true);
+        }
         
         // Apply materials if provided
         if (MaterialInterface)
@@ -1063,19 +1299,25 @@ void AAtlantisEonsCharacter::HandleDisarmItem(EItemEquipSlot ItemEquipSlot, cons
 {
     // Find and clear the appropriate mesh component
     UStaticMeshComponent* TargetComponent = nullptr;
+    FString SlotName;
+    
     switch (ItemEquipSlot)
     {
         case EItemEquipSlot::Head:
-            TargetComponent = HeadMesh;
+            TargetComponent = Helmet;
+            SlotName = TEXT("Head");
             break;
         case EItemEquipSlot::Body:
             TargetComponent = BodyMesh;
+            SlotName = TEXT("Body");
             break;
         case EItemEquipSlot::Weapon:
-            TargetComponent = WeaponMesh;
+            TargetComponent = Weapon;
+            SlotName = TEXT("Weapon");
             break;
         case EItemEquipSlot::Accessory:
-            TargetComponent = AccessoryMesh;
+            TargetComponent = Shield;
+            SlotName = TEXT("Shield/Accessory");
             break;
         default:
             return;
@@ -1084,6 +1326,7 @@ void AAtlantisEonsCharacter::HandleDisarmItem(EItemEquipSlot ItemEquipSlot, cons
     if (TargetComponent)
     {
         TargetComponent->SetStaticMesh(nullptr);
+        TargetComponent->SetVisibility(false);
     }
 }
 
@@ -1091,20 +1334,43 @@ void AAtlantisEonsCharacter::ProcessEquipItem(UBP_ItemInfo* ItemInfoRef)
 {
     if (!ItemInfoRef) return;
 
-    // Get the item's equipment slot and mesh
-    EItemEquipSlot EquipSlot = ItemInfoRef->ItemEquipSlot;
-    TSoftObjectPtr<UStaticMesh> MeshID = ItemInfoRef->MeshID;
-    TSoftObjectPtr<UTexture2D> Thumbnail = ItemInfoRef->Thumbnail;
-    int32 ItemIndex = ItemInfoRef->ItemIndex;
-    UMaterialInterface* Material1 = ItemInfoRef->Material1;
-    UMaterialInterface* Material2 = ItemInfoRef->Material2;
+    // Get item information from the data table
+    bool bFound = false;
+    FStructure_ItemInfo ItemData;
+    ItemInfoRef->GetItemTableRow(bFound, ItemData);
+    
+    if (!bFound)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ProcessEquipItem: Failed to get item data for item index %d"), ItemInfoRef->ItemIndex);
+        return;
+    }
 
-    // Equip the item
+    // Verify this is an equipable item
+    if (ItemData.ItemType != EItemType::Equip)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ProcessEquipItem: Item '%s' is not equipable"), *ItemData.ItemName);
+        return;
+    }
+
+    // Get the item's equipment slot and mesh from the data table
+    EItemEquipSlot EquipSlot = ItemData.ItemEquipSlot;
+    TSoftObjectPtr<UStaticMesh> MeshID = ItemData.StaticMeshID;
+    TSoftObjectPtr<UTexture2D> Thumbnail = ItemData.ItemThumbnail;
+    int32 ItemIndex = ItemInfoRef->ItemIndex;
+    UMaterialInterface* Material1 = nullptr; // Materials not available in data structure
+    UMaterialInterface* Material2 = nullptr; // Materials not available in data structure
+
+    // Equip the item visually
     EquipItemInSlot(EquipSlot, MeshID, Thumbnail, ItemIndex, Material1, Material2);
 
     // Update character stats
     AddingCharacterStatus(ItemIndex);
     UpdateAllStats();
+    
+    // Force refresh the stats display
+    RefreshStatsDisplay();
+    
+    UE_LOG(LogTemp, Log, TEXT("ProcessEquipItem: Successfully processed equipment for '%s'"), *ItemData.ItemName);
 }
 
 void AAtlantisEonsCharacter::ProcessConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef, int32 RecoverHP, int32 RecoverMP, EItemType ItemType)
@@ -1395,6 +1661,13 @@ void AAtlantisEonsCharacter::MeleeAttack(const FInputActionValue& Value)
     }
 }
 
+void AAtlantisEonsCharacter::ResetAttack()
+{
+    bCanAttack = true;
+    bIsAttacking = false;
+    UE_LOG(LogTemp, Warning, TEXT("Attack cooldown reset. Can attack again."));
+}
+
 void AAtlantisEonsCharacter::CloseInventoryImpl()
 {
     if (bIsInventoryOpen)
@@ -1413,19 +1686,42 @@ void AAtlantisEonsCharacter::CloseInventoryImpl()
         HUD->HideInventoryWidget();
         bIsInventoryOpen = false;
         
-        // Restore all input mappings
-        if (APlayerController* PC = Cast<APlayerController>(Controller))
+        // Get the player controller
+        APlayerController* PC = Cast<APlayerController>(Controller);
+        if (!PC)
         {
-            if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+            UE_LOG(LogTemp, Error, TEXT("Failed to get PlayerController in CloseInventory"));
+            return;
+        }
+        
+        // Clear keyboard focus from any widgets and reset input mode
+        if (GEngine && GEngine->GameViewport)
+        {
+            FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
+            FSlateApplication::Get().SetAllUserFocus(GEngine->GameViewport->GetGameViewportWidget());
+        }
+        
+        // Set input mode back to game only
+        FInputModeGameOnly GameOnlyMode;
+        PC->SetInputMode(GameOnlyMode);
+        PC->SetShowMouseCursor(false);
+        PC->FlushPressedKeys();
+        
+        // Restore all input mappings
+        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+        {
+            // Clear all mappings first
+            Subsystem->ClearAllMappings();
+            
+            // Then add back the default mapping context
+            if (DefaultMappingContext)
             {
-                // Clear all mappings first
-                Subsystem->ClearAllMappings();
-                
-                // Then add back the default mapping context
-                if (DefaultMappingContext)
-                {
-                    Subsystem->AddMappingContext(DefaultMappingContext, 0);
-                }
+                Subsystem->AddMappingContext(DefaultMappingContext, 0);
+                UE_LOG(LogTemp, Warning, TEXT("CloseInventory - Restored default mapping context"));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("CloseInventory - DefaultMappingContext is null!"));
             }
         }
         
@@ -1433,27 +1729,31 @@ void AAtlantisEonsCharacter::CloseInventoryImpl()
         if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
         {
             MovementComp->SetMovementMode(MOVE_Walking);
+            MovementComp->bOrientRotationToMovement = true;
+            MovementComp->MaxWalkSpeed = BaseMovementSpeed;
         }
+        
+        // Force enable input for both controller and character
+        PC->EnableInput(PC);
+        EnableInput(PC);
+        
+        // Reset character input to ensure everything works
+        ResetCharacterInput();
         
         UE_LOG(LogTemp, Warning, TEXT("====== INVENTORY CLOSE: CloseInventory COMPLETED ======"));
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get HUD"));
+        UE_LOG(LogTemp, Warning, TEXT("CloseInventory called but inventory was not open"));
     }
-}
-
-void AAtlantisEonsCharacter::UpdateCharacterPreview()
-{
-    // Functionality removed
 }
 
 void AAtlantisEonsCharacter::ToggleInventory(const FInputActionValue& Value)
 {
-    // Check if toggle is locked
-    if (bInventoryToggleLocked)
+    // Check if toggle is locked (but allow closing even if locked for emergency situations)
+    if (bInventoryToggleLocked && !bIsInventoryOpen)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ToggleInventory called but ignored due to toggle lock"));
+        UE_LOG(LogTemp, Warning, TEXT("ToggleInventory called but ignored due to toggle lock (opening blocked)"));
         return;
     }
     
@@ -1467,29 +1767,28 @@ void AAtlantisEonsCharacter::ToggleInventory(const FInputActionValue& Value)
         return;
     }
     
-    // Lock toggle to prevent rapid switching
+    // Lock toggle to prevent rapid switching (but shorter duration)
     bInventoryToggleLocked = true;
-    GetWorldTimerManager().SetTimer(InventoryToggleLockTimer, this, &AAtlantisEonsCharacter::UnlockInventoryToggle, 0.2f, false);
+    GetWorldTimerManager().SetTimer(InventoryToggleLockTimer, this, &AAtlantisEonsCharacter::UnlockInventoryToggle, 0.1f, false);
     
     // If inventory is open, close it
     if (bIsInventoryOpen)
     {
-        if (HUD->IsInventoryWidgetVisible())
-        {
-            CloseInventory();
-        }
-        else
-        {
-            // Widget is not visible but state says it's open - fix the state
-            bIsInventoryOpen = false;
-        }
+        UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Closing inventory"));
+        CloseInventory();
     }
     else
     {
         // Only try to open if it's not already visible
         if (!HUD->IsInventoryWidgetVisible())
         {
+            UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Opening inventory"));
             OpenInventory();
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Widget already visible, syncing state"));
+            bIsInventoryOpen = true;
         }
     }
 }
@@ -1558,6 +1857,9 @@ void AAtlantisEonsCharacter::UpdateInventorySlots()
             {
                 // Set the slot index first
                 Slots[i]->SetSlotIndex(i);
+                
+                // Set slot type to Inventory to enable context menu
+                Slots[i]->SetInventorySlotType(EInventorySlotType::Inventory);
                 
                 // Bind context menu events to character handlers
                 if (!Slots[i]->ContextMenuClickUse.IsBound())
@@ -1657,30 +1959,20 @@ bool AAtlantisEonsCharacter::AddItemToInventory(UBP_ItemInfo* ItemInfo)
         return false;
     }
 
-    UE_LOG(LogTemp, Display, TEXT("%s: AddItemToInventory - ItemIndex: %d, bIsValid: %s, StackNumber: %d"), 
-        *GetName(), ItemInfo->ItemIndex, ItemInfo->bIsValid ? TEXT("true") : TEXT("false"), ItemInfo->StackNumber);
-
     // Validate item data
     if (!ItemInfo->bIsValid || ItemInfo->ItemIndex < 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Invalid item data - Index: %d, Valid: %s"), 
-            *GetName(), ItemInfo->ItemIndex, ItemInfo->bIsValid ? TEXT("true") : TEXT("false"));
         return false;
     }
-
-    UE_LOG(LogTemp, Display, TEXT("%s: Item validation passed, attempting to add to inventory"), *GetName());
 
     // RESTORED ORIGINAL INVENTORY LOGIC
     bool bItemAdded = false;
     int32 RemainingStack = ItemInfo->StackNumber;
     const int32 MaxStackSize = 99;
 
-    UE_LOG(LogTemp, Display, TEXT("%s: InventoryItems array size: %d"), *GetName(), InventoryItems.Num());
-
     // First try to stack with existing items if stackable
     if (ItemInfo->bIsStackable)
     {
-        UE_LOG(LogTemp, Display, TEXT("%s: Item is stackable, checking for existing stacks"), *GetName());
         for (int32 i = 0; i < InventoryItems.Num(); ++i)
         {
             if (InventoryItems[i] && InventoryItems[i]->ItemIndex == ItemInfo->ItemIndex)
@@ -1693,9 +1985,6 @@ bool AAtlantisEonsCharacter::AddItemToInventory(UBP_ItemInfo* ItemInfo)
                     InventoryItems[i]->StackNumber += AmountToAdd;
                     RemainingStack -= AmountToAdd;
                     bItemAdded = true;
-
-                    UE_LOG(LogTemp, Display, TEXT("%s: Added %d to existing stack at index %d, new total: %d"), 
-                        *GetName(), AmountToAdd, i, InventoryItems[i]->StackNumber);
 
                     // Update UI for this slot
                     if (MainWidget)
@@ -1718,30 +2007,21 @@ bool AAtlantisEonsCharacter::AddItemToInventory(UBP_ItemInfo* ItemInfo)
             }
         }
     }
-    else
-    {
-        UE_LOG(LogTemp, Display, TEXT("%s: Item is not stackable"), *GetName());
-    }
-
-    UE_LOG(LogTemp, Display, TEXT("%s: After stacking check - RemainingStack: %d"), *GetName(), RemainingStack);
 
     // If we still have items to add, find empty slots
     while (RemainingStack > 0)
     {
         bool bFoundEmptySlot = false;
-        UE_LOG(LogTemp, Display, TEXT("%s: Looking for empty slot, RemainingStack: %d"), *GetName(), RemainingStack);
         
         for (int32 i = 0; i < InventoryItems.Num(); ++i)
         {
             if (!InventoryItems[i])
             {
-                UE_LOG(LogTemp, Display, TEXT("%s: Found empty slot at index %d"), *GetName(), i);
                 
                 // Create a new item info object directly from C++ class
                 UBP_ConcreteItemInfo* NewItemInfo = NewObject<UBP_ConcreteItemInfo>(this);
                 if (!NewItemInfo)
                 {
-                    UE_LOG(LogTemp, Error, TEXT("%s: Failed to create new item info object"), *GetName());
                     continue;
                 }
 
@@ -1765,9 +2045,6 @@ bool AAtlantisEonsCharacter::AddItemToInventory(UBP_ItemInfo* ItemInfo)
                 bItemAdded = true;
                 bFoundEmptySlot = true;
 
-                UE_LOG(LogTemp, Display, TEXT("%s: Added new item to slot %d with stack size %d"), 
-                    *GetName(), i, NewItemInfo->StackNumber);
-
                 // Update UI for this slot
                 if (MainWidget)
                 {
@@ -1776,22 +2053,9 @@ bool AAtlantisEonsCharacter::AddItemToInventory(UBP_ItemInfo* ItemInfo)
                         TArray<UWBP_InventorySlot*> Slots = InventoryWidget->GetInventorySlotWidgets();
                         if (Slots.IsValidIndex(i) && Slots[i])
                         {
-                            UE_LOG(LogTemp, Display, TEXT("%s: Updating UI slot %d"), *GetName(), i);
                             Slots[i]->UpdateSlot(NewItemInfo);
                         }
-                        else
-                        {
-                            UE_LOG(LogTemp, Warning, TEXT("%s: No valid UI slot found at index %d"), *GetName(), i);
-                        }
                     }
-                    else
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("%s: InventoryWidget not found in MainWidget"), *GetName());
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("%s: MainWidget is null"), *GetName());
                 }
 
                 break;
@@ -1800,19 +2064,9 @@ bool AAtlantisEonsCharacter::AddItemToInventory(UBP_ItemInfo* ItemInfo)
 
         if (!bFoundEmptySlot)
         {
-            UE_LOG(LogTemp, Warning, TEXT("%s: No empty slots found in inventory"), *GetName());
             break;
         }
     }
-
-    // If we couldn't add all items, log a warning
-    if (RemainingStack > 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Could not add all items. %d items remaining"), *GetName(), RemainingStack);
-    }
-
-    UE_LOG(LogTemp, Display, TEXT("%s: AddItemToInventory returning: %s"), 
-        *GetName(), bItemAdded ? TEXT("true") : TEXT("false"));
 
     return bItemAdded;
 }
@@ -1824,6 +2078,13 @@ void AAtlantisEonsCharacter::SetMainWidget(UWBP_Main* NewWidget)
         MainWidget = NewWidget;
         UE_LOG(LogTemp, Display, TEXT("%s: Main widget set successfully"), *GetName());
         
+        // Get the character info widget from the main widget
+        if (MainWidget->GetCharacterInfoWidget())
+        {
+            WBP_CharacterInfo = MainWidget->GetCharacterInfoWidget();
+            UE_LOG(LogTemp, Display, TEXT("%s: Character info widget set from main widget"), *GetName());
+        }
+        
         // If inventory is currently open, update the slots immediately and with delay
         if (bIsInventoryOpen)
         {
@@ -1831,9 +2092,298 @@ void AAtlantisEonsCharacter::SetMainWidget(UWBP_Main* NewWidget)
             UpdateInventorySlots();
             ForceUpdateInventorySlotsAfterDelay();
         }
+        
+        // Initialize equipment slot references and update UI
+        InitializeEquipmentSlotReferences();
     }
     else
     {
         UE_LOG(LogTemp, Warning, TEXT("%s: Attempted to set null Main widget"), *GetName());
     }
+}
+
+void AAtlantisEonsCharacter::UpdateEquipmentSlotUI(EItemEquipSlot EquipSlot, UBP_ItemInfo* ItemInfo)
+{
+    UWBP_InventorySlot* TargetSlot = nullptr;
+    FString SlotName;
+    
+    // Get the appropriate UI slot based on equipment type
+    switch (EquipSlot)
+    {
+        case EItemEquipSlot::Head:
+            TargetSlot = HeadSlot;
+            SlotName = TEXT("Head");
+            break;
+        case EItemEquipSlot::Body:
+            TargetSlot = SuitSlot;
+            SlotName = TEXT("Suit");
+            break;
+        case EItemEquipSlot::Weapon:
+            TargetSlot = WeaponSlot;
+            SlotName = TEXT("Weapon");
+            break;
+        case EItemEquipSlot::Accessory:
+            TargetSlot = CollectableSlot;
+            SlotName = TEXT("Collectable");
+            break;
+        default:
+            UE_LOG(LogTemp, Warning, TEXT("UpdateEquipmentSlotUI: Unknown equipment slot %d"), static_cast<int32>(EquipSlot));
+            return;
+    }
+    
+    if (TargetSlot)
+    {
+        if (ItemInfo)
+        {
+            // Update the slot with the equipped item
+            TargetSlot->UpdateSlot(ItemInfo);
+            UE_LOG(LogTemp, Log, TEXT("✅ Updated %s equipment slot UI with item"), *SlotName);
+        }
+        else
+        {
+            // Clear the slot
+            TargetSlot->ClearSlot();
+            UE_LOG(LogTemp, Log, TEXT("🔄 Cleared %s equipment slot UI"), *SlotName);
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("UpdateEquipmentSlotUI: %s slot widget is null"), *SlotName);
+    }
+}
+
+void AAtlantisEonsCharacter::ClearEquipmentSlotUI(EItemEquipSlot EquipSlot)
+{
+    UpdateEquipmentSlotUI(EquipSlot, nullptr);
+}
+
+void AAtlantisEonsCharacter::UpdateAllEquipmentSlotsUI()
+{
+    // Update all equipment slots based on currently equipped items
+    for (int32 i = 0; i < EquipmentSlots.Num(); ++i)
+    {
+        EItemEquipSlot SlotType = EItemEquipSlot::None;
+        
+        // Map array index to equipment slot type
+        switch (i)
+        {
+            case 0:
+                SlotType = EItemEquipSlot::Head;
+                break;
+            case 1:
+                SlotType = EItemEquipSlot::Body;
+                break;
+            case 2:
+                SlotType = EItemEquipSlot::Weapon;
+                break;
+            case 3:
+                SlotType = EItemEquipSlot::Accessory;
+                break;
+            default:
+                continue;
+        }
+        
+        // Update the UI slot with the equipped item (or clear if none)
+        UpdateEquipmentSlotUI(SlotType, EquipmentSlots[i]);
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("🔄 Updated all equipment slot UIs"));
+}
+
+void AAtlantisEonsCharacter::InitializeEquipmentSlotReferences()
+{
+    // Get equipment slot references from the character info widget
+    if (WBP_CharacterInfo)
+    {
+        HeadSlot = WBP_CharacterInfo->HeadSlot;
+        WeaponSlot = WBP_CharacterInfo->WeaponSlot;
+        SuitSlot = WBP_CharacterInfo->SuitSlot;
+        CollectableSlot = WBP_CharacterInfo->CollectableSlot;
+        
+        UE_LOG(LogTemp, Warning, TEXT("✅ Initialized equipment slot references from CharacterInfo widget"));
+        UE_LOG(LogTemp, Warning, TEXT("   HeadSlot: %s"), HeadSlot ? TEXT("Valid") : TEXT("NULL"));
+        UE_LOG(LogTemp, Warning, TEXT("   WeaponSlot: %s"), WeaponSlot ? TEXT("Valid") : TEXT("NULL"));
+        UE_LOG(LogTemp, Warning, TEXT("   SuitSlot: %s"), SuitSlot ? TEXT("Valid") : TEXT("NULL"));
+        UE_LOG(LogTemp, Warning, TEXT("   CollectableSlot: %s"), CollectableSlot ? TEXT("Valid") : TEXT("NULL"));
+        
+        // Set up slot indices for equipment slots (different from inventory slots)
+        if (HeadSlot) 
+        {
+            HeadSlot->SetSlotIndex(100); // Use high numbers to distinguish from inventory
+            // Set slot type to Equipment to disable context menu
+            HeadSlot->SetInventorySlotType(EInventorySlotType::Equipment);
+            // Bind click event for unequipping
+            HeadSlot->OnSlotClicked.AddDynamic(this, &AAtlantisEonsCharacter::OnHeadSlotClicked);
+            UE_LOG(LogTemp, Warning, TEXT("   HeadSlot configured as Equipment slot"));
+        }
+        if (WeaponSlot) 
+        {
+            WeaponSlot->SetSlotIndex(101);
+            // Set slot type to Equipment to disable context menu
+            WeaponSlot->SetInventorySlotType(EInventorySlotType::Equipment);
+            WeaponSlot->OnSlotClicked.AddDynamic(this, &AAtlantisEonsCharacter::OnWeaponSlotClicked);
+            UE_LOG(LogTemp, Warning, TEXT("   WeaponSlot configured as Equipment slot"));
+        }
+        if (SuitSlot) 
+        {
+            SuitSlot->SetSlotIndex(102);
+            // Set slot type to Equipment to disable context menu
+            SuitSlot->SetInventorySlotType(EInventorySlotType::Equipment);
+            SuitSlot->OnSlotClicked.AddDynamic(this, &AAtlantisEonsCharacter::OnSuitSlotClicked);
+            UE_LOG(LogTemp, Warning, TEXT("   SuitSlot configured as Equipment slot"));
+        }
+        if (CollectableSlot) 
+        {
+            CollectableSlot->SetSlotIndex(103);
+            // Set slot type to Equipment to disable context menu
+            CollectableSlot->SetInventorySlotType(EInventorySlotType::Equipment);
+            CollectableSlot->OnSlotClicked.AddDynamic(this, &AAtlantisEonsCharacter::OnCollectableSlotClicked);
+            UE_LOG(LogTemp, Warning, TEXT("   CollectableSlot configured as Equipment slot"));
+        }
+        
+        // Update all equipment slots after initialization
+        UpdateAllEquipmentSlotsUI();
+        
+        // Update stats to ensure they reflect current equipment
+        UpdateAllStats();
+        
+        // Force refresh the stats display
+        RefreshStatsDisplay();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("InitializeEquipmentSlotReferences: WBP_CharacterInfo is null"));
+    }
+}
+
+void AAtlantisEonsCharacter::OnEquipmentSlotClicked(EItemEquipSlot EquipSlot)
+{
+    // Get the equipment slot index
+    int32 EquipSlotIndex = -1;
+    switch (EquipSlot)
+    {
+        case EItemEquipSlot::Head:
+            EquipSlotIndex = 0;
+            break;
+        case EItemEquipSlot::Body:
+            EquipSlotIndex = 1;
+            break;
+        case EItemEquipSlot::Weapon:
+            EquipSlotIndex = 2;
+            break;
+        case EItemEquipSlot::Accessory:
+            EquipSlotIndex = 3;
+            break;
+        default:
+            UE_LOG(LogTemp, Warning, TEXT("OnEquipmentSlotClicked: Invalid equipment slot"));
+            return;
+    }
+    
+    // Check if there's an item equipped in this slot
+    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num() && EquipmentSlots[EquipSlotIndex])
+    {
+        UBP_ItemInfo* EquippedItem = EquipmentSlots[EquipSlotIndex];
+        
+        // Find an empty inventory slot to move the item to
+        bool bFoundEmptySlot = false;
+        for (int32 i = 0; i < InventoryItems.Num(); ++i)
+        {
+            if (!InventoryItems[i])
+            {
+                // Move the item to inventory
+                InventoryItems[i] = EquippedItem;
+                bFoundEmptySlot = true;
+                
+                UE_LOG(LogTemp, Log, TEXT("✅ Moved equipped item to inventory slot %d"), i);
+                break;
+            }
+        }
+        
+        if (!bFoundEmptySlot)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("❌ Cannot unequip item - inventory is full"));
+            // Show message to player that inventory is full
+            if (GEngine)
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("Inventory is full! Cannot unequip item."));
+            }
+            return;
+        }
+        
+        // Get item data for logging and visual updates
+        bool bFound = false;
+        FStructure_ItemInfo ItemData;
+        EquippedItem->GetItemTableRow(bFound, ItemData);
+        
+        // Clear the equipment slot
+        EquipmentSlots[EquipSlotIndex] = nullptr;
+        
+        // Handle visual unequipping
+        if (bFound)
+        {
+            HandleDisarmItem(EquipSlot, ItemData.StaticMeshID, EquippedItem->ItemIndex);
+            
+            // Remove stat bonuses from the unequipped item
+            SubtractingCharacterStatus(EquippedItem->ItemIndex);
+            
+            UE_LOG(LogTemp, Log, TEXT("✅ Successfully unequipped '%s' from %s slot"), 
+                   *ItemData.ItemName,
+                   EquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
+                   EquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
+                   EquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
+        }
+        
+        // Clear equipment slot UI
+        ClearEquipmentSlotUI(EquipSlot);
+        
+        // Update inventory display
+        UpdateInventorySlots();
+        
+        // Update character stats
+        UpdateAllStats();
+        
+        // Force refresh the stats display
+        RefreshStatsDisplay();
+        
+        // Play unequip sound
+        if (UGameplayStatics::GetCurrentLevelName(this) != TEXT(""))
+        {
+            UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")));
+        }
+        
+        // Show success message
+        if (GEngine && bFound)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, 
+                FString::Printf(TEXT("Unequipped %s"), *ItemData.ItemName));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("OnEquipmentSlotClicked: No item equipped in this slot"));
+    }
+}
+
+void AAtlantisEonsCharacter::OnHeadSlotClicked(int32 SlotIndex)
+{
+    UE_LOG(LogTemp, Log, TEXT("Head slot clicked (SlotIndex: %d)"), SlotIndex);
+    OnEquipmentSlotClicked(EItemEquipSlot::Head);
+}
+
+void AAtlantisEonsCharacter::OnWeaponSlotClicked(int32 SlotIndex)
+{
+    UE_LOG(LogTemp, Log, TEXT("Weapon slot clicked (SlotIndex: %d)"), SlotIndex);
+    OnEquipmentSlotClicked(EItemEquipSlot::Weapon);
+}
+
+void AAtlantisEonsCharacter::OnSuitSlotClicked(int32 SlotIndex)
+{
+    UE_LOG(LogTemp, Log, TEXT("Suit slot clicked (SlotIndex: %d)"), SlotIndex);
+    OnEquipmentSlotClicked(EItemEquipSlot::Body);
+}
+
+void AAtlantisEonsCharacter::OnCollectableSlotClicked(int32 SlotIndex)
+{
+    UE_LOG(LogTemp, Log, TEXT("Collectable slot clicked (SlotIndex: %d)"), SlotIndex);
+    OnEquipmentSlotClicked(EItemEquipSlot::Accessory);
 }

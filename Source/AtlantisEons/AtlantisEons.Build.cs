@@ -10,12 +10,33 @@ public class AtlantisEons : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PrivatePCHHeaderFile = "AtlantisEons.h";
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "AIModule", "EnhancedInput", "UMG", "NavigationSystem", "Slate", "SlateCore", "Niagara" });
+		PublicDependencyModuleNames.AddRange(new string[] { 
+			"Core", 
+			"CoreUObject", 
+			"Engine", 
+			"InputCore", 
+			"AIModule", 
+			"EnhancedInput", 
+			"UMG", 
+			"NavigationSystem", 
+			"Slate", 
+			"SlateCore", 
+			"Niagara",
+			"GameplayTasks", // Added for AI behavior trees
+			"Json", // Added for JSON serialization
+			"JsonUtilities" // Added for JSON utilities
+		});
 
 		// Ensure UI modules are included
-		PrivateDependencyModuleNames.AddRange(new string[] { "UMG", "Slate", "SlateCore" });
-
-		PrivateDependencyModuleNames.AddRange(new string[] { "Niagara" });
+		PrivateDependencyModuleNames.AddRange(new string[] { 
+			"UMG", 
+			"Slate", 
+			"SlateCore",
+			"Niagara",
+			"ToolMenus", // For editor integration
+			"EditorStyle", // For editor styling
+			"EditorWidgets" // For editor widgets
+		});
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
@@ -24,6 +45,17 @@ public class AtlantisEons : ModuleRules
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
 
 		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
-		PublicIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Runtime/Engine/Public"));  
+		PublicIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Runtime/Engine/Public"));
+
+		// Optimization settings
+		if (Target.Configuration == UnrealTargetConfiguration.Shipping)
+		{
+			bUseUnity = true;
+			MinFilesUsingPrecompiledHeaderOverride = 1;
+		}
+		else
+		{
+			bUseUnity = false;
+		}
 	}
 }

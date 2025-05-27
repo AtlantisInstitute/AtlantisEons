@@ -334,3 +334,192 @@ For issues with the memory system:
 4. Use `node memory-cli.js cleanup` to resolve data issues
 
 The memory system is designed to be resilient and self-healing, automatically managing storage and providing graceful degradation if issues occur. 
+
+# Memory System for AtlantisEons Project
+
+## Project Overview
+- **Engine**: Unreal Engine 5.5
+- **Platform**: macOS
+- **Project Type**: Third-person action RPG with inventory, equipment, and store systems
+- **Build Path**: `/Users/Shared/Epic Games/UE_5.5/Engine/Build/BatchFiles/Mac/Build.sh`
+
+## ⚠️ CRITICAL LESSONS LEARNED - NEVER FORGET ⚠️
+
+### 🚨 LOG CLEANUP INCIDENT (December 2024) - MAJOR LEARNING
+**What Happened**: Cleaned up "verbose" logs and accidentally broke texture loading system
+**Impact**: Multiple items lost their textures, system appeared broken
+**Root Cause**: Removed logs without understanding they contained critical functionality paths
+**Time to Fix**: 2+ hours of debugging and rebuilding
+
+**CRITICAL RULES TO FOLLOW FOREVER**:
+1. **🛑 NEVER remove logs without testing the system first**
+2. **🛑 NEVER assume logs are "just for debugging" - they may contain functional code**
+3. **🛑 ALWAYS test ALL systems after ANY log cleanup**
+4. **🛑 ALWAYS build and run the project after log changes**
+5. **🛑 ALWAYS verify that "working perfectly" systems still work after changes**
+
+**SAFE LOG CLEANUP PROCEDURE**:
+1. ✅ Build project and verify everything works BEFORE cleanup
+2. ✅ Remove logs ONE FILE AT A TIME
+3. ✅ Build and test after EACH file
+4. ✅ If anything breaks, immediately revert that file
+5. ✅ Never batch-remove logs from multiple files at once
+
+**RED FLAGS TO WATCH FOR**:
+- 🚨 Logs that contain asset paths or loading logic
+- 🚨 Logs that show "✅" or "❌" indicators (these often track functionality)
+- 🚨 Logs inside functions that handle critical operations (loading, saving, etc.)
+- 🚨 Any log that contains variable values or object names
+- 🚨 Logs that appear to be tracking success/failure states
+
+**WHAT THIS INCIDENT TAUGHT US**:
+- The Universal Item Loader was working because it prioritized exact data table names
+- When logs were removed, the prioritization logic was accidentally broken
+- The system fell back to pattern generation which missed exact texture names
+- "Working perfectly" can become "completely broken" with seemingly innocent changes
+
+**PREVENTION MEASURES IMPLEMENTED**:
+- ✅ Added `GetExactTexturePathsFromDataTable()` function for robust texture loading
+- ✅ Prioritized exact data table paths over generated patterns
+- ✅ Enhanced error logging to catch future issues
+- ✅ Documented this incident in detail for future reference
+
+### 🔧 TECHNICAL DEBUGGING LESSONS
+1. **Data Table Priority**: Always use exact asset names from data table before generating patterns
+2. **Universal System Design**: Single loading system prevents inconsistencies across UI components
+3. **Validation Tools**: Built-in validation helps catch issues early
+4. **Incremental Changes**: Make one change at a time and test immediately
+
+## Completed Systems
+
+### Universal Item System (COMPLETED - December 2024)
+**Status**: ✅ FULLY IMPLEMENTED AND WORKING
+**Files**: 
+- `UniversalItemLoader.h/cpp` - Core universal loading system
+- `WBP_Store.cpp` - Store integration
+- `WBP_StoreItemElement.cpp` - Store item elements
+- `WBP_StorePopup.cpp` - Store popup integration
+- `AtlantisEonsCharacter.cpp` - Inventory integration
+- `UNIVERSAL_ITEM_SYSTEM.md` - Complete documentation
+
+**Key Features**:
+- **Zero hardcoding**: All item loading is data-driven and algorithmic
+- **Intelligent texture loading**: Pattern-based with fallbacks and typo handling
+- **JSON data table integration**: Uses established conversion system
+- **Universal consistency**: Same loading logic across store, inventory, and world items
+- **Future-proof**: Unlimited items can be added to data table without code changes
+- **Comprehensive validation**: Built-in diagnostic and validation tools
+
+**Integration Points**:
+- Store system uses `UUniversalItemLoader::GetAllItems()` and `LoadItemTexture()`
+- Inventory system uses `UUniversalItemLoader::LoadItemTexture()` in `PickingItem()`
+- All hardcoded texture mappings removed (100+ lines eliminated)
+- Consistent behavior across all item-related systems
+
+**Usage**: Simply add items to data table with proper naming conventions, system handles everything automatically.
+
+### Critical Fix - Texture Loading After Log Cleanup (December 2024)
+**Issue**: After cleaning up verbose logs, some textures stopped loading properly
+**Root Cause**: Universal Item Loader was generating patterns instead of using exact texture names from data table
+**Solution**: Added `GetExactTexturePathsFromDataTable()` function to prioritize exact data table texture names
+**Files Modified**: 
+- `UniversalItemLoader.h` - Added function declaration
+- `UniversalItemLoader.cpp` - Added function implementation and prioritized exact paths
+**Key Learning**: ⚠️ **NEVER remove logs that might contain critical functionality** - always verify that log cleanup doesn't break working systems
+
+### Store System (COMPLETED)
+**Status**: ✅ FULLY WORKING
+**Key Components**:
+- `WBP_Store.cpp` - Main store widget with filtering
+- `WBP_StoreItemElement.cpp` - Individual item display
+- `WBP_StorePopup.cpp` - Purchase confirmation popup
+- `StoreSystemFix.h/cpp` - Data table integration and JSON conversion
+
+**Features**:
+- Dynamic item loading from data table
+- Category filtering (ALL, Weapon, Helmet, Shield, Suit, Consumables)
+- Proper texture loading for all items
+- Price display and purchase functionality
+- Quantity selection with up/down buttons
+- Gold deduction and inventory integration
+
+### Inventory System (COMPLETED)
+**Status**: ✅ FULLY WORKING
+**Key Components**:
+- `AtlantisEonsCharacter.cpp` - Main character inventory logic
+- `WBP_Inventory.cpp` - Inventory UI widget
+- `WBP_InventorySlot.cpp` - Individual slot management
+- `BP_ItemInfo.h` and `BP_ConcreteItemInfo.cpp` - Item data structures
+
+**Features**:
+- 30-slot inventory system
+- Item stacking for consumables (max 99)
+- Drag and drop functionality
+- Context menu (Use/Throw)
+- Equipment slot integration
+- Proper texture loading using Universal Item Loader
+
+### Equipment System (COMPLETED)
+**Status**: ✅ WORKING
+**Key Components**:
+- Equipment slots: Head, Body, Weapon, Accessory
+- Visual equipment display on character
+- Stat bonuses from equipped items
+- Equipment/disarm functionality
+
+### Data Table System (COMPLETED)
+**Status**: ✅ WORKING
+**Key Components**:
+- `Table_ItemList` - Main item data table
+- `FStructure_ItemInfo` - Item data structure
+- JSON conversion system for Blueprint compatibility
+- Property mapping for generated Blueprint suffixes
+
+## Technical Architecture
+
+### Build System
+- Uses UE 5.5 build system on macOS
+- Build command: `/Users/Shared/Epic Games/UE_5.5/Engine/Build/BatchFiles/Mac/Build.sh AtlantisEonsEditor Development Mac -Project="/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/AtlantisEons.uproject" -WaitMutex -FromMsBuild`
+- Successfully compiles with all systems integrated
+
+### Key Design Patterns
+- **Universal Loading**: Single system handles all asset loading with intelligent fallbacks
+- **Data-Driven Design**: All item data comes from data table, zero hardcoding
+- **Consistent Integration**: Same loading logic across all systems
+- **Future-Proof Architecture**: Supports unlimited items without code changes
+
+### Asset Organization
+- **Textures**: `/Game/AtlantisEons/Sources/Images/ItemThumbnail/`
+- **Meshes**: `/Game/AtlantisEons/Sources/Meshes/Items/`
+- **Naming Conventions**: `IMG_[ItemName]`, `SM_[ItemName]`, with intelligent pattern matching
+
+## Current Status
+- ✅ All core systems implemented and working
+- ✅ Universal Item System provides future-proof scalability
+- ✅ Store, inventory, and equipment fully integrated
+- ✅ Comprehensive documentation and validation tools
+- ✅ Ready for content expansion
+- ✅ Texture loading issue after log cleanup resolved
+
+## Next Steps
+- Add new items to data table as needed
+- Follow naming conventions for assets
+- Use validation tools to verify new items
+- System automatically handles everything else
+
+## Log Cleanup (December 2024)
+**Status**: ✅ COMPLETED WITH CRITICAL FIX
+- Removed excessive verbose logging from all systems
+- Kept essential error logging for debugging
+- Cleaned up success indicators and diagnostic messages
+- **CRITICAL**: Fixed texture loading issue caused by log cleanup
+- Added exact data table path resolution to Universal Item Loader
+- Systems are stable and working properly
+
+## 🎯 DEVELOPMENT BEST PRACTICES (LEARNED THE HARD WAY)
+1. **Incremental Testing**: Test after every single change, no matter how small
+2. **Log Safety**: Treat log removal as potentially dangerous code changes
+3. **System Validation**: Always run full system tests after "cleanup" operations
+4. **Backup Strategy**: Keep working versions before making "improvement" changes
+5. **Documentation**: Document every incident to prevent repetition
+6. **Assumption Checking**: Never assume something is "just cosmetic" without testing 

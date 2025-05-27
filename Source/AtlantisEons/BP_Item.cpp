@@ -7,6 +7,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "StoreSystemFix.h"
 
 ABP_Item::ABP_Item()
 {
@@ -63,188 +64,60 @@ void ABP_Item::InitializeItem(int32 NewItemIndex, int32 NewStackNumber)
     ItemIndex = NewItemIndex;
     StackNumber = NewStackNumber;
     
-    // Enhanced debugging for item initialization
     UE_LOG(LogTemp, Display, TEXT("%s: InitializeItem - ItemIndex=%d, StackNumber=%d"), *GetName(), ItemIndex, StackNumber);
     
-    // Verify data table is valid
-    if (!ItemDataTable)
+    // Use the new store system to get proper item data
+    if (UStoreSystemFix::GetItemData(ItemIndex, ItemInfo))
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s: ItemDataTable is null, attempting to load from content directory"), *GetName());
-        // Try to load it now if it wasn't loaded in constructor
-        ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, 
-            TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList")));
-            
-        if (!ItemDataTable)
+        UE_LOG(LogTemp, Display, TEXT("%s: Successfully loaded item data for %d: %s"), *GetName(), ItemIndex, *ItemInfo.ItemName);
+        
+        // Update stack number
+        ItemInfo.StackNumber = StackNumber;
+        
+        // Try to load the 3D mesh from the item data
+        if (!ItemInfo.StaticMeshID.IsNull())
         {
-            UE_LOG(LogTemp, Error, TEXT("%s: Failed to load item data table"), *GetName());
-            SetDefaultItemInfo();
-            return;
+            UE_LOG(LogTemp, Display, TEXT("%s: Attempting to load mesh: %s"), *GetName(), *ItemInfo.StaticMeshID.ToString());
+            
+            UStaticMesh* LoadedMesh = ItemInfo.StaticMeshID.LoadSynchronous();
+            if (LoadedMesh)
+            {
+                ItemMesh->SetStaticMesh(LoadedMesh);
+                UE_LOG(LogTemp, Display, TEXT("%s: ✅ Successfully set mesh from data table: %s"), *GetName(), *LoadedMesh->GetName());
+                return; // Success! No need for fallbacks
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("%s: ❌ Failed to load mesh from data table path: %s"), *GetName(), *ItemInfo.StaticMeshID.ToString());
+            }
         }
         else
         {
-            UE_LOG(LogTemp, Display, TEXT("%s: Successfully loaded item data table"), *GetName());
-            // Dump some table info for debugging
-            UE_LOG(LogTemp, Display, TEXT("%s: Table row struct name: %s"), *GetName(), 
-                ItemDataTable->GetRowStruct() ? *ItemDataTable->GetRowStruct()->GetName() : TEXT("NULL"));
+            UE_LOG(LogTemp, Error, TEXT("%s: ❌ No StaticMeshID in data table for item %d"), *GetName(), ItemIndex);
         }
+        
+        // If we reach here, the data table mesh failed - this should NOT happen with a complete data pipeline
+        UE_LOG(LogTemp, Error, TEXT("%s: CRITICAL: Data table mesh failed for item %d (%s) - data pipeline incomplete!"), *GetName(), ItemIndex, *ItemInfo.ItemName);
     }
-
-    // For this specific index (using direct hardcoded approach for now)
-    if (ItemIndex == 1)
+    else
     {
-        // Create the data manually since we know the values from the screenshot
-        UE_LOG(LogTemp, Display, TEXT("%s: Using hardcoded data for Basic HP Potion (index 1)"), *GetName());
-        
-        ItemInfo.ItemIndex = 1;
-        ItemInfo.ItemName = TEXT("Basic HP Potion");
-        ItemInfo.ItemDescription = TEXT("Restores health when consumed");
-        ItemInfo.bIsValid = true;
-        ItemInfo.bIsStackable = true;
-        ItemInfo.StackNumber = StackNumber > 0 ? StackNumber : 1;
-        ItemInfo.ItemType = EItemType::Consume_HP;
-        ItemInfo.RecoveryHP = 20;
-        
-        // Try multiple potential mesh paths to find the correct one
-        UStaticMesh* LoadedMesh = nullptr;
-        TArray<FString> PotentialPaths;
-        
-        // From the screenshot and logs, add all possible paths we might try
-        PotentialPaths.Add(TEXT("/Game/AtlantisEons/Sources/StaticMesh/InventoryItems/SM_BasicHealingPotion"));
-        PotentialPaths.Add(TEXT("/Game/AtlantisEons/Sources/StaticMesh/InventoryItems/SM_BasicHealingPotion.SM_BasicHealingPotion"));
-        PotentialPaths.Add(TEXT("/Game/AtlantisEons/StaticMesh/InventoryItems/SM_BasicHealingPotion"));
-        PotentialPaths.Add(TEXT("/Game/AtlantisEons/Meshes/SM_BasicHealingPotion"));
-        
-        // Try each path until we find one that works
-        for (const FString& MeshPath : PotentialPaths)
-        {
-            UE_LOG(LogTemp, Display, TEXT("%s: Trying to load mesh from path: %s"), *GetName(), *MeshPath);
-            LoadedMesh = LoadObject<UStaticMesh>(nullptr, *MeshPath);
-            
-            if (LoadedMesh)
-            {
-                UE_LOG(LogTemp, Display, TEXT("%s: Successfully loaded mesh from path: %s"), *GetName(), *MeshPath);
-                ItemMesh->SetStaticMesh(LoadedMesh);
-                break;
-            }
-        }
-        
-        // If no mesh was found, use a default shape
-        if (!LoadedMesh)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("%s: Failed to load mesh from any path, using fallback"), *GetName());
-            
-            // Use fallback cylinder
-            UStaticMesh* DefaultMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder"));
-            if (DefaultMesh)
-            {
-                ItemMesh->SetStaticMesh(DefaultMesh);
-                // Set a custom material to make it look like a potion
-                UMaterialInterface* RedMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial"));
-                if (RedMaterial)
-                {
-                    ItemMesh->SetMaterial(0, RedMaterial);
-                    // Scale and position the cylinder to look like a potion
-                    ItemMesh->SetWorldScale3D(FVector(0.5f, 0.5f, 1.0f));
-                }
-                UE_LOG(LogTemp, Display, TEXT("%s: Set default cylinder mesh"), *GetName());
-            }
-        }
-        
-        // Also set the thumbnail path properly
-        TArray<FString> PotentialThumbnailPaths;
-        PotentialThumbnailPaths.Add(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicHealingPotion"));
-        PotentialThumbnailPaths.Add(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicHealingPotion.IMG_BasicHealingPotion"));
-        PotentialThumbnailPaths.Add(TEXT("/Game/AtlantisEons/Images/ItemThumbnail/IMG_BasicHealingPotion"));
-        
-        UTexture2D* Thumbnail = nullptr;
-        for (const FString& ThumbnailPath : PotentialThumbnailPaths)
-        {
-            UE_LOG(LogTemp, Display, TEXT("%s: Trying to load thumbnail from path: %s"), *GetName(), *ThumbnailPath);
-            Thumbnail = LoadObject<UTexture2D>(nullptr, *ThumbnailPath);
-            
-            if (Thumbnail)
-            {
-                UE_LOG(LogTemp, Display, TEXT("%s: Successfully loaded thumbnail from path: %s"), *GetName(), *ThumbnailPath);
-                ItemInfo.ItemThumbnail = Thumbnail;
-                break;
-            }
-        }
-        
-        // If no thumbnail was found, use a default texture
-        if (!Thumbnail)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("%s: Failed to load thumbnail from any path, using fallback"), *GetName());
-            UTexture2D* DefaultTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Engine/EditorResources/S_Actor"));
-            if (DefaultTexture)
-            {
-                ItemInfo.ItemThumbnail = DefaultTexture;
-                UE_LOG(LogTemp, Display, TEXT("%s: Set default thumbnail"), *GetName());
-            }
-        }
-        
-        return;
+        UE_LOG(LogTemp, Error, TEXT("%s: ❌ Failed to load item data for %d - data pipeline broken!"), *GetName(), ItemIndex);
     }
     
-    // If we get here, we couldn't use hardcoded approach, try with FindRow
-    SetDefaultItemInfo();
+    // If we reach here, something is wrong with the data pipeline
+    UE_LOG(LogTemp, Error, TEXT("%s: FATAL: Complete data pipeline failure for item %d"), *GetName(), ItemIndex);
+}
+
+void ABP_Item::SetDefaultMesh()
+{
+    // REMOVED: We want complete data pipeline, no fallbacks
+    UE_LOG(LogTemp, Error, TEXT("%s: SetDefaultMesh called - this should not happen with complete data pipeline"), *GetName());
 }
 
 void ABP_Item::SetDefaultItemInfo()
 {
-    // For testing: If this is index 1 (basic HP potion), set default values
-    if (ItemIndex == 1)
-    {
-        UE_LOG(LogTemp, Display, TEXT("%s: Using default HP potion data for index 1"), *GetName());
-        
-        ItemInfo.ItemIndex = 1;
-        ItemInfo.ItemName = TEXT("Basic HP Potion");
-        ItemInfo.ItemDescription = TEXT("Restores 20 HP");
-        ItemInfo.bIsValid = true;
-        ItemInfo.bIsStackable = true;
-        ItemInfo.StackNumber = StackNumber;
-        ItemInfo.ItemType = EItemType::Consume_HP;
-        ItemInfo.RecoveryHP = 20;
-        
-        // Try to load the thumbnail
-        TArray<FString> PotentialThumbnailPaths;
-        PotentialThumbnailPaths.Add(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicHealingPotion"));
-        PotentialThumbnailPaths.Add(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicHealingPotion.IMG_BasicHealingPotion"));
-        PotentialThumbnailPaths.Add(TEXT("/Game/AtlantisEons/Images/ItemThumbnail/IMG_BasicHealingPotion"));
-        
-        UTexture2D* Thumbnail = nullptr;
-        for (const FString& ThumbnailPath : PotentialThumbnailPaths)
-        {
-            UE_LOG(LogTemp, Display, TEXT("%s: Trying to load thumbnail from path: %s"), *GetName(), *ThumbnailPath);
-            Thumbnail = LoadObject<UTexture2D>(nullptr, *ThumbnailPath);
-            
-            if (Thumbnail)
-            {
-                UE_LOG(LogTemp, Display, TEXT("%s: Successfully loaded thumbnail from path: %s"), *GetName(), *ThumbnailPath);
-                ItemInfo.ItemThumbnail = Thumbnail;
-                break;
-            }
-        }
-        
-        // If no thumbnail was found, use a default texture
-        if (!Thumbnail)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("%s: Failed to load thumbnail from any path, using fallback"), *GetName());
-            UTexture2D* DefaultTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Engine/EditorResources/S_Actor"));
-            if (DefaultTexture)
-            {
-                ItemInfo.ItemThumbnail = DefaultTexture;
-                UE_LOG(LogTemp, Display, TEXT("%s: Set default thumbnail"), *GetName());
-            }
-        }
-        
-        // Try to load a default mesh
-        UStaticMesh* DefaultMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder"));
-        if (DefaultMesh)
-        {
-            ItemMesh->SetStaticMesh(DefaultMesh);
-            UE_LOG(LogTemp, Display, TEXT("%s: Set default cylinder mesh"), *GetName());
-        }
-    }
+    // REMOVED: We want complete data pipeline, no fallbacks  
+    UE_LOG(LogTemp, Error, TEXT("%s: SetDefaultItemInfo called - this should not happen with complete data pipeline"), *GetName());
 }
 
 void ABP_Item::HideItemNamePopUp()

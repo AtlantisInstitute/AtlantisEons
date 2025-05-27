@@ -5,13 +5,15 @@
 #include "Components/UniformGridSlot.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"
 #include "Blueprint/WidgetTree.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetTextLibrary.h"
 #include "Kismet/KismetStringLibrary.h"
 #include "Kismet/KismetArrayLibrary.h"
 #include "AtlantisEonsCharacter.h"
-#include "BP_Item.h"
+#include "AtlantisEonsHUD.h"
+#include "Engine/TextureRenderTarget2D.h"
 
 UWBP_Inventory::UWBP_Inventory(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)

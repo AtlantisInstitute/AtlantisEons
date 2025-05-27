@@ -839,10 +839,14 @@ void UWBP_InventorySlot::MouseLeftButtonDown()
 {
     if (!SlotEmpty && inventoryItemInfoRef)
     {
-        // Create and show context menu directly at mouse position
-        ShowContextMenuAtMousePosition();
+        // Only show context menu for inventory slots, not equipment slots
+        if (SlotType == EInventorySlotType::Inventory)
+        {
+            // Create and show context menu directly at mouse position
+            ShowContextMenuAtMousePosition();
+        }
         
-        // Still broadcast the slot clicked event for other systems that might need it
+        // Always broadcast the slot clicked event for other systems that might need it
         OnSlotClicked.Broadcast(SlotIndex);
     }
 }

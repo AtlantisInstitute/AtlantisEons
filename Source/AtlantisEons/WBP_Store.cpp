@@ -3,10 +3,26 @@
 #include "Kismet/KismetArrayLibrary.h"
 #include "AtlantisEonsCharacter.h"
 #include "Kismet/GameplayStatics.h"
+#include "UniversalDataTableReader.h"
+#include "DataTableDiagnostic.h"
+#include "WBP_StoreItemElement.h"
+#include "Components/ScrollBox.h"
+#include "Components/Button.h"
+#include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
+#include "Components/HorizontalBox.h"
+#include "Blueprint/UserWidget.h"
+#include "Engine/World.h"
+#include "StoreSystemFix.h"
+#include "StoreDataTableInspector.h"
+#include "TextureDiagnostic.h"
+#include "UniversalItemLoader.h"
 
 void UWBP_Store::NativeConstruct()
 {
     Super::NativeConstruct();
+
+    UE_LOG(LogTemp, Log, TEXT("Store: Initializing"));
 
     // Clear any existing bindings before adding new ones to prevent duplicate delegate errors
     if (ALLButton)
@@ -51,219 +67,281 @@ void UWBP_Store::NativeConstruct()
 
 void UWBP_Store::InitializeStoreElements()
 {
-    // Clear existing elements
-    StoreElements.Empty();
-    
-    // Load the data table
-    UDataTable* ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList.Table_ItemList")));
-    if (!ItemDataTable)
+    if (!StoreItemContainer)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load Item Data Table"));
+        UE_LOG(LogTemp, Error, TEXT("Store: StoreItemContainer is null"));
         return;
     }
 
-    // Get all row names
-    TArray<FName> RowNames = ItemDataTable->GetRowNames();
+    // Clear existing elements
+    StoreItemContainer->ClearChildren();
+    StoreElements.Empty();
 
-    // Create store elements dynamically based on data table entries
-    for (int32 i = 0; i < RowNames.Num(); ++i)
+    // Get all store items using the universal loader (which uses the established JSON system)
+    TArray<FStructure_ItemInfo> StoreItems = UUniversalItemLoader::GetAllItems();
+
+    // Create store elements for each item
+    for (const FStructure_ItemInfo& ItemInfo : StoreItems)
     {
-        // Create widget instance
-        UWBP_StoreItemElement* NewElement = CreateWidget<UWBP_StoreItemElement>(this, StoreItemElementClass);
-        if (NewElement)
+        if (ItemInfo.bIsValid && ItemInfo.ItemIndex > 0)
         {
-            AddingStoreElement(i, NewElement);
-            if (StoreItemContainer)
-            {
-                StoreItemContainer->AddChild(NewElement);
-            }
+            AddingStoreElement(ItemInfo);
         }
     }
-    if (WBP_StoreItemElement_C_3) AddingStoreElement(3, WBP_StoreItemElement_C_3);
-    if (WBP_StoreItemElement_C_4) AddingStoreElement(4, WBP_StoreItemElement_C_4);
-
-    // Set initial visibility for all elements
-    OnALLButtonClicked();
 }
 
-void UWBP_Store::AddingStoreElement(int32 Index, UWBP_StoreItemElement* WBPStoreItemElementRef)
+void UWBP_Store::AddingStoreElement(const FStructure_ItemInfo& ItemInfo)
 {
-    if (!WBPStoreItemElementRef)
+    if (!StoreItemContainer)
     {
+        UE_LOG(LogTemp, Error, TEXT("Store: StoreItemContainer is null"));
         return;
     }
 
-    // Get data from item table with better error handling
-    FString RowName = FString::Printf(TEXT("Item_%d"), Index);
+    // Create the store item element widget
+    UWBP_StoreItemElement* StoreElement = CreateWidget<UWBP_StoreItemElement>(this, StoreItemElementClass);
+    if (!StoreElement)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Store: Failed to create store element widget"));
+        return;
+    }
+
+    // Set up the store element with item data
+    StoreElement->SetItemInfo(ItemInfo);
+    StoreElement->SetParentStore(this);
+
+    // Add to container
+    StoreItemContainer->AddChild(StoreElement);
+    StoreElements.Add(StoreElement);
+}
+
+bool UWBP_Store::AddingStoreElement(int32 ItemIndex, UWBP_StoreItemElement* WBPStoreItemElementRef)
+{
+    // This method is deprecated - use the new AddingStoreElement(const FStructure_ItemInfo&) instead
+    UE_LOG(LogTemp, Warning, TEXT("WBP_Store: Using deprecated AddingStoreElement method"));
+    return false;
+}
+
+FStructure_ItemInfo UWBP_Store::CreateFallbackItemData(int32 ItemIndex)
+{
     FStructure_ItemInfo ItemInfo;
-
-    UDataTable* ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList.Table_ItemList")));
-    if (!ItemDataTable)
+    
+    // Basic properties
+    ItemInfo.ItemIndex = ItemIndex;
+    ItemInfo.ItemName = FString::Printf(TEXT("Item %d"), ItemIndex);
+    ItemInfo.ItemDescription = FString::Printf(TEXT("Description for item %d"), ItemIndex);
+    ItemInfo.bIsValid = true;
+    ItemInfo.Price = 100 * FMath::Max(1, ItemIndex);
+    
+    // Set item type and equipment slot based on index ranges (example logic)
+    if (ItemIndex >= 1 && ItemIndex <= 10)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load Item Data Table"));
-        return;
+        // Consumables
+        ItemInfo.ItemType = (ItemIndex % 2 == 1) ? EItemType::Consume_HP : EItemType::Consume_MP;
+        ItemInfo.ItemEquipSlot = EItemEquipSlot::None;
+        ItemInfo.bIsStackable = true;
+        ItemInfo.StackNumber = 99;
+        ItemInfo.RecoveryHP = (ItemInfo.ItemType == EItemType::Consume_HP) ? 50 : 0;
+        ItemInfo.RecoveryMP = (ItemInfo.ItemType == EItemType::Consume_MP) ? 30 : 0;
     }
-
-    // Use FindRowUnchecked to avoid structure type mismatch errors
-    void* RowData = ItemDataTable->FindRowUnchecked(*RowName);
-    if (!RowData)
+    else if (ItemIndex >= 11 && ItemIndex <= 20)
     {
-        // Try with just the index number as fallback
-        RowName = FString::FromInt(Index);
-        RowData = ItemDataTable->FindRowUnchecked(*RowName);
-        
-        if (!RowData)
-        {
-            // Use hardcoded fallback data for common items
-            ItemInfo = FStructure_ItemInfo();
-            ItemInfo.ItemIndex = Index;
-            ItemInfo.ItemName = FString::Printf(TEXT("Store Item %d"), Index);
-            ItemInfo.ItemDescription = FString::Printf(TEXT("Description for item %d"), Index);
-            ItemInfo.Price = 100 * (Index + 1);
-            ItemInfo.bIsValid = true;
-            ItemInfo.bIsStackable = true;
-            ItemInfo.StackNumber = 1;
-        }
-        else
-        {
-            // We found data but can't safely cast it, create basic fallback
-            ItemInfo = FStructure_ItemInfo();
-            ItemInfo.ItemIndex = Index;
-            ItemInfo.ItemName = FString::Printf(TEXT("Item %d"), Index);
-            ItemInfo.bIsValid = true;
-        }
+        // Weapons
+        ItemInfo.ItemType = EItemType::Equip;
+        ItemInfo.ItemEquipSlot = EItemEquipSlot::Weapon;
+        ItemInfo.bIsStackable = false;
+        ItemInfo.StackNumber = 1;
+        ItemInfo.Damage = 10 + (ItemIndex - 10) * 5;
+        ItemInfo.STR = 2 + (ItemIndex - 10);
+    }
+    else if (ItemIndex >= 21 && ItemIndex <= 30)
+    {
+        // Helmets
+        ItemInfo.ItemType = EItemType::Equip;
+        ItemInfo.ItemEquipSlot = EItemEquipSlot::Head;
+        ItemInfo.bIsStackable = false;
+        ItemInfo.StackNumber = 1;
+        ItemInfo.Defence = 5 + (ItemIndex - 20) * 3;
+        ItemInfo.HP = 10 + (ItemIndex - 20) * 5;
+    }
+    else if (ItemIndex >= 31 && ItemIndex <= 40)
+    {
+        // Body armor
+        ItemInfo.ItemType = EItemType::Equip;
+        ItemInfo.ItemEquipSlot = EItemEquipSlot::Body;
+        ItemInfo.bIsStackable = false;
+        ItemInfo.StackNumber = 1;
+        ItemInfo.Defence = 8 + (ItemIndex - 30) * 4;
+        ItemInfo.HP = 15 + (ItemIndex - 30) * 7;
     }
     else
     {
-        // We found data but can't safely cast it, create basic fallback
-        ItemInfo = FStructure_ItemInfo();
-        ItemInfo.ItemIndex = Index;
-        ItemInfo.ItemName = FString::Printf(TEXT("Item %d"), Index);
-        ItemInfo.bIsValid = true;
+        // Accessories/Other
+        ItemInfo.ItemType = EItemType::Equip;
+        ItemInfo.ItemEquipSlot = EItemEquipSlot::Accessory;
+        ItemInfo.bIsStackable = false;
+        ItemInfo.StackNumber = 1;
+        ItemInfo.INT = 3 + ItemIndex;
+        ItemInfo.MP = 20 + ItemIndex * 2;
     }
 
-    WBPStoreItemElementRef->ItemInfo = ItemInfo;
-    WBPStoreItemElementRef->ItemIndex = Index;
+    // Try to load thumbnail
+    TArray<FString> PossibleThumbnailPaths = {
+        FString::Printf(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_Item_%d"), ItemIndex),
+        FString::Printf(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_%d"), ItemIndex),
+        TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicHealingPotion"),
+        TEXT("/Engine/EditorResources/S_Actor")
+    };
 
-    // Add to store elements array
-    StoreElements.Add(WBPStoreItemElementRef);
-
-    // Set item thumbnail
-    if (UImage* ItemImage = WBPStoreItemElementRef->GetItemImage())
+    for (const FString& Path : PossibleThumbnailPaths)
     {
-        UTexture2D* Texture = nullptr;
-        if (!ItemInfo.ItemThumbnail.IsNull())
-        {
-            Texture = ItemInfo.ItemThumbnail.LoadSynchronous();
-        }
+        UTexture2D* Texture = Cast<UTexture2D>(StaticLoadObject(UTexture2D::StaticClass(), nullptr, *Path));
         if (Texture)
         {
-            ItemImage->SetBrushFromTexture(Texture);
+            ItemInfo.ItemThumbnail = TSoftObjectPtr<UTexture2D>(Texture);
+            UE_LOG(LogTemp, Log, TEXT("WBP_Store: Loaded thumbnail for item %d from %s"), ItemIndex, *Path);
+            break;
+        }
+    }
+
+    return ItemInfo;
+}
+
+void UWBP_Store::PopulateStoreElementUI(UWBP_StoreItemElement* Element, const FStructure_ItemInfo& ItemInfo)
+{
+    if (!Element)
+    {
+        UE_LOG(LogTemp, Error, TEXT("WBP_Store::PopulateStoreElementUI: Element is null"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("WBP_Store::PopulateStoreElementUI: Populating UI for item %s"), *ItemInfo.ItemName);
+
+    // Set item thumbnail
+    if (UImage* ItemImage = Element->GetItemImage())
+    {
+        if (!ItemInfo.ItemThumbnail.IsNull())
+        {
+            UTexture2D* Texture = ItemInfo.ItemThumbnail.LoadSynchronous();
+            if (Texture)
+            {
+                ItemImage->SetBrushFromTexture(Texture);
+                UE_LOG(LogTemp, Log, TEXT("WBP_Store: Set thumbnail for item %s"), *ItemInfo.ItemName);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("WBP_Store: Failed to load thumbnail for item %s"), *ItemInfo.ItemName);
+            }
         }
     }
 
     // Set title
-    if (UTextBlock* TitleText = WBPStoreItemElementRef->GetTitleText())
+    if (UTextBlock* TitleText = Element->GetTitleText())
     {
         TitleText->SetText(FText::FromString(ItemInfo.ItemName));
+        UE_LOG(LogTemp, Log, TEXT("WBP_Store: Set title for item %s"), *ItemInfo.ItemName);
     }
 
     // Set description
-    if (UTextBlock* DescText = WBPStoreItemElementRef->GetDescriptionText())
+    if (UTextBlock* DescText = Element->GetDescriptionText())
     {
         DescText->SetText(FText::FromString(ItemInfo.ItemDescription));
+        UE_LOG(LogTemp, Log, TEXT("WBP_Store: Set description for item %s"), *ItemInfo.ItemName);
     }
 
-    // Set stats based on item type
+    // Determine item category for UI visibility
     bool bIsConsumable = ItemInfo.ItemType == EItemType::Consume_HP || ItemInfo.ItemType == EItemType::Consume_MP;
     bool bIsEquipment = ItemInfo.ItemType == EItemType::Equip;
 
+    UE_LOG(LogTemp, Log, TEXT("WBP_Store: Item %s - IsConsumable: %s, IsEquipment: %s"), 
+           *ItemInfo.ItemName, bIsConsumable ? TEXT("true") : TEXT("false"), bIsEquipment ? TEXT("true") : TEXT("false"));
+
     // Recovery stats (for consumables)
-    if (UTextBlock* RecoveryHPText = WBPStoreItemElementRef->GetRecoveryHPText())
+    if (UTextBlock* RecoveryHPText = Element->GetRecoveryHPText())
     {
         RecoveryHPText->SetVisibility(bIsConsumable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsConsumable)
+        if (bIsConsumable && ItemInfo.RecoveryHP > 0)
         {
-            RecoveryHPText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.RecoveryHP)));
+            RecoveryHPText->SetText(FText::FromString(FString::Printf(TEXT("+%d HP"), ItemInfo.RecoveryHP)));
         }
     }
 
-    if (UTextBlock* RecoveryMPText = WBPStoreItemElementRef->GetRecoveryMPText())
+    if (UTextBlock* RecoveryMPText = Element->GetRecoveryMPText())
     {
         RecoveryMPText->SetVisibility(bIsConsumable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsConsumable)
+        if (bIsConsumable && ItemInfo.RecoveryMP > 0)
         {
-            RecoveryMPText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.RecoveryMP)));
+            RecoveryMPText->SetText(FText::FromString(FString::Printf(TEXT("+%d MP"), ItemInfo.RecoveryMP)));
         }
     }
 
     // Equipment stats
-    if (UTextBlock* DamageText = WBPStoreItemElementRef->GetDamageText())
+    if (UTextBlock* DamageText = Element->GetDamageText())
     {
-        DamageText->SetVisibility(bIsEquipment ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsEquipment)
+        DamageText->SetVisibility(bIsEquipment && ItemInfo.Damage > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        if (bIsEquipment && ItemInfo.Damage > 0)
         {
-            DamageText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.Damage)));
+            DamageText->SetText(FText::FromString(FString::Printf(TEXT("+%d ATK"), ItemInfo.Damage)));
         }
     }
 
-    if (UTextBlock* DefenceText = WBPStoreItemElementRef->GetDefenceText())
+    if (UTextBlock* DefenceText = Element->GetDefenceText())
     {
-        DefenceText->SetVisibility(bIsEquipment ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsEquipment)
+        DefenceText->SetVisibility(bIsEquipment && ItemInfo.Defence > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        if (bIsEquipment && ItemInfo.Defence > 0)
         {
-            DefenceText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.Defence)));
+            DefenceText->SetText(FText::FromString(FString::Printf(TEXT("+%d DEF"), ItemInfo.Defence)));
         }
     }
 
-    // Base stats
-    if (UTextBlock* HPText = WBPStoreItemElementRef->GetHPText())
+    // Base stats for equipment
+    if (UTextBlock* HPText = Element->GetHPText())
     {
-        HPText->SetVisibility(bIsEquipment ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsEquipment)
+        HPText->SetVisibility(bIsEquipment && ItemInfo.HP > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        if (bIsEquipment && ItemInfo.HP > 0)
         {
-            HPText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.HP)));
+            HPText->SetText(FText::FromString(FString::Printf(TEXT("+%d HP"), ItemInfo.HP)));
         }
     }
 
-    if (UTextBlock* MPText = WBPStoreItemElementRef->GetMPText())
+    if (UTextBlock* MPText = Element->GetMPText())
     {
-        MPText->SetVisibility(bIsEquipment ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsEquipment)
+        MPText->SetVisibility(bIsEquipment && ItemInfo.MP > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        if (bIsEquipment && ItemInfo.MP > 0)
         {
-            MPText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.MP)));
+            MPText->SetText(FText::FromString(FString::Printf(TEXT("+%d MP"), ItemInfo.MP)));
         }
     }
 
-    if (UTextBlock* STRText = WBPStoreItemElementRef->GetSTRText())
+    if (UTextBlock* STRText = Element->GetSTRText())
     {
-        STRText->SetVisibility(bIsEquipment ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsEquipment)
+        STRText->SetVisibility(bIsEquipment && ItemInfo.STR > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        if (bIsEquipment && ItemInfo.STR > 0)
         {
-            STRText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.STR)));
+            STRText->SetText(FText::FromString(FString::Printf(TEXT("+%d STR"), ItemInfo.STR)));
         }
     }
 
-    if (UTextBlock* DEXText = WBPStoreItemElementRef->GetDEXText())
+    if (UTextBlock* DEXText = Element->GetDEXText())
     {
-        DEXText->SetVisibility(bIsEquipment ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsEquipment)
+        DEXText->SetVisibility(bIsEquipment && ItemInfo.DEX > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        if (bIsEquipment && ItemInfo.DEX > 0)
         {
-            DEXText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.DEX)));
+            DEXText->SetText(FText::FromString(FString::Printf(TEXT("+%d DEX"), ItemInfo.DEX)));
         }
     }
 
-    if (UTextBlock* INTText = WBPStoreItemElementRef->GetINTText())
+    if (UTextBlock* INTText = Element->GetINTText())
     {
-        INTText->SetVisibility(bIsEquipment ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-        if (bIsEquipment)
+        INTText->SetVisibility(bIsEquipment && ItemInfo.INT > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        if (bIsEquipment && ItemInfo.INT > 0)
         {
-            INTText->SetText(FText::FromString(FString::Printf(TEXT("+%d"), ItemInfo.INT)));
+            INTText->SetText(FText::FromString(FString::Printf(TEXT("+%d INT"), ItemInfo.INT)));
         }
     }
 
-    // Set item slot type
-    if (UTextBlock* SlotTypeText = WBPStoreItemElementRef->GetItemSlotTypeText())
+    // Set item slot type text
+    if (UTextBlock* SlotTypeText = Element->GetItemSlotTypeText())
     {
         FString SlotTypeString;
         switch (ItemInfo.ItemEquipSlot)
@@ -272,32 +350,42 @@ void UWBP_Store::AddingStoreElement(int32 Index, UWBP_StoreItemElement* WBPStore
                 SlotTypeString = TEXT("Weapon");
                 break;
             case EItemEquipSlot::Head:
-                SlotTypeString = TEXT("Head");
+                SlotTypeString = TEXT("Helmet");
                 break;
             case EItemEquipSlot::Body:
-                SlotTypeString = TEXT("Body");
+                SlotTypeString = TEXT("Body Armor");
                 break;
             case EItemEquipSlot::Accessory:
                 SlotTypeString = TEXT("Accessory");
                 break;
+            case EItemEquipSlot::None:
             default:
-                SlotTypeString = TEXT("Consumable");
+                SlotTypeString = bIsConsumable ? TEXT("Consumable") : TEXT("Misc");
                 break;
         }
-        SlotTypeText->SetText(FText::FromString(SlotTypeString + TEXT(" Type")));
+        SlotTypeText->SetText(FText::FromString(SlotTypeString));
+        UE_LOG(LogTemp, Log, TEXT("WBP_Store: Set slot type %s for item %s"), *SlotTypeString, *ItemInfo.ItemName);
     }
+
+    UE_LOG(LogTemp, Log, TEXT("WBP_Store::PopulateStoreElementUI: Completed UI population for item %s"), *ItemInfo.ItemName);
 }
 
 void UWBP_Store::OnALLButtonClicked()
 {
+    UE_LOG(LogTemp, Log, TEXT("Store: Showing all items"));
+    
     // Show all store elements
+    int32 VisibleCount = 0;
     for (UWBP_StoreItemElement* Element : StoreElements)
     {
         if (Element)
         {
             Element->SetVisibility(ESlateVisibility::Visible);
+            VisibleCount++;
         }
     }
+    
+    UE_LOG(LogTemp, Verbose, TEXT("Store: Showing %d items in ALL"), VisibleCount);
 
     // Show bottom border for ALL button
     if (BottomBorder0) BottomBorder0->SetVisibility(ESlateVisibility::Visible);
@@ -309,7 +397,8 @@ void UWBP_Store::OnALLButtonClicked()
 
 void UWBP_Store::OnWeaponButtonClicked()
 {
-    UpdateElementVisibility(1); // Assuming 1 is the enum value for Weapon
+    UE_LOG(LogTemp, Log, TEXT("Store: Filtering by weapons"));
+    UpdateElementVisibility(static_cast<uint8>(EItemEquipSlot::Weapon));
     
     // Show bottom border for Weapon button
     if (BottomBorder0) BottomBorder0->SetVisibility(ESlateVisibility::Collapsed);
@@ -321,7 +410,9 @@ void UWBP_Store::OnWeaponButtonClicked()
 
 void UWBP_Store::OnHelmetButtonClicked()
 {
-    UpdateElementVisibility(9); // Assuming 9 is the enum value for Helmet
+    UE_LOG(LogTemp, Log, TEXT("Store: Filtering by helmets"));
+    // Helmet items are mapped to Head in our enum system
+    UpdateElementVisibility(static_cast<uint8>(EItemEquipSlot::Head));
     
     // Show bottom border for Helmet button
     if (BottomBorder0) BottomBorder0->SetVisibility(ESlateVisibility::Collapsed);
@@ -333,7 +424,9 @@ void UWBP_Store::OnHelmetButtonClicked()
 
 void UWBP_Store::OnShieldButtonClicked()
 {
-    UpdateElementVisibility(2); // Assuming 2 is the enum value for Shield
+    UE_LOG(LogTemp, Log, TEXT("Store: Filtering by shields"));
+    // Shield items are mapped to Accessory in our enum system
+    UpdateElementVisibility(static_cast<uint8>(EItemEquipSlot::Accessory));
     
     // Show bottom border for Shield button
     if (BottomBorder0) BottomBorder0->SetVisibility(ESlateVisibility::Collapsed);
@@ -345,7 +438,9 @@ void UWBP_Store::OnShieldButtonClicked()
 
 void UWBP_Store::OnSuitButtonClicked()
 {
-    UpdateElementVisibility(0); // Assuming 0 is the enum value for Suit
+    UE_LOG(LogTemp, Log, TEXT("Store: Filtering by suits"));
+    // Suit items are mapped to Body in our enum system
+    UpdateElementVisibility(static_cast<uint8>(EItemEquipSlot::Body));
     
     // Show bottom border for Suit button
     if (BottomBorder0) BottomBorder0->SetVisibility(ESlateVisibility::Collapsed);
@@ -357,28 +452,45 @@ void UWBP_Store::OnSuitButtonClicked()
 
 void UWBP_Store::OnNoneButtonClicked()
 {
+    UE_LOG(LogTemp, Log, TEXT("Store: Filtering by consumables"));
     UpdateElementVisibility(static_cast<uint8>(EItemEquipSlot::None));
-
-    // Hide all elements
-    for (UWBP_StoreItemElement* Element : StoreElements)
-    {
-        if (Element)
-        {
-            Element->SetVisibility(ESlateVisibility::Collapsed);
-        }
-    }
+    
+    // Show border for None button (assuming this should show consumables)
+    if (BottomBorder0) BottomBorder0->SetVisibility(ESlateVisibility::Collapsed);
+    if (BottomBorder1) BottomBorder1->SetVisibility(ESlateVisibility::Collapsed);
+    if (BottomBorder2) BottomBorder2->SetVisibility(ESlateVisibility::Collapsed);
+    if (BottomBorder3) BottomBorder3->SetVisibility(ESlateVisibility::Collapsed);
+    if (BottomBorder4) BottomBorder4->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void UWBP_Store::UpdateElementVisibility(uint8 EquipSlotType)
 {
+    EItemEquipSlot FilterSlot = static_cast<EItemEquipSlot>(EquipSlotType);
+    int32 VisibleCount = 0;
+    int32 TotalCount = 0;
+    
+    UE_LOG(LogTemp, Verbose, TEXT("Store: Filtering by slot %d"), EquipSlotType);
+    
     // Update visibility for each store element based on equip slot type
     for (UWBP_StoreItemElement* Element : StoreElements)
     {
         if (Element)
         {
-            Element->SetVisibility(static_cast<uint8>(Element->GetItemInfo().ItemEquipSlot) == EquipSlotType ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+            TotalCount++;
+            FStructure_ItemInfo ElementItemInfo = Element->GetItemInfo();
+            EItemEquipSlot ElementSlot = ElementItemInfo.ItemEquipSlot;
+            bool bShouldShow = (ElementSlot == FilterSlot);
+            
+            Element->SetVisibility(bShouldShow ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+            
+            if (bShouldShow)
+            {
+                VisibleCount++;
+            }
         }
     }
+    
+    UE_LOG(LogTemp, Log, TEXT("Store: Filtered %d of %d items for slot %d"), VisibleCount, TotalCount, EquipSlotType);
 }
 
 FText UWBP_Store::GetText_ALL() const
@@ -498,4 +610,54 @@ void UWBP_Store::OnItemSelected(int32 ItemIndex)
     {
         BuyButton->SetIsEnabled(true);
     }
+}
+
+void UWBP_Store::OpenPurchasePopup(const FStructure_ItemInfo& ItemInfo)
+{
+    UE_LOG(LogTemp, Log, TEXT("Store: Opening popup for %d: %s"), ItemInfo.ItemIndex, *ItemInfo.ItemName);
+
+    // Try to load the store popup class
+    UClass* StorePopupClass = LoadClass<UWBP_StorePopup>(nullptr, 
+        TEXT("/Game/AtlantisEons/Blueprints/Store/WBP_StorePopup.WBP_StorePopup_C"));
+    
+    if (!StorePopupClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Store: Failed to load WBP_StorePopup class"));
+        return;
+    }
+
+    // Create the popup widget
+    UWBP_StorePopup* StorePopup = CreateWidget<UWBP_StorePopup>(GetWorld(), StorePopupClass);
+    if (!StorePopup)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Store: Failed to create store popup widget"));
+        return;
+    }
+
+    // Set up the popup with item data - ALL necessary fields
+    StorePopup->ItemInfo = ItemInfo;
+    StorePopup->ItemIndex = ItemInfo.ItemIndex;  // Ensure this is set correctly
+    StorePopup->StackNumber = 1;                 // Start with 1 item
+    StorePopup->SelectedQuantity = 1;            // Also set the new quantity field
+
+    // Update the popup display to ensure all UI elements are properly populated
+    StorePopup->UpdateItemDisplay();
+
+    // Add to viewport
+    StorePopup->SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
+    StorePopup->AddToViewport(1000);
+
+    // Set buying state
+    ACharacter* PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+    if (PlayerCharacter)
+    {
+        AAtlantisEonsCharacter* Character = Cast<AAtlantisEonsCharacter>(PlayerCharacter);
+        if (Character && Character->Main)
+        {
+            Character->Main->buying = true;
+            Character->Main->UpdateDisplayedGold();
+        }
+    }
+
+    UE_LOG(LogTemp, Verbose, TEXT("Store: Popup opened for item %d"), ItemInfo.ItemIndex);
 }

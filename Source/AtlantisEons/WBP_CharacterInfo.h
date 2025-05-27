@@ -46,9 +46,6 @@ public:
     UPROPERTY()
     AAtlantisEonsCharacter* Character;
     
-    // Initialize character preview - moved to public for HUD access
-    void InitializeCharacterPreview();
-
     // Character stat getters
     UFUNCTION(BlueprintPure, Category = "Character Info")
     FText GetText_CharacterHP();
@@ -111,6 +108,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Game")
     void HandleResumeClicked();
 
+    /** Set the character reference and initialize equipment slots */
+    UFUNCTION(BlueprintCallable, Category = "Character")
+    void SetCharacterReference(AAtlantisEonsCharacter* NewCharacter);
+
+    /** Called when character stats are updated */
+    UFUNCTION()
+    void OnCharacterStatsUpdated();
+
 protected:
     virtual void NativeConstruct() override;
 
@@ -148,10 +153,6 @@ protected:
     // Root Canvas Panel
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UCanvasPanel* CanvasPanel;
-
-    // Character preview image
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
-    UImage* CharacterPreviewImage;
 
     // Text Blocks
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
@@ -215,15 +216,21 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UTextBlock* IntelligenceValue;
 
-    // Inventory slots
+public:
+    // Equipment slots - made public for character access
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
-    UWBP_InventorySlot* WBP_InventorySlot_0;
+    UWBP_InventorySlot* HeadSlot;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
-    UWBP_InventorySlot* WBP_InventorySlot_1;
+    UWBP_InventorySlot* WeaponSlot;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
-    UWBP_InventorySlot* WBP_InventorySlot_2;
+    UWBP_InventorySlot* SuitSlot;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    UWBP_InventorySlot* CollectableSlot;
+
+protected:
 
     // Circular bars
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))

@@ -2,7 +2,6 @@
 #include "AtlantisEonsCharacter.h"
 #include "AtlantisEonsHUD.h"
 #include "AtlantisEonsPlayerController.h"
-#include "BP_SceneCapture.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -36,6 +35,15 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "SlateBasics.h"
 #include "Engine/Engine.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/Border.h"
+#include "Components/BorderSlot.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/VerticalBoxSlot.h"
+#include "Components/PanelSlot.h"
+#include "Components/PanelWidget.h"
+#include "RenderingThread.h"
 
 void UWBP_CharacterInfo::NativeConstruct()
 {
@@ -136,75 +144,11 @@ void UWBP_CharacterInfo::NativeConstruct()
         UE_LOG(LogTemp, Warning, TEXT("%s: Ensured ResumeButton is enabled"), *GetName());
     }
 
-    // Try multiple methods to get character reference
-    // 1. Check if Character is already set by parent widget
-    if (IsValid(Character))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Character already set by parent: %s"), *GetName(), *Character->GetName());
-    }
-    else
-    {
-        // 2. Try via PlayerController
-        if (UWorld* World = GetWorld())
-        {
-            if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
-            {
-                Character = Cast<AAtlantisEonsCharacter>(PC->GetPawn());
-                
-                if (IsValid(Character))
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("%s: Found character via PlayerController: %s"), *GetName(), *Character->GetName());
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("%s: Failed to get character via PlayerController"), *GetName());
-                }
-                
-                if (IsValid(PC))
-                {
-                    PC->bShowMouseCursor = true;
-                    PC->SetInputMode(FInputModeUIOnly());
-                }
-            }
-        }
-        
-        // 3. Try finding directly in world if still not found
-        if (!IsValid(Character) && GetWorld())
-        {
-            for (TActorIterator<AAtlantisEonsCharacter> It(GetWorld()); It; ++It)
-            {
-                Character = *It;
-                if (IsValid(Character))
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("%s: Found character via World Iterator: %s"), *GetName(), *Character->GetName());
-                    break;
-                }
-            }
-        }
-    }
-
-    // If we still don't have a valid character, we'll set up the rest of the widget
-    // but skip the character-dependent parts
-    if (!IsValid(Character))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: No valid character found, skipping character-dependent initialization"), *GetName());
-        
-        // Setup text bindings with null character
-        SetupTextBindings();
-        
-        // Make sure this widget is visible
-        SetVisibility(ESlateVisibility::Visible);
-        return;
-    }
-
-    // Initialize the character preview - now with more resilience
-    InitializeCharacterPreview();
-
-    // Setup text bindings
+    // Setup basic widget functionality - character will be set later by WBP_Main
+    UE_LOG(LogTemp, Warning, TEXT("%s: Setting up basic widget functionality, character will be set later"), *GetName());
+    
+    // Setup text bindings (they handle null character gracefully)
     SetupTextBindings();
-
-    // Update stats
-    UpdateAllStats();
 
     UE_LOG(LogTemp, Warning, TEXT("%s: Widget constructed and stats updated"), *GetName());
 
@@ -228,61 +172,6 @@ void UWBP_CharacterInfo::NativeConstruct()
     }
     
     UE_LOG(LogTemp, Warning, TEXT("======== %s: NativeConstruct Complete ========"), *GetName());
-}
-
-void UWBP_CharacterInfo::InitializeCharacterPreview()
-{
-    if (!Character)
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Cannot initialize character preview - Character is null"), *GetName());
-        return;
-    }
-
-    if (!CharacterPreviewImage)
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: CharacterPreviewImage widget is null"), *GetName());
-        return;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("%s: Character preview system has been disabled"), *GetName());
-
-    // Create a simple placeholder image instead
-    UMaterialInterface* PreviewMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/AtlantisEons/Materials/M_RT_CharacterPreview_FullBody"));
-    if (!IsValid(PreviewMaterial))
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Failed to load preview material"), *GetName());
-        return;
-    }
-
-    // Create dynamic material instance
-    UMaterialInstanceDynamic* DynamicMaterial = UMaterialInstanceDynamic::Create(PreviewMaterial, this);
-    if (!IsValid(DynamicMaterial))
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Failed to create dynamic material instance"), *GetName());
-        return;
-    }
-
-    // Create and configure new brush
-    FSlateBrush NewBrush;
-    NewBrush.SetResourceObject(DynamicMaterial);
-    NewBrush.DrawAs = ESlateBrushDrawType::Image;
-    NewBrush.Tiling = ESlateBrushTileType::NoTile;
-    NewBrush.ImageSize = FVector2D(512.0f, 512.0f);
-    NewBrush.TintColor = FLinearColor::White;
-
-    // Apply the brush to the image widget
-    if (IsValid(CharacterPreviewImage))
-    {
-        CharacterPreviewImage->SetBrush(NewBrush);
-        UE_LOG(LogTemp, Warning, TEXT("%s: Applied placeholder brush to image"), *GetName());
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: CharacterPreviewImage became invalid during initialization"), *GetName());
-        return;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("%s: Character preview placeholder initialized"), *GetName());
 }
 
 void UWBP_CharacterInfo::SetupTextBindings()
@@ -377,31 +266,81 @@ FText UWBP_CharacterInfo::GetMPText() const
 FText UWBP_CharacterInfo::GetDamageText() const
 {
     if (!Character) return FText::FromString(TEXT("N/A"));
-    return FText::FromString(FString::Printf(TEXT("%d"), Character->GetCurrentDamage()));
+    int32 CurrentDamage = Character->GetCurrentDamage();
+    int32 BaseDamage = Character->BaseDamage;
+    
+    // Show bonus if there's a difference
+    if (CurrentDamage > BaseDamage)
+    {
+        int32 Bonus = CurrentDamage - BaseDamage;
+        return FText::FromString(FString::Printf(TEXT("%d (+%d)"), CurrentDamage, Bonus));
+    }
+    
+    return FText::FromString(FString::Printf(TEXT("%d"), CurrentDamage));
 }
 
 FText UWBP_CharacterInfo::GetDefenceText() const
 {
     if (!Character) return FText::FromString(TEXT("N/A"));
-    return FText::FromString(FString::Printf(TEXT("%d"), Character->GetCurrentDefence()));
+    int32 CurrentDefence = Character->GetCurrentDefence();
+    int32 BaseDefence = Character->BaseDefence;
+    
+    // Show bonus if there's a difference
+    if (CurrentDefence > BaseDefence)
+    {
+        int32 Bonus = CurrentDefence - BaseDefence;
+        return FText::FromString(FString::Printf(TEXT("%d (+%d)"), CurrentDefence, Bonus));
+    }
+    
+    return FText::FromString(FString::Printf(TEXT("%d"), CurrentDefence));
 }
 
 FText UWBP_CharacterInfo::GetStrengthText() const
 {
     if (!Character) return FText::FromString(TEXT("N/A"));
-    return FText::FromString(FString::Printf(TEXT("%d"), Character->GetCurrentSTR()));
+    int32 CurrentSTR = Character->GetCurrentSTR();
+    int32 BaseSTR = Character->BaseSTR;
+    
+    // Show bonus if there's a difference
+    if (CurrentSTR > BaseSTR)
+    {
+        int32 Bonus = CurrentSTR - BaseSTR;
+        return FText::FromString(FString::Printf(TEXT("%d (+%d)"), CurrentSTR, Bonus));
+    }
+    
+    return FText::FromString(FString::Printf(TEXT("%d"), CurrentSTR));
 }
 
 FText UWBP_CharacterInfo::GetDexText() const
 {
     if (!Character) return FText::FromString(TEXT("N/A"));
-    return FText::FromString(FString::Printf(TEXT("%d"), Character->GetCurrentDEX()));
+    int32 CurrentDEX = Character->GetCurrentDEX();
+    int32 BaseDEX = Character->BaseDEX;
+    
+    // Show bonus if there's a difference
+    if (CurrentDEX > BaseDEX)
+    {
+        int32 Bonus = CurrentDEX - BaseDEX;
+        return FText::FromString(FString::Printf(TEXT("%d (+%d)"), CurrentDEX, Bonus));
+    }
+    
+    return FText::FromString(FString::Printf(TEXT("%d"), CurrentDEX));
 }
 
 FText UWBP_CharacterInfo::GetIntelligenceText() const
 {
     if (!Character) return FText::FromString(TEXT("N/A"));
-    return FText::FromString(FString::Printf(TEXT("%d"), Character->GetCurrentINT()));
+    int32 CurrentINT = Character->GetCurrentINT();
+    int32 BaseINT = Character->BaseINT;
+    
+    // Show bonus if there's a difference
+    if (CurrentINT > BaseINT)
+    {
+        int32 Bonus = CurrentINT - BaseINT;
+        return FText::FromString(FString::Printf(TEXT("%d (+%d)"), CurrentINT, Bonus));
+    }
+    
+    return FText::FromString(FString::Printf(TEXT("%d"), CurrentINT));
 }
 
 void UWBP_CharacterInfo::UpdateAllStats()
@@ -702,7 +641,6 @@ void UWBP_CharacterInfo::OnResumeButtonClicked()
         }
     }
     
-    // Broadcast the OnResumeGame event for any listeners
     OnResumeGame.Broadcast();
 }
 
@@ -898,6 +836,40 @@ void UWBP_CharacterInfo::HandleResumeClicked()
         }
     }
     
-    // Broadcast the OnResumeGame event for any listeners
     OnResumeGame.Broadcast();
+}
+
+void UWBP_CharacterInfo::SetCharacterReference(AAtlantisEonsCharacter* NewCharacter)
+{
+    if (NewCharacter)
+    {
+        // Unbind from previous character if any
+        if (Character && Character->OnStatsUpdated.IsBound())
+        {
+            Character->OnStatsUpdated.RemoveAll(this);
+        }
+        
+        Character = NewCharacter;
+        UE_LOG(LogTemp, Log, TEXT("WBP_CharacterInfo: Character reference set to %s"), *NewCharacter->GetName());
+        
+        // Bind to stats updated delegate for automatic updates
+        Character->OnStatsUpdated.AddDynamic(this, &UWBP_CharacterInfo::OnCharacterStatsUpdated);
+        
+        // Tell the character to initialize equipment slot references
+        NewCharacter->InitializeEquipmentSlotReferences();
+        
+        // Update all stats
+        UpdateAllStats();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("WBP_CharacterInfo: Attempted to set null character reference"));
+    }
+}
+
+void UWBP_CharacterInfo::OnCharacterStatsUpdated()
+{
+    // Automatically update the stats display when character stats change
+    UpdateAllStats();
+    UE_LOG(LogTemp, Log, TEXT("WBP_CharacterInfo: Stats updated automatically via delegate"));
 }

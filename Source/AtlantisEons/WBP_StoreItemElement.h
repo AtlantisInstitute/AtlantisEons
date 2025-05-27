@@ -63,6 +63,10 @@ public:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UTextBlock* DescriptionText;
 
+    // Price display element - named "Price" in the Blueprint widget
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    UTextBlock* Price;
+
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UButton* BuyButton;
 
@@ -75,6 +79,31 @@ public:
     // Functions
     UFUNCTION(BlueprintCallable, Category = "Store Item")
     void OnBuyButtonClicked();
+
+    // Set item information and update display
+    UFUNCTION(BlueprintCallable, Category = "Store Item")
+    void SetItemInfo(const FStructure_ItemInfo& InItemInfo);
+
+    // Update the UI display with current item data
+    UFUNCTION(BlueprintCallable, Category = "Store Item")
+    void UpdateItemDisplay();
+
+    // Set parent store reference
+    UFUNCTION(BlueprintCallable, Category = "Store Item")
+    void SetParentStore(class UWBP_Store* InParentStore);
+
+    // UI Elements for new system
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ItemNameText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ItemDescriptionText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ItemPriceText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* ItemThumbnailImage;
 
     // Getter functions for UI elements
     UFUNCTION(BlueprintCallable, Category = "UI")
@@ -119,4 +148,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "UI")
     UTextBlock* GetItemSlotTypeText() const { return ItemSlotType; }
+
+private:
+    // Reference to parent store
+    UPROPERTY()
+    class UWBP_Store* ParentStore;
 };
