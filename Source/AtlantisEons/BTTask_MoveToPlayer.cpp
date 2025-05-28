@@ -106,8 +106,14 @@ void UBTTask_MoveToPlayer::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* No
     FVector ZombieLocation = Zombie->GetActorLocation();
     float DistanceToPlayer = FVector::DistXY(ZombieLocation, PlayerLocation);
     
-    UE_LOG(LogTemp, Warning, TEXT("MoveToPlayer Tick: Distance2D=%.1f, AcceptableRadius=%.1f, AttackRange=%.1f"), 
-           DistanceToPlayer, AcceptableRadius, Zombie->GetAttackRange());
+    // REDUCED LOGGING: Only log every 3 seconds instead of every tick
+    static float LastLogTime = 0.0f;
+    float CurrentTime = GetWorld()->GetTimeSeconds();
+    if (CurrentTime - LastLogTime > 3.0f)
+    {
+        UE_LOG(LogTemp, Log, TEXT("MoveToPlayer: Distance=%.1f, AcceptableRadius=%.1f, AttackRange=%.1f"), DistanceToPlayer, AcceptableRadius, Zombie->GetAttackRange());
+        LastLogTime = CurrentTime;
+    }
 
     if (DistanceToPlayer <= Zombie->GetAttackRange())
     {

@@ -79,6 +79,9 @@ protected:
     float AttackDamage;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie|Combat")
+    float BaseDamage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie|Combat")
     float AttackRange;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie|AI")
@@ -114,8 +117,7 @@ protected:
     UFUNCTION()
     void OnDeath();
 
-    UFUNCTION(BlueprintNativeEvent, Category = "Zombie|Combat")
-    float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser);
+    virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
     /** Play hit reaction montage */
     UFUNCTION(BlueprintCallable, Category = "Zombie|Combat")

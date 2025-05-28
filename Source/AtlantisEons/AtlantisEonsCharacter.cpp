@@ -59,6 +59,7 @@
 #include "BP_Item.h"
 #include "StoreSystemFix.h"
 #include "UniversalItemLoader.h"
+#include "Engine/OverlapResult.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -175,19 +176,19 @@ void AAtlantisEonsCharacter::PostInitProperties()
 
 void AAtlantisEonsCharacter::SetInventoryToggleLock(bool bLock, float UnlockDelay)
 {
-    UE_LOG(LogTemp, Warning, TEXT("SetInventoryToggleLock called with bLock: %s, UnlockDelay: %f"),
-        bLock ? TEXT("true") : TEXT("false"), UnlockDelay);
+    // UE_LOG(LogTemp, Warning, TEXT("SetInventoryToggleLock called with bLock: %s, UnlockDelay: %f"),
+    //     bLock ? TEXT("true") : TEXT("false"), UnlockDelay);
 
     bool bPrevLocked = bInventoryToggleLocked;
     bInventoryToggleLocked = bLock;
 
-    UE_LOG(LogTemp, Warning, TEXT("Inventory toggle lock changed from %s to %s"),
-        bPrevLocked ? TEXT("Locked") : TEXT("Unlocked"),
-        bInventoryToggleLocked ? TEXT("Locked") : TEXT("Unlocked"));
+    // UE_LOG(LogTemp, Warning, TEXT("Inventory toggle lock changed from %s to %s"),
+    //     bPrevLocked ? TEXT("Locked") : TEXT("Unlocked"),
+    //     bInventoryToggleLocked ? TEXT("Locked") : TEXT("Unlocked"));
 
     if (UnlockDelay > 0.0f)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Setting up unlock timer for %f seconds"), UnlockDelay);
+        // UE_LOG(LogTemp, Warning, TEXT("Setting up unlock timer for %f seconds"), UnlockDelay);
         GetWorld()->GetTimerManager().ClearTimer(InventoryToggleLockTimer);
         GetWorld()->GetTimerManager().SetTimer(
             InventoryToggleLockTimer,
@@ -198,32 +199,32 @@ void AAtlantisEonsCharacter::SetInventoryToggleLock(bool bLock, float UnlockDela
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("No unlock delay, state will remain: %s"),
-            bInventoryToggleLocked ? TEXT("Locked") : TEXT("Unlocked"));
+        // UE_LOG(LogTemp, Warning, TEXT("No unlock delay, state will remain: %s"),
+        //     bInventoryToggleLocked ? TEXT("Locked") : TEXT("Unlocked"));
     }
 
     // Log current inventory state
-    UE_LOG(LogTemp, Warning, TEXT("Current inventory state - Open: %s, ToggleLocked: %s"),
-        bIsInventoryOpen ? TEXT("true") : TEXT("false"),
-        bInventoryToggleLocked ? TEXT("true") : TEXT("false"));
+    // UE_LOG(LogTemp, Warning, TEXT("Current inventory state - Open: %s, ToggleLocked: %s"),
+    //     bIsInventoryOpen ? TEXT("true") : TEXT("false"),
+    //     bInventoryToggleLocked ? TEXT("true") : TEXT("false"));
 }
 
 void AAtlantisEonsCharacter::ForceSetInventoryState(bool bNewIsOpen)
 {
-    UE_LOG(LogTemp, Warning, TEXT("ForceSetInventoryState called with bNewIsOpen: %s"), bNewIsOpen ? TEXT("true") : TEXT("false"));
+    // UE_LOG(LogTemp, Warning, TEXT("ForceSetInventoryState called with bNewIsOpen: %s"), bNewIsOpen ? TEXT("true") : TEXT("false"));
     
     bool bPrevState = bIsInventoryOpen;
     bIsInventoryOpen = bNewIsOpen;
     
-    UE_LOG(LogTemp, Warning, TEXT("Character inventory state changed from %s to %s"), 
-        bPrevState ? TEXT("Open") : TEXT("Closed"),
-        bIsInventoryOpen ? TEXT("Open") : TEXT("Closed"));
+    // UE_LOG(LogTemp, Warning, TEXT("Character inventory state changed from %s to %s"), 
+    //     bPrevState ? TEXT("Open") : TEXT("Closed"),
+    //     bIsInventoryOpen ? TEXT("Open") : TEXT("Closed"));
 
     // Log widget state
     if (InventoryWidget)
     {
-        UE_LOG(LogTemp, Warning, TEXT("InventoryWidget exists, visibility: %s"), 
-            InventoryWidget->IsVisible() ? TEXT("Visible") : TEXT("Hidden"));
+        // UE_LOG(LogTemp, Warning, TEXT("InventoryWidget exists, visibility: %s"), 
+        //     InventoryWidget->IsVisible() ? TEXT("Visible") : TEXT("Hidden"));
     }
     else
     {
@@ -236,124 +237,35 @@ void AAtlantisEonsCharacter::BeginPlay()
     // Call the base class  
     Super::BeginPlay();
 
-    UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Starting input initialization"), *GetName());
-
-    // Initialize AI perception stimulus source
-    if (AIPerceptionStimuliSourceComponent)
+    // Add Input Mapping Context
+    if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
     {
-        AIPerceptionStimuliSourceComponent->RegisterForSense(UAISense_Sight::StaticClass());
-        AIPerceptionStimuliSourceComponent->RegisterWithPerceptionSystem();
-    }
-
-    // Initialize inventory flag
-    bInventoryNeedsUpdate = false;
-
-    // CRITICAL FIX: Explicitly load the IMC_Default.uasset input mapping context if not already set
-    if (!DefaultMappingContext)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - DefaultMappingContext is null, attempting to load from Content"), *GetName());
-        DefaultMappingContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/AtlantisEons/Input/IMC_Default"));
-        
-        if (DefaultMappingContext)
+        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
         {
-            UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Successfully loaded IMC_Default"), *GetName());
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - CRITICAL: Failed to load IMC_Default, input will not work!"), *GetName());
+            Subsystem->AddMappingContext(DefaultMappingContext, 0);
         }
     }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Using existing DefaultMappingContext"), *GetName());
-    }
 
-    // Set up input mapping on the player controller
-    APlayerController* PlayerController = Cast<APlayerController>(Controller);
-    if (PlayerController)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Got valid PlayerController, setting up input"), *GetName());
-        
-        // Clear keyboard focus from any widgets
-        if (GEngine && GEngine->GameViewport)
-        {
-            FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
-            FSlateApplication::Get().SetAllUserFocus(GEngine->GameViewport->GetGameViewportWidget());
-            UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Cleared slate keyboard focus"), *GetName());
-        }
-        
-        // Make sure we're in game mode with cursor hidden
-        FInputModeGameOnly GameOnlyMode;
-        PlayerController->SetInputMode(GameOnlyMode);
-        PlayerController->SetShowMouseCursor(false);
-        PlayerController->FlushPressedKeys();
-        
-        // Force-enable input for both controller and character
-        PlayerController->EnableInput(PlayerController);
-        EnableInput(PlayerController);
-        
-        UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Set input mode to game only, cursor hidden, input enabled"), *GetName());
-        
-        // Set up Enhanced Input Subsystem
-        if (ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(PlayerController->Player))
-        {
-            if (UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
-            {
-                UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Got Enhanced Input Subsystem, setting up mapping context"), *GetName());
-                
-                // First clear any existing mappings
-                Subsystem->ClearAllMappings();
-                
-                // Add our default mapping context
-                if (DefaultMappingContext)
-                {
-                    Subsystem->AddMappingContext(DefaultMappingContext, 0);
-                    UE_LOG(LogTemp, Warning, TEXT("%s: BeginPlay - Successfully added mapping context"), *GetName());
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - CRITICAL: DefaultMappingContext is null, input will not work!"), *GetName());
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - Failed to get Enhanced Input Subsystem"), *GetName());
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - Failed to get Local Player"), *GetName());
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: BeginPlay - Failed to get Player Controller"), *GetName());
-    }
+    // Initialize team ID for AI perception
+    TeamId = FGenericTeamId(1); // Player team
 
-    // Initialize UI components - disabled for now to fix input issues
-    // InitializeUI();
+    // Store original materials for invulnerability effects
+    StoreOriginalMaterials();
+
+    // Initialize UI
+    InitializeUI();
+
+    // Ensure player starts without invulnerability
+    bIsInvulnerable = false;
+    bIsDead = false;
     
-    // Play background music
-    UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")), 1.0f, 1.0f, 0.0f, nullptr, nullptr, true);
+    // Initialize stats
+    UpdateAllStats();
     
-    // Add a small delay to "wake up" the input system with a simulated input
-    FTimerHandle WakeupTimerHandle;
-    GetWorld()->GetTimerManager().SetTimer(
-        WakeupTimerHandle, 
-        [this]() { 
-            UE_LOG(LogTemp, Warning, TEXT("%s: Input system wakeup triggered"), *GetName());
-            AddMovementInput(FVector(1, 0, 0), 0.01f);
-            FTimerHandle SecondWakeupTimerHandle;
-            GetWorld()->GetTimerManager().SetTimer(
-                SecondWakeupTimerHandle, 
-                [this]() { AddMovementInput(FVector(-1, 0, 0), 0.01f); }, 
-                0.1f, 
-                false
-            );
-        }, 
-        0.5f, 
-        false
-    );
+    UE_LOG(LogTemp, Warning, TEXT("Player BeginPlay: Invulnerable=%s, Dead=%s, Health=%.1f"), 
+           bIsInvulnerable ? TEXT("Yes") : TEXT("No"),
+           bIsDead ? TEXT("Yes") : TEXT("No"),
+           CurrentHealth);
 }
 
 // BeginPlay is now BlueprintImplementableEvent
@@ -583,8 +495,147 @@ void AAtlantisEonsCharacter::RecoverHP(int32 Amount)
     SettingCircularBar_HP();
 }
 
+void AAtlantisEonsCharacter::ApplyDamage(float InDamageAmount)
+{
+    if (bIsDead) 
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ApplyDamage: Character is already dead, ignoring damage"));
+        return;
+    }
+
+    if (InDamageAmount > 0.0f && !bIsDead)
+    {
+        PlayHitReactMontage();
+    }
+
+    if (CurrentHealth > 0.0f)
+    {
+        CurrentHealth = FMath::Max(CurrentHealth - InDamageAmount, 0.0f);
+        UE_LOG(LogTemp, Warning, TEXT("💔 Player: Health reduced from %.1f to %.1f (damage: %.1f)"), 
+               CurrentHealth + InDamageAmount, CurrentHealth, InDamageAmount);
+
+        // IMPROVED: Spawn damage number with better positioning and error handling
+        if (IsValid(this) && GetWorld() && InDamageAmount > 0.0f)
+        {
+            // Get damage number location above player's head
+            FVector DamageLocation = GetActorLocation() + FVector(0, 0, 120);
+            
+            // Try to find damage number system
+            ADamageNumberSystem* DamageSystem = nullptr;
+            
+            // Method 1: Try GetInstance
+            DamageSystem = ADamageNumberSystem::GetInstance(GetWorld());
+            
+            // Method 2: Search for it if GetInstance failed
+            if (!DamageSystem)
+            {
+                TArray<AActor*> FoundActors;
+                UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADamageNumberSystem::StaticClass(), FoundActors);
+                
+                if (FoundActors.Num() > 0)
+                {
+                    DamageSystem = Cast<ADamageNumberSystem>(FoundActors[0]);
+                }
+            }
+            
+            if (DamageSystem && IsValid(DamageSystem))
+            {
+                // Use SpawnDamageNumberAtLocation for better positioning
+                DamageSystem->SpawnDamageNumberAtLocation(this, DamageLocation, InDamageAmount, true);
+                UE_LOG(LogTemp, Warning, TEXT("💥 Player: Spawned damage number for %.1f damage at %.1f,%.1f,%.1f"), 
+                       InDamageAmount, DamageLocation.X, DamageLocation.Y, DamageLocation.Z);
+                
+                // Draw debug sphere to show where damage number spawned
+                DrawDebugSphere(GetWorld(), DamageLocation, 15.0f, 8, FColor::Red, false, 5.0f, 0, 2.0f);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("❌ Player: Could not find DamageNumberSystem for damage numbers!"));
+            }
+        }
+        
+        // Update UI with safety checks
+        if (IsValid(this))
+        {
+            SettingCircularBar_HP();
+        }
+    }
+    
+    // Check if health is zero or less and character is not already dead
+    if (CurrentHealth <= 0.0f && !bIsDead)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("💀 Player: Health reached zero, calling HandleDeath. CurrentHealth: %f, bIsDead: %d"), 
+            CurrentHealth, bIsDead ? 1 : 0);
+        HandleDeath();
+        UE_LOG(LogTemp, Warning, TEXT("HandleDeath call completed"));
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Player ApplyDamage completed: DamageAmount=%f, NewHealth=%f"), InDamageAmount, CurrentHealth);
+}
+
+void AAtlantisEonsCharacter::SettingCircularBar_HP()
+{
+    // Early exit if we don't have a valid controller (prevents crashes during thumbnail generation)
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC)
+    {
+        UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_HP: No valid PlayerController"));
+        return;
+    }
+    
+    // Try multiple approaches to update the HP bar
+    bool bUpdated = false;
+    
+    // Method 1: Use WBP_CharacterInfo if available
+    if (WBP_CharacterInfo)
+    {
+        WBP_CharacterInfo->UpdateHPBar();
+        bUpdated = true;
+        UE_LOG(LogTemp, Log, TEXT("Updated HP bar via WBP_CharacterInfo"));
+    }
+    
+    // Method 2: Use Main widget if available
+    if (Main)
+    {
+        // Update HP bar progress
+        float HPPercentage = MaxHealth > 0 ? CurrentHealth / MaxHealth : 0.0f;
+        if (HPBar)
+        {
+            HPBar->SetPercent(HPPercentage);
+            bUpdated = true;
+            UE_LOG(LogTemp, Log, TEXT("Updated HP bar via Main widget: %.2f%%"), HPPercentage * 100.0f);
+        }
+    }
+    
+    if (!bUpdated)
+    {
+        UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_HP: Could not update HP bar - no valid UI references"));
+    }
+}
+
 void AAtlantisEonsCharacter::SettingCircularBar_MP()
 {
+    // Early exit if we don't have a valid controller (prevents crashes during thumbnail generation)
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC)
+    {
+        UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_MP: No valid PlayerController"));
+        return;
+    }
+    
+    // Try multiple approaches to update the MP bar
+    bool bUpdated = false;
+    
+    // Method 1: Use WBP_CharacterInfo if available
+    if (WBP_CharacterInfo)
+    {
+        float MPPercentage = MaxMP > 0 ? CurrentMP / (float)MaxMP : 0.0f;
+        WBP_CharacterInfo->UpdateMPBar(MPPercentage);
+        bUpdated = true;
+        UE_LOG(LogTemp, Log, TEXT("Updated MP bar via WBP_CharacterInfo"));
+    }
+    
+    // Method 2: Use Main widget if available
     if (Main)
     {
         // Update MP bar progress
@@ -592,7 +643,14 @@ void AAtlantisEonsCharacter::SettingCircularBar_MP()
         if (MPBar)
         {
             MPBar->SetPercent(MPPercentage);
+            bUpdated = true;
+            UE_LOG(LogTemp, Log, TEXT("Updated MP bar via Main widget: %.2f%%"), MPPercentage * 100.0f);
         }
+    }
+    
+    if (!bUpdated)
+    {
+        UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_MP: Could not update MP bar - no valid UI references"));
     }
 }
 
@@ -1465,14 +1523,6 @@ void AAtlantisEonsCharacter::RecoverMP(int32 Amount)
     SettingCircularBar_MP();
 }
 
-void AAtlantisEonsCharacter::SettingCircularBar_HP()
-{
-    if (WBP_CharacterInfo)
-    {
-        WBP_CharacterInfo->UpdateHPBar();
-    }
-}
-
 UBP_ItemInfo* AAtlantisEonsCharacter::GetInventoryItemRef() const
 {
     // Create a new concrete item info instance
@@ -1549,78 +1599,7 @@ void AAtlantisEonsCharacter::ForceEnableMovement()
 
 void AAtlantisEonsCharacter::ResetCharacterInput()
 {
-    UE_LOG(LogTemp, Warning, TEXT("%s: ResetCharacterInput called"), *GetName());
-    
-    // Make sure we have a controller
-    APlayerController* PC = Cast<APlayerController>(GetController());
-    if (!PC)
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: No PlayerController found!"), *GetName());
-        return;
-    }
-    
-    // Make sure input is enabled for both character and controller
-    PC->EnableInput(PC);
-    EnableInput(PC);
-    
-    // Set game-only input mode with no cursor
-    FInputModeGameOnly GameOnlyMode;
-    PC->SetInputMode(GameOnlyMode);
-    PC->SetShowMouseCursor(false);
-    
-    // Clear keyboard focus from any widgets
-    if (GEngine && GEngine->GameViewport)
-    {
-        FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
-        FSlateApplication::Get().SetAllUserFocus(GEngine->GameViewport->GetGameViewportWidget());
-    }
-    
-    // Reapply input mapping context
-    if (ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(PC->Player))
-    {
-        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
-        {
-            UE_LOG(LogTemp, Warning, TEXT("%s: Clearing and re-adding input mapping context"), *GetName());
-            
-            // First clear any existing mappings
-            Subsystem->ClearAllMappings();
-            
-            // Add our default mapping context
-            if (DefaultMappingContext)
-            {
-                Subsystem->AddMappingContext(DefaultMappingContext, 0);
-                UE_LOG(LogTemp, Warning, TEXT("%s: Successfully added mapping context"), *GetName());
-            }
-            else
-            {
-                // Try to load the default context if it's not set
-                DefaultMappingContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/AtlantisEons/Input/IMC_Default"));
-                if (DefaultMappingContext)
-                {
-                    Subsystem->AddMappingContext(DefaultMappingContext, 0);
-                    UE_LOG(LogTemp, Warning, TEXT("%s: Loaded and added IMC_Default"), *GetName());
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Error, TEXT("%s: DefaultMappingContext is null and couldn't be loaded!"), *GetName());
-                }
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("%s: Failed to get Enhanced Input Subsystem"), *GetName());
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Failed to get Local Player"), *GetName());
-    }
-    
-    // Force movement component to be enabled
-    ForceEnableMovement();
-    
-    // Apply a small movement to "wake up" the input system
-    AddMovementInput(FVector(1, 0, 0), 0.01f);
+    // Reset character input by applying a tiny movement to ensure input system is responsive
     GetWorld()->GetTimerManager().SetTimer(
         CameraLagTimer, // Reusing an existing timer handle
         [this]() { 
@@ -1636,46 +1615,96 @@ void AAtlantisEonsCharacter::ResetCharacterInput()
 
 void AAtlantisEonsCharacter::MeleeAttack(const FInputActionValue& Value)
 {
-    UE_LOG(LogTemp, Warning, TEXT("%s: MeleeAttack called"), *GetName());
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttack called. Can attack: %s"), bCanAttack ? TEXT("Yes") : TEXT("No"));
     
-    // Only attack if we're not already attacking and the cooldown is over
-    if (!bIsAttacking && bCanAttack)
+    if (!bCanAttack)
     {
-        // Set attacking flag
-        bIsAttacking = true;
-        bCanAttack = false;
-        
-        // Play attack animation if montage exists
-        if (MeleeAttackMontage)
-        {
-            PlayAnimMontage(MeleeAttackMontage);
-            
-            // Face nearest enemy if any
-            FaceNearestEnemy();
-        }
-        
-        // Set up attack cooldown
-        GetWorld()->GetTimerManager().SetTimer(
-            AttackCooldownTimer,
-            FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::ResetAttack),
-            AttackCooldown,
-            false
-        );
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Cannot attack - on cooldown"));
+        return;
     }
+    
+    if (bIsDead)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Cannot attack - character is dead"));
+        return;
+    }
+    
+    // Check if we have a valid mesh and animation instance
+    if (!GetMesh())
+    {
+        UE_LOG(LogTemp, Error, TEXT("🗡️ Character mesh is null!"));
+        return;
+    }
+    
+    UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+    if (!AnimInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🗡️ Animation instance is null!"));
+        return;
+    }
+    
+    bCanAttack = false;
+    bIsAttacking = true;
+    
+    FaceNearestEnemy(); // Snap to face nearest enemy
+    
+    // Debug montage information
+    if (MeleeAttackMontage)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttackMontage asset found: %s"), *MeleeAttackMontage->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttackMontage duration: %f"), MeleeAttackMontage->GetPlayLength());
+        
+        // Try to play the montage
+        float MontageLength = PlayAnimMontage(MeleeAttackMontage);
+        
+        if (MontageLength > 0.0f)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Successfully playing attack montage with duration: %f"), MontageLength);
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Current animation state: IsPlaying=%d"), AnimInstance->IsAnyMontagePlaying());
+            
+            // CRITICAL FIX: Add a backup timer to call OnMeleeAttackNotify since animation notify may not be set up
+            // This ensures damage application happens even without animation notify setup
+            float NotifyTiming = MontageLength * 0.6f; // Call at 60% through the animation
+            FTimerHandle AttackNotifyTimer;
+            GetWorld()->GetTimerManager().SetTimer(
+                AttackNotifyTimer,
+                FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::OnMeleeAttackNotify),
+                NotifyTiming,
+                false
+            );
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Set backup timer to call OnMeleeAttackNotify in %.2f seconds"), NotifyTiming);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("🗡️ Failed to play attack montage. Current anim mode: %d"), GetMesh()->GetAnimationMode());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("🗡️ MeleeAttackMontage is null! Please assign in Blueprint."));
+    }
+    
+    // Set timer for cooldown reset
+    GetWorld()->GetTimerManager().SetTimer(
+        AttackCooldownTimer,
+        FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::ResetAttack),
+        AttackCooldown,
+        false
+    );
 }
 
 void AAtlantisEonsCharacter::ResetAttack()
 {
     bCanAttack = true;
     bIsAttacking = false;
-    UE_LOG(LogTemp, Warning, TEXT("Attack cooldown reset. Can attack again."));
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack cooldown reset. Can attack again."));
 }
 
 void AAtlantisEonsCharacter::CloseInventoryImpl()
 {
     if (bIsInventoryOpen)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CloseInventory - Restoring default mapping context"));
+        // UE_LOG(LogTemp, Warning, TEXT("CloseInventory - Restoring default mapping context"));
         
         // Get the HUD
         AAtlantisEonsHUD* HUD = Cast<AAtlantisEonsHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
@@ -1720,7 +1749,7 @@ void AAtlantisEonsCharacter::CloseInventoryImpl()
             if (DefaultMappingContext)
             {
                 Subsystem->AddMappingContext(DefaultMappingContext, 0);
-                UE_LOG(LogTemp, Warning, TEXT("CloseInventory - Restored default mapping context"));
+                // UE_LOG(LogTemp, Warning, TEXT("CloseInventory - Restored default mapping context"));
             }
             else
             {
@@ -1743,11 +1772,11 @@ void AAtlantisEonsCharacter::CloseInventoryImpl()
         // Reset character input to ensure everything works
         ResetCharacterInput();
         
-        UE_LOG(LogTemp, Warning, TEXT("====== INVENTORY CLOSE: CloseInventory COMPLETED ======"));
+        // UE_LOG(LogTemp, Warning, TEXT("====== INVENTORY CLOSE: CloseInventory COMPLETED ======"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CloseInventory called but inventory was not open"));
+        // UE_LOG(LogTemp, Warning, TEXT("CloseInventory called but inventory was not open"));
     }
 }
 
@@ -1756,11 +1785,11 @@ void AAtlantisEonsCharacter::ToggleInventory(const FInputActionValue& Value)
     // Check if toggle is locked (but allow closing even if locked for emergency situations)
     if (bInventoryToggleLocked && !bIsInventoryOpen)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ToggleInventory called but ignored due to toggle lock (opening blocked)"));
+        // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory called but ignored due to toggle lock (opening blocked)"));
         return;
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("ToggleInventory called. Current state: %s"), bIsInventoryOpen ? TEXT("Open") : TEXT("Closed"));
+    // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory called. Current state: %s"), bIsInventoryOpen ? TEXT("Open") : TEXT("Closed"));
     
     // Get the HUD first
     AAtlantisEonsHUD* HUD = Cast<AAtlantisEonsHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
@@ -1777,7 +1806,7 @@ void AAtlantisEonsCharacter::ToggleInventory(const FInputActionValue& Value)
     // If inventory is open, close it
     if (bIsInventoryOpen)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Closing inventory"));
+        // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Closing inventory"));
         CloseInventory();
     }
     else
@@ -1785,12 +1814,12 @@ void AAtlantisEonsCharacter::ToggleInventory(const FInputActionValue& Value)
         // Only try to open if it's not already visible
         if (!HUD->IsInventoryWidgetVisible())
         {
-            UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Opening inventory"));
+            // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Opening inventory"));
             OpenInventory();
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Widget already visible, syncing state"));
+            // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Widget already visible, syncing state"));
             bIsInventoryOpen = true;
         }
     }
@@ -1835,7 +1864,7 @@ void AAtlantisEonsCharacter::OpenInventory()
     // Also set up a delayed update to ensure it runs after any Blueprint logic
     ForceUpdateInventorySlotsAfterDelay();
     
-    UE_LOG(LogTemp, Display, TEXT("%s: Inventory opened successfully"), *GetName());
+    // UE_LOG(LogTemp, Display, TEXT("%s: Inventory opened successfully"), *GetName());
 }
 
 void AAtlantisEonsCharacter::UpdateInventorySlots()
@@ -2255,7 +2284,7 @@ void AAtlantisEonsCharacter::InitializeEquipmentSlotReferences()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("InitializeEquipmentSlotReferences: WBP_CharacterInfo is null"));
+        // UE_LOG(LogTemp, Warning, TEXT("InitializeEquipmentSlotReferences: WBP_CharacterInfo is null"));
     }
 }
 
@@ -2722,5 +2751,523 @@ void AAtlantisEonsCharacter::UnequipInventoryItem(UBP_ItemInfo* ItemInfoRef)
                ItemData.ItemEquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
                ItemData.ItemEquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
                ItemData.ItemEquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
+    }
+}
+
+void AAtlantisEonsCharacter::OnMeleeAttackNotify()
+{
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ OnMeleeAttackNotify called - Player attacking"));
+    
+    if (bIsDead) 
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Character is dead, skipping attack"));
+        return;
+    }
+    
+    // Prevent multiple calls in the same attack sequence
+    if (bAttackNotifyInProgress)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack notify already in progress, skipping duplicate call"));
+        return;
+    }
+    
+    bAttackNotifyInProgress = true;
+    
+    // Reset the flag after a short delay to allow for the next attack
+    FTimerHandle ResetNotifyTimer;
+    GetWorld()->GetTimerManager().SetTimer(
+        ResetNotifyTimer,
+        [this]() { 
+            bAttackNotifyInProgress = false; // Reset the flag
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack notify flag reset - ready for next attack"));
+        },
+        0.5f, // Reset after 0.5 seconds
+        false
+    );
+    
+    // Calculate damage based on character stats and equipped weapon
+    float BaseDamage = static_cast<float>(CurrentDamage); // Use character's current damage stat
+    float WeaponDamage = 0.0f;
+    
+    // Check if we have a weapon equipped and get its damage bonus
+    if (EquipmentSlots.Num() > 2 && EquipmentSlots[2]) // Weapon slot is index 2
+    {
+        UBP_ItemInfo* WeaponItem = EquipmentSlots[2];
+        if (WeaponItem)
+        {
+            // Get weapon data from store system
+            FStructure_ItemInfo WeaponData;
+            if (UStoreSystemFix::GetItemData(WeaponItem->GetItemIndex(), WeaponData))
+            {
+                WeaponDamage = static_cast<float>(WeaponData.Damage);
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Equipped weapon '%s' adds %f damage"), 
+                       *WeaponData.ItemName, WeaponDamage);
+            }
+        }
+    }
+    
+    float TotalDamage = BaseDamage + WeaponDamage;
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ Total calculated damage: %f (Base: %f + Weapon: %f)"), 
+           TotalDamage, BaseDamage, WeaponDamage);
+    
+    // IMPROVED ATTACK DETECTION: Use multiple detection methods for maximum reliability
+    FVector StartLocation = GetActorLocation();
+    FVector ForwardVector = GetActorForwardVector();
+    float AttackRange = 300.0f; // Reasonable attack range
+    float AttackRadius = 200.0f; // Larger radius for better detection
+    
+    // Track which actors we've already hit to prevent multiple hits
+    TSet<AActor*> AlreadyHitActors;
+    bool bSuccessfulHit = false;
+    
+    // METHOD 1: Direct sphere overlap at player location (most reliable)
+    TArray<FOverlapResult> OverlapResults;
+    FCollisionShape SphereShape = FCollisionShape::MakeSphere(AttackRadius);
+    
+    bool bHitDetected = GetWorld()->OverlapMultiByChannel(
+        OverlapResults,
+        StartLocation, // Use player location directly instead of calculated center
+        FQuat::Identity,
+        ECollisionChannel::ECC_Pawn,
+        SphereShape
+    );
+    
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ Sphere overlap found %d results"), OverlapResults.Num());
+    
+    if (bHitDetected)
+    {
+        for (const FOverlapResult& Result : OverlapResults)
+        {
+            AActor* HitActor = Result.GetActor();
+            if (!HitActor || HitActor == this)
+                continue;
+                
+            // Skip if we already hit this actor
+            if (AlreadyHitActors.Contains(HitActor))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Skipping already hit actor: %s"), *HitActor->GetName());
+                continue;
+            }
+            
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Checking actor: %s (Class: %s)"), 
+                   *HitActor->GetName(), *HitActor->GetClass()->GetName());
+            
+            // Check if it's a zombie by class name (most reliable method)
+            bool bIsZombie = HitActor->GetClass()->GetName().Contains(TEXT("ZombieCharacter"));
+            
+            if (bIsZombie)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ ✓ Found zombie by class name: %s"), 
+                       *HitActor->GetClass()->GetName());
+                
+                // Calculate distance and direction for additional validation
+                FVector ToTarget = HitActor->GetActorLocation() - GetActorLocation();
+                float DistanceToTarget = ToTarget.Size();
+                float DotProduct = FVector::DotProduct(ForwardVector, ToTarget.GetSafeNormal());
+                
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Zombie %s - Distance: %.1f, Dot: %.2f"), 
+                       *HitActor->GetName(), DistanceToTarget, DotProduct);
+                
+                // More lenient distance and direction check for better hit detection
+                if (DistanceToTarget <= AttackRange && DotProduct > -0.5f) // Allow hits from wider angles
+                {
+                    // Mark this actor as hit
+                    AlreadyHitActors.Add(HitActor);
+                    
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ ATTACKING zombie %s with %.1f damage!"), 
+                           *HitActor->GetName(), TotalDamage);
+                    
+                    // Apply damage to the zombie
+                    float ActualDamage = HitActor->TakeDamage(TotalDamage, FDamageEvent(), GetController(), this);
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ TakeDamage returned: %.1f"), ActualDamage);
+                    
+                    bSuccessfulHit = true;
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ Zombie %s out of range or wrong direction (Distance: %.1f, Dot: %.2f)"), 
+                           *HitActor->GetName(), DistanceToTarget, DotProduct);
+                }
+            }
+        }
+    }
+    
+    // METHOD 2: If no hits found, try a forward sweep as backup
+    if (!bSuccessfulHit)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ No hits from sphere overlap, trying forward sweep backup"));
+        
+        TArray<FHitResult> HitResults;
+        FVector EndLocation = StartLocation + (ForwardVector * AttackRange);
+        
+        bool bSweepHit = GetWorld()->SweepMultiByChannel(
+            HitResults,
+            StartLocation,
+            EndLocation,
+            FQuat::Identity,
+            ECollisionChannel::ECC_Pawn,
+            FCollisionShape::MakeSphere(AttackRadius * 0.8f) // Slightly smaller for sweep
+        );
+        
+        if (bSweepHit)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Forward sweep found %d results"), HitResults.Num());
+            
+            for (const FHitResult& Hit : HitResults)
+            {
+                AActor* HitActor = Hit.GetActor();
+                if (!HitActor || HitActor == this || AlreadyHitActors.Contains(HitActor))
+                    continue;
+                
+                bool bIsZombie = HitActor->GetClass()->GetName().Contains(TEXT("ZombieCharacter"));
+                if (bIsZombie)
+                {
+                    AlreadyHitActors.Add(HitActor);
+                    
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ SWEEP ATTACKING zombie %s with %.1f damage!"), 
+                           *HitActor->GetName(), TotalDamage);
+                    
+                    float ActualDamage = HitActor->TakeDamage(TotalDamage, FDamageEvent(), GetController(), this);
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Sweep TakeDamage returned: %.1f"), ActualDamage);
+                    
+                    bSuccessfulHit = true;
+                    break; // Only hit one enemy per attack
+                }
+            }
+        }
+    }
+    
+    if (bSuccessfulHit)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Successfully hit at least one enemy!"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ No valid enemies found in attack range"));
+    }
+}
+
+void AAtlantisEonsCharacter::StoreOriginalMaterials()
+{
+    if (OriginalMaterials.Num() == 0 && GetMesh())
+    {
+        OriginalMaterials.Empty();
+        TArray<UMaterialInterface*> Materials = GetMesh()->GetMaterials();
+        OriginalMaterials.Append(Materials);
+    }
+}
+
+void AAtlantisEonsCharacter::ApplyInvulnerabilityEffects()
+{
+    // Store original materials if not already stored
+    StoreOriginalMaterials();
+
+    // Apply invulnerability material if available
+    if (InvulnerabilityMaterial && GetMesh())
+    {
+        for (int32 i = 0; i < GetMesh()->GetNumMaterials(); i++)
+        {
+            GetMesh()->SetMaterial(i, InvulnerabilityMaterial);
+        }
+    }
+
+    // Spawn invulnerability particle effect
+    if (InvulnerabilityEffect && !InvulnerabilityPSC)
+    {
+        InvulnerabilityPSC = UGameplayStatics::SpawnEmitterAttached(
+            InvulnerabilityEffect,
+            GetMesh(),
+            NAME_None,
+            FVector::ZeroVector,
+            FRotator::ZeroRotator,
+            FVector(1.0f),
+            EAttachLocation::SnapToTarget,
+            true
+        );
+    }
+}
+
+void AAtlantisEonsCharacter::RemoveInvulnerabilityEffects()
+{
+    // Restore original materials
+    if (GetMesh() && OriginalMaterials.Num() > 0)
+    {
+        for (int32 i = 0; i < OriginalMaterials.Num(); i++)
+        {
+            if (OriginalMaterials[i])
+            {
+                GetMesh()->SetMaterial(i, OriginalMaterials[i]);
+            }
+        }
+    }
+
+    // Remove invulnerability particle effect
+    if (InvulnerabilityPSC)
+    {
+        InvulnerabilityPSC->DestroyComponent();
+        InvulnerabilityPSC = nullptr;
+    }
+}
+
+float AAtlantisEonsCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+{
+    UE_LOG(LogTemplateCharacter, Warning, TEXT("Player TakeDamage called: %.1f damage from %s, Invulnerable: %s, Dead: %s"), 
+           DamageAmount, 
+           DamageCauser ? *DamageCauser->GetName() : TEXT("Unknown"),
+           bIsInvulnerable ? TEXT("Yes") : TEXT("No"),
+           bIsDead ? TEXT("Yes") : TEXT("No"));
+
+    // Don't take damage if already dead
+    if (bIsDead)
+    {
+        UE_LOG(LogTemplateCharacter, Warning, TEXT("Player is dead, ignoring damage"));
+        return 0.0f;
+    }
+
+    float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+    
+    UE_LOG(LogTemplateCharacter, Warning, TEXT("Player Super::TakeDamage returned: %.1f"), ActualDamage);
+
+    // Apply damage if not invulnerable (for now, always apply damage to fix combat issues)
+    // TODO: Implement proper invulnerability frames later
+    ApplyDamage(ActualDamage);
+    UE_LOG(LogTemplateCharacter, Warning, TEXT("Player took %.1f damage from %s"), ActualDamage, DamageCauser ? *DamageCauser->GetName() : TEXT("Unknown"));
+
+    return ActualDamage;
+}
+
+void AAtlantisEonsCharacter::HandleDeath()
+{
+    UE_LOG(LogTemp, Warning, TEXT("HandleDeath: Function entered. bIsDead: %d"), bIsDead ? 1 : 0);
+    
+    if (bIsDead) 
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HandleDeath: Character is already dead, returning early"));
+        return;
+    }
+
+    // Safety check to ensure we're still valid
+    if (!IsValid(this))
+    {
+        UE_LOG(LogTemp, Error, TEXT("HandleDeath: Character is no longer valid, aborting"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("HandleDeath: Setting bIsDead to true and disabling movement"));
+    bIsDead = true;
+
+    // Disable movement with safety checks
+    if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+    {
+        MovementComp->DisableMovement();
+        MovementComp->StopMovementImmediately();
+    }
+
+    // Disable input with safety checks
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        DisableInput(PC);
+        UE_LOG(LogTemp, Warning, TEXT("HandleDeath: Disabled player input"));
+    }
+
+    // Play death animation if available
+    if (DeathMontage && GetMesh())
+    {
+        PlayAnimMontage(DeathMontage);
+        UE_LOG(LogTemp, Warning, TEXT("HandleDeath: Playing death animation"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HandleDeath: No death montage assigned or no mesh!"));
+    }
+
+    // Log death
+    UE_LOG(LogTemplateCharacter, Log, TEXT("Character has died"));
+
+    // Start respawn timer with safety checks
+    if (GetWorld())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HandleDeath: Starting respawn timer for %f seconds"), RespawnDelay);
+        GetWorld()->GetTimerManager().SetTimer(
+            RespawnTimerHandle,
+            this,
+            &AAtlantisEonsCharacter::ResetCharacter,
+            RespawnDelay,
+            false
+        );
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("HandleDeath: Cannot start respawn timer - invalid world"));
+    }
+}
+
+void AAtlantisEonsCharacter::ResetCharacter()
+{
+    UE_LOG(LogTemp, Warning, TEXT("ResetCharacter: Resetting character after death"));
+    
+    // Reset health
+    CurrentHealth = MaxHealth;
+    bIsDead = false;
+
+    // Stop any ongoing animations
+    if (DeathMontage)
+    {
+        StopAnimMontage(DeathMontage);
+    }
+
+    // Re-enable movement
+    GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+
+    // Re-enable input
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        EnableInput(PC);
+    }
+
+    // Respawn at appropriate location
+    RespawnCharacter();
+
+    // Update UI
+    SettingCircularBar_HP();
+    SettingCircularBar_MP();
+
+    // Log respawn
+    UE_LOG(LogTemplateCharacter, Log, TEXT("Character has respawned with full health"));
+}
+
+void AAtlantisEonsCharacter::RespawnCharacter()
+{
+    UE_LOG(LogTemp, Warning, TEXT("RespawnCharacter: Finding respawn location"));
+    
+    // Find a player start to respawn at
+    AActor* StartSpot = nullptr;
+    APlayerController* PC = Cast<APlayerController>(GetController());
+
+    if (PC)
+    {
+        // Try to find a Player Start actor
+        TArray<AActor*> PlayerStarts;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), APlayerStart::StaticClass(), PlayerStarts);
+
+        if (PlayerStarts.Num() > 0)
+        {
+            // Use the first player start found
+            StartSpot = PlayerStarts[0];
+            UE_LOG(LogTemp, Warning, TEXT("RespawnCharacter: Found PlayerStart at %s"), *StartSpot->GetActorLocation().ToString());
+        }
+    }
+
+    if (StartSpot)
+    {
+        // Teleport to the start spot
+        SetActorLocation(StartSpot->GetActorLocation());
+        SetActorRotation(StartSpot->GetActorRotation());
+        UE_LOG(LogTemp, Warning, TEXT("RespawnCharacter: Teleported to PlayerStart"));
+    }
+    else
+    {
+        // If no player start is found, just reset to origin
+        SetActorLocation(FVector(0.0f, 0.0f, 100.0f));
+        SetActorRotation(FRotator(0.0f));
+        UE_LOG(LogTemplateCharacter, Warning, TEXT("No PlayerStart found - respawning at origin"));
+    }
+}
+
+void AAtlantisEonsCharacter::FaceNearestEnemy()
+{
+    UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: Looking for nearest enemy to face"));
+    
+    // Find the nearest enemy within a reasonable range
+    const float SearchRadius = 500.0f; // 5 meter search radius
+    AActor* NearestEnemy = nullptr;
+    float NearestDistance = SearchRadius;
+    
+    // Get all actors in the world
+    TArray<AActor*> AllActors;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AActor::StaticClass(), AllActors);
+    
+    FGenericTeamId MyTeamId = GetGenericTeamId();
+    FVector MyLocation = GetActorLocation();
+    
+    for (AActor* Actor : AllActors)
+    {
+        if (!Actor || Actor == this || !IsValid(Actor)) continue;
+        
+        // Check if this is an enemy
+        bool bIsEnemy = false;
+        
+        // Check 1: Class name contains "Zombie"
+        if (Actor->GetClass()->GetName().Contains("Zombie"))
+        {
+            bIsEnemy = true;
+        }
+        // Check 2: Actor has enemy tags
+        else if (Actor->ActorHasTag(TEXT("AdvancedZombieEnemy")) || Actor->ActorHasTag(TEXT("Enemy")))
+        {
+            bIsEnemy = true;
+        }
+        // Check 3: Different team ID
+        else
+        {
+            IGenericTeamAgentInterface* TeamAgent = Cast<IGenericTeamAgentInterface>(Actor);
+            if (TeamAgent && TeamAgent->GetGenericTeamId() != MyTeamId)
+            {
+                bIsEnemy = true;
+            }
+        }
+        
+        if (bIsEnemy)
+        {
+            float Distance = FVector::Dist(MyLocation, Actor->GetActorLocation());
+            if (Distance < NearestDistance)
+            {
+                NearestDistance = Distance;
+                NearestEnemy = Actor;
+            }
+        }
+    }
+    
+    // If we found an enemy, face towards it
+    if (NearestEnemy)
+    {
+        FVector DirectionToEnemy = (NearestEnemy->GetActorLocation() - MyLocation).GetSafeNormal();
+        FRotator TargetRotation = DirectionToEnemy.Rotation();
+        
+        // Only rotate on the Z axis (yaw) to keep the character upright
+        TargetRotation.Pitch = 0.0f;
+        TargetRotation.Roll = 0.0f;
+        
+        // FIXED: Use immediate rotation instead of interpolation for better combat responsiveness
+        // This ensures the player immediately faces the enemy when attacking
+        SetActorRotation(TargetRotation);
+        
+        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: Immediately rotated to face enemy %s at distance %.1f"), 
+               *NearestEnemy->GetName(), NearestDistance);
+        
+        // Draw debug line to show targeting
+        DrawDebugLine(GetWorld(), MyLocation, NearestEnemy->GetActorLocation(), FColor::Orange, false, 1.0f, 0, 2.0f);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: No enemies found within range"));
+    }
+}
+
+
+void AAtlantisEonsCharacter::PlayHitReactMontage()
+{
+    if (HitReactMontage && GetMesh())
+    {
+        UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+        if (AnimInstance)
+        {
+            AnimInstance->Montage_Play(HitReactMontage);
+            UE_LOG(LogTemp, Warning, TEXT("Playing hit react montage"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HitReactMontage is null or no mesh found"));
     }
 }

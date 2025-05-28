@@ -19,6 +19,8 @@
 #include "GenericTeamAgentInterface.h"
 #include "DamageNumberActor.h"
 #include "DamageNumberScreenManager.h"
+#include "Engine/World.h"
+#include "Engine/GameInstance.h"
 
 // Initialize static instance to nullptr
 ADamageNumberSystem* ADamageNumberSystem::Instance = nullptr;
@@ -133,16 +135,21 @@ void ADamageNumberSystem::BeginPlay()
         // This is the main damage number system actor, not a dynamically spawned one
         UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: This is the main system actor, not initializing widget in BeginPlay"));
         
+        // CRITICAL: Only the main system actor should set itself as the singleton
+        if (!Instance || !IsValid(Instance))
+        {
+            Instance = this;
+            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Main system actor set as singleton instance"));
+        }
+        
         // Don't set a lifespan for the main system actor
     }
     else
     {
         // This is a dynamically spawned damage number, initialize the widget
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: This is a temporary damage number actor, initializing widget"));
         InitWidget();
     }
-    
-    // Set this instance as the singleton
-    Instance = this;
     
     // Try to load the widget class if it wasn't found in the constructor
     if (!DamageNumberWidgetClass)
@@ -372,116 +379,143 @@ void ADamageNumberSystem::SpawnDamageNumber(AActor* DamagedActor, float DamageAm
     }
 }
 
-void ADamageNumberSystem::SpawnDamageNumberAtLocation(AActor* DamagedActor, const FVector& Location, float DamageAmount, bool bIsPlayerDamage)
+void ADamageNumberSystem::SpawnDamageNumberAtLocation(AActor* DamagedActor, FVector Location, float DamageAmount, bool bIsCritical)
 {
-    // Log damage information for debugging
-    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Spawning damage number at specific location X=%.1f, Y=%.1f, Z=%.1f for %s (Amount: %.1f)"), 
-           Location.X, Location.Y, Location.Z, 
-           DamagedActor ? *DamagedActor->GetName() : TEXT("Unknown Actor"), 
-           DamageAmount);
+    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: SpawnDamageNumberAtLocation called - Actor: %s, Damage: %.1f"), 
+           DamagedActor ? *DamagedActor->GetName() : TEXT("NULL"), DamageAmount);
     
-    // Skip if no actor or world is available
-    if (!DamagedActor || !IsValid(DamagedActor) || !GetWorld())
+    // Enhanced validation
+    if (!DamagedActor || !IsValid(DamagedActor))
     {
-        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: Cannot spawn damage number - Invalid Actor or World"));
+        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: Invalid DamagedActor"));
         return;
     }
     
-    // Skip if damage amount is zero or negative
-    if (DamageAmount <= 0.0f)
+    UWorld* World = DamagedActor->GetWorld();
+    if (!World || !IsValid(World))
     {
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Skipping damage number for zero or negative damage"));
+        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: Invalid World from DamagedActor"));
         return;
     }
     
-    // Check if this is a zombie to apply special formatting
-    bool bIsZombie = DamagedActor->GetClass()->GetName().Contains("Zombie");
-    if (bIsZombie)
+    // Get the game instance world as backup
+    if (!World)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Detected zombie actor for location-specific damage number"));
+        if (UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this))
+        {
+            World = GameInstance->GetWorld();
+        }
     }
     
-    // Use the exact location provided
-    FVector SpawnLocation = Location;
-    
-    // Add a very slight random offset to prevent exact overlap with the hit point
-    // and to add some visual variety when multiple hits occur in the same area
-    float RandomX = FMath::RandRange(-5.0f, 5.0f);
-    float RandomY = FMath::RandRange(-5.0f, 5.0f);
-    float RandomZ = FMath::RandRange(0.0f, 10.0f); // Slightly higher bias to prevent clipping
-    SpawnLocation += FVector(RandomX, RandomY, RandomZ);
-    
-    // Spawn the actor for the damage number
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-    SpawnParams.Owner = this;
-    
-    // Create a new damage number actor
-    ADamageNumberSystem* DamageNumberActor = GetWorld()->SpawnActor<ADamageNumberSystem>(GetClass(), SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-    
-    // Check if spawn was successful
-    if (!DamageNumberActor || !IsValid(DamageNumberActor))
+    if (!World)
     {
-        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: Failed to spawn damage number actor at specific location"));
+        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: Cannot get valid world context"));
         return;
     }
     
-    // Draw debug point to visualize the exact spawn location
-    DrawDebugPoint(GetWorld(), SpawnLocation, 15.0f, FColor::Yellow, false, 2.0f, 0);
-    
-    // Add the actor to our tracking array
-    ActiveDamageNumberActors.Add(DamageNumberActor);
-    
-    // Log successful creation
-    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Created damage number actor at exact location: X=%.1f, Y=%.1f, Z=%.1f"), 
-           SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
-    
-    // Configure the spawned actor
-    DamageNumberActor->DamageAmount = DamageAmount;
-    DamageNumberActor->bIsPlayerDamage = bIsPlayerDamage;
-    
-    // Set the widget class on the new actor
-    if (DamageNumberWidgetClass)
+    // Check if we're in PIE (Play In Editor) mode
+    if (!World->IsGameWorld())
     {
-        DamageNumberActor->DamageNumberWidgetClass = DamageNumberWidgetClass;
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Set widget class for location-specific damage number"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: No DamageNumberWidgetClass set for location-specific damage number!"));
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Not in game world, skipping damage number spawn"));
+        return;
     }
     
-    // Initialize the widget on the actor
-    DamageNumberActor->InitWidget();
+    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Valid world found, proceeding with spawn"));
     
-    // Apply special scaling for zombie damage numbers
-    if (bIsZombie)
+    // Try to get player controller for UI context
+    APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+    if (!PC)
     {
-        // Increase the scale for better visibility
-        DamageNumberActor->SetActorScale3D(FVector(3.0f, 3.0f, 3.0f));
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Applied special scaling to location-specific zombie damage number"));
+        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: No valid PlayerController found"));
+        return;
     }
     
-    // Set timer to automatically destroy the damage number after animation
-    if (DamageNumberWidgetClass)
+    // Enhanced widget class validation
+    if (!DamageNumberWidgetClass)
     {
-        const float DestroyDelay = 2.0f; // Slightly longer than animation duration to ensure it completes
-        FTimerHandle DestroyTimerHandle;
-        GetWorld()->GetTimerManager().SetTimer(
-            DestroyTimerHandle, 
-            FTimerDelegate::CreateUObject(DamageNumberActor, &ADamageNumberSystem::DestroyDamageNumber),
-            DestroyDelay, 
-            false
-        );
+        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: DamageNumberWidgetClass is NULL!"));
+        return;
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Creating widget with class: %s"), 
+           *DamageNumberWidgetClass->GetName());
+    
+    // Create the damage number widget with proper world context
+    UUserWidget* DamageWidget = CreateWidget<UUserWidget>(PC, DamageNumberWidgetClass);
+    if (!DamageWidget)
+    {
+        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: Failed to create damage number widget"));
+        return;
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Widget created successfully"));
+    
+    // Set damage amount and critical status via BlueprintImplementableEvent
+    if (UFunction* InitFunction = DamageWidget->FindFunction(FName("InitializeDamageNumber")))
+    {
+        struct
+        {
+            float Amount;
+            bool bCritical;
+        } Params;
         
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Set destroy timer for location-specific damage number"));
+        Params.Amount = DamageAmount;
+        Params.bCritical = bIsCritical;
+        
+        DamageWidget->ProcessEvent(InitFunction, &Params);
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Called InitializeDamageNumber with amount: %.1f"), DamageAmount);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: No widget class set, cannot initialize location-specific damage number"));
-        DamageNumberActor->Destroy();
-        ActiveDamageNumberActors.Remove(DamageNumberActor);
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: InitializeDamageNumber function not found, using fallback"));
+        
+        // Fallback: Try to set the damage amount directly via reflection
+        if (FFloatProperty* DamageProperty = FindFProperty<FFloatProperty>(DamageWidget->GetClass(), FName("DamageAmount")))
+        {
+            DamageProperty->SetPropertyValue_InContainer(DamageWidget, DamageAmount);
+            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Set DamageAmount property directly"));
+        }
     }
+    
+    // Add to viewport with proper Z-order
+    DamageWidget->AddToViewport(1000); // High Z-order to appear on top
+    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Added widget to viewport"));
+    
+    // Convert world location to screen space for positioning
+    FVector2D ScreenLocation;
+    if (UGameplayStatics::ProjectWorldToScreen(PC, Location, ScreenLocation))
+    {
+        // Offset screen position slightly for better visibility
+        ScreenLocation.X -= 25.0f; // Center horizontally
+        ScreenLocation.Y -= 10.0f; // Slightly above
+        
+        DamageWidget->SetPositionInViewport(ScreenLocation, false);
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Positioned widget at screen location: %.1f, %.1f"), 
+               ScreenLocation.X, ScreenLocation.Y);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Could not project to screen, using default position"));
+    }
+    
+    // Set up auto-removal timer
+    FTimerHandle RemovalTimer;
+    World->GetTimerManager().SetTimer(
+        RemovalTimer,
+        [DamageWidget]()
+        {
+            if (IsValid(DamageWidget))
+            {
+                DamageWidget->RemoveFromParent();
+                UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Auto-removed damage widget"));
+            }
+        },
+        3.0f, // Remove after 3 seconds
+        false
+    );
+    
+    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: ✅ Successfully spawned damage number: %.1f at location %.1f,%.1f,%.1f"), 
+           DamageAmount, Location.X, Location.Y, Location.Z);
 }
 
 FVector ADamageNumberSystem::CalculateDamageNumberLocation(AActor* DamagedActor)
@@ -592,12 +626,11 @@ void ADamageNumberSystem::InitWidget()
         UDamageNumberWidget* DamageWidget = Cast<UDamageNumberWidget>(UserWidget);
         if (DamageWidget)
         {
-            // CRITICAL: Ensure the widget is visible before initialization
-            UserWidget->SetVisibility(ESlateVisibility::Visible);
-            
-            // Initialize the widget with the damage amount and player damage flag
-            // This single call now handles everything: setting the damage amount, color, and starting the animation
+            // FIXED: Use the correct method to initialize the damage number widget
             DamageWidget->InitializeDamageNumber(DamageAmount, bIsPlayerDamage);
+            
+            // CRITICAL: Ensure the widget is visible
+            UserWidget->SetVisibility(ESlateVisibility::Visible);
             
             // CRITICAL: Make sure the widget component is visible
             WidgetComponent->SetVisibility(true);
@@ -605,22 +638,24 @@ void ADamageNumberSystem::InitWidget()
             // CRITICAL: Make sure the actor is visible
             SetActorHiddenInGame(false);
             
-            // CRITICAL: Ensure the widget component is properly positioned
-            APlayerController* PC = GetWorld()->GetFirstPlayerController();
-            if (PC && PC->GetPawn())
+            // Face the player camera
+            if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
             {
-                // Calculate rotation to face the player
-                FVector PlayerLocation = PC->GetPawn()->GetActorLocation();
-                FVector MyLocation = GetActorLocation();
-                FVector Direction = PlayerLocation - MyLocation;
-                Direction.Z = 0.0f; // Keep it level
-                FRotator FacingRotation = Direction.Rotation();
-                WidgetComponent->SetWorldRotation(FacingRotation);
-                
-                // Don't override the actor's position - we're already at the right hit location
-                // Just add a small offset for better visibility if needed
-                FVector CurrentLocation = WidgetComponent->GetRelativeLocation();
-                WidgetComponent->SetRelativeLocation(FVector(CurrentLocation.X, CurrentLocation.Y, 20.0f));
+                if (PC && PC->GetPawn())
+                {
+                    // Calculate rotation to face the player
+                    FVector PlayerLocation = PC->GetPawn()->GetActorLocation();
+                    FVector MyLocation = GetActorLocation();
+                    FVector Direction = PlayerLocation - MyLocation;
+                    Direction.Z = 0.0f; // Keep it level
+                    FRotator FacingRotation = Direction.Rotation();
+                    WidgetComponent->SetWorldRotation(FacingRotation);
+                    
+                    // FIXED: Don't override the actor's spawn location - we're already positioned correctly
+                    // Just ensure the widget component is properly positioned relative to the actor
+                    WidgetComponent->SetRelativeLocation(FVector::ZeroVector);
+                    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Positioned widget component at actor location without offset"));
+                }
             }
             
             UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Successfully initialized damage widget with damage amount: %.2f"), 
@@ -649,8 +684,8 @@ void ADamageNumberSystem::InitWidget()
 
 ADamageNumberSystem* ADamageNumberSystem::GetInstance(UWorld* World)
 {
-    // If we already have an instance, return it
-    if (Instance)
+    // If we already have a valid instance, return it
+    if (Instance && IsValid(Instance))
     {
         return Instance;
     }
@@ -660,13 +695,30 @@ ADamageNumberSystem* ADamageNumberSystem::GetInstance(UWorld* World)
     {
         for (TActorIterator<ADamageNumberSystem> It(World); It; ++It)
         {
-            Instance = *It;
-            return Instance;
+            ADamageNumberSystem* FoundSystem = *It;
+            // Only use actors that are not temporarily spawned damage numbers
+            // (those have a limited lifespan)
+            if (IsValid(FoundSystem) && FoundSystem->GetLifeSpan() <= 0.0f)
+            {
+                Instance = FoundSystem;
+                UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Found main system instance: %s"), *Instance->GetName());
+                return Instance;
+            }
+        }
+        
+        // If no main system found, spawn one
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        SpawnParams.Name = FName("MainDamageNumberSystem");
+        
+        Instance = World->SpawnActor<ADamageNumberSystem>(ADamageNumberSystem::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+        if (Instance)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Created new main system instance"));
         }
     }
     
-    // No instance found
-    return nullptr;
+    return Instance;
 }
 
 void ADamageNumberSystem::SetDamageNumberWidgetClass(TSubclassOf<UDamageNumberWidget> WidgetClass)

@@ -31,7 +31,7 @@ public:
     void SpawnDamageNumber(AActor* DamagedActor, float DamageAmount, bool bIsPlayerDamage);
     
     // Function to spawn a damage number at a specific world location
-    void SpawnDamageNumberAtLocation(AActor* DamagedActor, const FVector& Location, float DamageAmount, bool bIsPlayerDamage);
+    void SpawnDamageNumberAtLocation(AActor* DamagedActor, FVector Location, float DamageAmount, bool bIsCritical);
     
     // Calculates the best location to spawn a damage number for the given actor
     FVector CalculateDamageNumberLocation(AActor* DamagedActor);

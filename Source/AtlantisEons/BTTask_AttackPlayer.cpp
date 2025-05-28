@@ -169,16 +169,20 @@ void UBTTask_AttackPlayer::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* No
     NewRotation.Roll = 0.0f;
     Zombie->SetActorRotation(NewRotation);
 
+    // REDUCED LOGGING: Only log every 2 seconds instead of every tick
+    static float LastLogTime = 0.0f;
+    float CurrentTime = GetWorld()->GetTimeSeconds();
+    if (CurrentTime - LastLogTime > 2.0f)
+    {
+        UE_LOG(LogTemp, Log, TEXT("BTTask_AttackPlayer: Cooldown remaining: %.1fs, distance: %.1f"), MyMemory->RemainingCooldown, DistanceToPlayer);
+        LastLogTime = CurrentTime;
+    }
+
     // Check if cooldown is finished
     if (MyMemory->RemainingCooldown <= 0.0f)
     {
         UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Attack cooldown finished at distance %.1f"), 
                DistanceToPlayer);
         FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
-    }
-    else
-    {
-        float DistanceToPlayer = FVector::Distance(Zombie->GetActorLocation(), Player->GetActorLocation());
-        UE_LOG(LogTemp, Warning, TEXT("BTTask_AttackPlayer: Cooldown ticking, remaining time: %.2f seconds, current distance: %.1f"), MyMemory->RemainingCooldown, DistanceToPlayer);
     }
 }

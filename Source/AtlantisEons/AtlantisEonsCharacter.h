@@ -16,6 +16,7 @@
 #include "BP_ItemInterface.h"
 #include "BP_ItemInfo.h"
 #include "WBP_Main.h"
+#include "Particles/ParticleSystemComponent.h"
 class UWBP_CharacterInfo;
 #include "WBP_GuideText.h"
 #include "WBP_InventorySlot.h"
@@ -149,7 +150,7 @@ public:
 
     FORCEINLINE UInputMappingContext* GetDefaultMappingContext() { return DefaultMappingContext; }
 
-    UFUNCTION(BlueprintImplementableEvent, Category = "Character|Combat")
+    UFUNCTION(BlueprintCallable, Category = "Character|Combat")
     void PlayHitReactMontage();
 
     /** Equipment Components */
@@ -235,6 +236,7 @@ protected:
     bool bIsInvulnerable = false;
     bool bCanAttack;
     bool bIsAttacking;
+    bool bAttackNotifyInProgress = false;
 
     // Timer handles
     FTimerHandle AttackCooldownTimer;
@@ -243,10 +245,15 @@ protected:
     FTimerHandle DashTimer;
     FTimerHandle CameraLagTimer;
     FTimerHandle CameraRotationLagTimer;
+    FTimerHandle RespawnTimerHandle;
 
     /** Melee attack animation montage */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     UAnimMontage* MeleeAttackMontage;
+
+    /** Hit reaction animation montage */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
+    UAnimMontage* HitReactMontage;
 
     /** Invulnerability effect */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|VFX", meta = (AllowPrivateAccess = "true"))
@@ -274,6 +281,10 @@ protected:
     /** Death animation montage */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     UAnimMontage* DeathMontage;
+
+    /** Respawn delay in seconds */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Death", meta = (AllowPrivateAccess = "true"))
+    float RespawnDelay = 3.0f;
 
     /** Debug Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
@@ -340,6 +351,8 @@ private:
     TArray<UMaterialInterface*> OriginalMaterials;
 
     /** Active particle system components */
+    UPROPERTY()
+    UParticleSystemComponent* InvulnerabilityPSC;
 
 float AttackCooldown = 0.5f;
 
@@ -367,6 +380,9 @@ public:
 
 // Input handling
 virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+// Damage handling
+virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 // Item pickup functions
 void OnPickupPressed();
@@ -416,15 +432,19 @@ public:
     void StoreOriginalMaterials();
 
     /** Apply damage to the character */
+    UFUNCTION(BlueprintCallable, Category = "Character|Health")
+    void ApplyDamage(float InDamageAmount);
+
+    /** Apply damage to the character */
     UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
     void ApplyCharacterDamage(float Amount);
 
     /** Handle character death */
-    UFUNCTION(BlueprintImplementableEvent, Category = "Character")
+    UFUNCTION(BlueprintCallable, Category = "Character")
     void HandleDeath();
 
 public:
-    UFUNCTION(BlueprintImplementableEvent, Category = "Character")
+    UFUNCTION(BlueprintCallable, Category = "Character")
     void ResetCharacter();
 
     /** Toggle the inventory open/closed */
@@ -453,17 +473,16 @@ public:
 
     virtual void PostInitializeComponents() override;
 
-    UFUNCTION(BlueprintImplementableEvent, Category = "Character")
+    UFUNCTION(BlueprintCallable, Category = "Character")
     void RespawnCharacter();
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Debug")
     void DebugDamage(const FInputActionValue& Value);
 
-    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     void FaceNearestEnemy();
 
-    // ... (rest of the code remains the same)
-    UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     void OnMeleeAttackNotify();
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Debug")

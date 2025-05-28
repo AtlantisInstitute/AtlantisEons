@@ -157,43 +157,40 @@ void UWBP_StorePopup::UpdateItemDisplay()
 
 void UWBP_StorePopup::UpdateQuantityDisplay()
 {
-    UE_LOG(LogTemp, Log, TEXT("StorePopup: Updating quantity display to %d"), SelectedQuantity);
+    // UE_LOG(LogTemp, Log, TEXT("StorePopup: Updating quantity display to %d"), SelectedQuantity);
     
-    // Ensure SelectedQuantity is valid
+    // Validate quantity
     if (SelectedQuantity <= 0)
     {
         SelectedQuantity = 1;
-        UE_LOG(LogTemp, Warning, TEXT("StorePopup: Fixed invalid SelectedQuantity, set to 1"));
+        // UE_LOG(LogTemp, Warning, TEXT("StorePopup: Fixed invalid SelectedQuantity, set to 1"));
     }
     
-    FString QuantityString = FString::Printf(TEXT("%d"), SelectedQuantity);
+    // Convert to string
+    FString QuantityString = FString::FromInt(SelectedQuantity);
     
-    // Update the confirmed quantity widget first
+    // Update Quantity widget if it exists
     if (Quantity)
     {
-        Quantity->SetText(FText::FromString(QuantityString));
-        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set Quantity widget to %s"), *QuantityString);
+        // UE_LOG(LogTemp, Log, TEXT("StorePopup: Set Quantity widget to %s"), *QuantityString);
     }
     
-    // Update the new system quantity text
+    // Update QuantityText if it exists
     if (QuantityText)
     {
-        QuantityText->SetText(FText::FromString(QuantityString));
-        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set QuantityText to %s"), *QuantityString);
+        // UE_LOG(LogTemp, Log, TEXT("StorePopup: Set QuantityText to %s"), *QuantityString);
     }
     
-    // Update legacy stack counter text
+    // Update TextBlock_StackCounter if it exists
     if (TextBlock_StackCounter)
     {
-        TextBlock_StackCounter->SetText(FText::FromString(QuantityString));
-        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set TextBlock_StackCounter to %s"), *QuantityString);
+        // UE_LOG(LogTemp, Log, TEXT("StorePopup: Set TextBlock_StackCounter to %s"), *QuantityString);
     }
     
-    // Update alternative stack counter text
+    // Update StackCounterText if it exists  
     if (StackCounterText)
     {
-        StackCounterText->SetText(FText::FromString(QuantityString));
-        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set StackCounterText to %s"), *QuantityString);
+        // UE_LOG(LogTemp, Log, TEXT("StorePopup: Set StackCounterText to %s"), *QuantityString);
     }
     
     // Try to find and update any text block that might be showing quantity
@@ -236,11 +233,11 @@ void UWBP_StorePopup::UpdateQuantityDisplay()
         {
             QuantityWidget->SetText(FText::FromString(QuantityString));
             WidgetsUpdated++;
-            UE_LOG(LogTemp, Log, TEXT("StorePopup: Set %s to %s"), *WidgetName, *QuantityString);
+            // UE_LOG(LogTemp, Log, TEXT("StorePopup: Set %s to %s"), *WidgetName, *QuantityString);
         }
     }
     
-    UE_LOG(LogTemp, Log, TEXT("StorePopup: Updated %d quantity widgets"), WidgetsUpdated);
+    // UE_LOG(LogTemp, Log, TEXT("StorePopup: Updated %d quantity widgets"), WidgetsUpdated);
     
     // Also update the legacy StackNumber for backwards compatibility
     StackNumber = SelectedQuantity;
