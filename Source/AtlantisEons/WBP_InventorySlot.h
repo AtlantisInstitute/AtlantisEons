@@ -174,6 +174,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mouse")
     void MouseRightButtonDown();
 
+    UFUNCTION(BlueprintCallable, Category = "Equipment")
+    void HandleEquipToggle();
+
+    UFUNCTION(BlueprintCallable, Category = "Consumables")
+    void HandleConsumableUse();
+
     UPROPERTY(BlueprintReadWrite, Category = "Inventory")
     int32 SlotIndex;
 
@@ -202,7 +208,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Inventory")
     UBP_ItemInfo* GetInventoryItemInfoRef() const { return inventoryItemInfoRef; }
 
-    UFUNCTION(BlueprintPure, Category = "UI")
+    UFUNCTION(BlueprintPure, Category = "Inventory")
+    FText GetStackNumberText();
+
+    UFUNCTION(BlueprintCallable, Category = "Inventory")
+    void RefreshSlotText();
+
+    UFUNCTION(BlueprintPure, Category = "Inventory")
     ESlateVisibility GetItemThumbnailVisibility() const;
 
     // Functions
@@ -217,9 +229,6 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Inventory")
     void SetSlotIndex(int32 NewIndex);
-
-    UFUNCTION(BlueprintPure, Category = "Inventory")
-    FText GetStackNumberText();
 
     // Font settings
     UPROPERTY()

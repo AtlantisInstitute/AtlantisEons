@@ -18,8 +18,20 @@ public:
 
     virtual void NativeConstruct() override;
 
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UImage* ItemThumbnail;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* Image;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* ItemImage;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* ThumbnailImage;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* Image_Item;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UTextBlock* Title;

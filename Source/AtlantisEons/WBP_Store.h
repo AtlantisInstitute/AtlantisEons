@@ -168,6 +168,9 @@ private:
     FStructure_ItemInfo CreateFallbackItemData(int32 ItemIndex);
     void PopulateStoreElementUI(UWBP_StoreItemElement* Element, const FStructure_ItemInfo& ItemInfo);
     
+    // Apply equipment slot corrections to match character system
+    void ApplyEquipmentSlotCorrections(FStructure_ItemInfo& ItemInfo);
+    
     // Currently selected item index
     UPROPERTY()
     int32 SelectedItemIndex;

@@ -1,7 +1,7 @@
 {
   "projectName": "AtlantisEons",
   "created": "2025-05-23T09:50:24.246Z",
-  "lastUpdated": "2025-05-23T09:52:51.401Z",
+  "lastUpdated": "2025-05-27T03:12:01.250Z",
   "version": "1.0.0",
   "sessions": [
     {
@@ -22,6 +22,18 @@
       "filesModified": [],
       "insights": [
         "6a3f5de8-f422-482c-af22-cfdd282a8900"
+      ],
+      "problems": [],
+      "solutions": []
+    },
+    {
+      "id": "936affcb-b9ad-4595-ac3b-863514fad4fb",
+      "started": "2025-05-27T03:12:01.206Z",
+      "description": "MCP Memory-Enhanced Analysis Session",
+      "actions": [],
+      "filesModified": [],
+      "insights": [
+        "b8b81e05-7950-4f66-ba2a-6105f9ab12f7"
       ],
       "problems": [],
       "solutions": []
@@ -66,6 +78,24 @@
         ]
       },
       "relevance": 0.42857142857142855
+    },
+    {
+      "id": "b8b81e05-7950-4f66-ba2a-6105f9ab12f7",
+      "timestamp": "2025-05-27T03:12:01.249Z",
+      "sessionId": "936affcb-b9ad-4595-ac3b-863514fad4fb",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
     }
   ],
   "patterns": [
@@ -81,6 +111,20 @@
       "frequency": 5,
       "firstSeen": "2025-05-23T09:52:51.401Z",
       "lastSeen": "2025-05-23T09:52:51.401Z",
+      "confidence": 0.5
+    },
+    {
+      "id": "e9c8b640-86fd-4d9a-904b-9c6673c6c241",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-05-27T03:12:01.250Z",
+      "lastSeen": "2025-05-27T03:12:01.250Z",
       "confidence": 0.5
     }
   ],
@@ -108,6 +152,17 @@
       "id": "b6557c7a-0854-4331-8608-7706648ab865",
       "timestamp": "2025-05-23T09:52:51.369Z",
       "sessionId": "19affcd9-78d5-4cb6-86e7-58f8f28f016d",
+      "type": "server-start",
+      "description": "Memory-Enhanced MCP Server started",
+      "files": [
+        "memory-mcp-server.js"
+      ],
+      "impact": "low"
+    },
+    {
+      "id": "2139b461-e243-441e-8ad8-ca92cc2c228d",
+      "timestamp": "2025-05-27T03:12:01.219Z",
+      "sessionId": "936affcb-b9ad-4595-ac3b-863514fad4fb",
       "type": "server-start",
       "description": "Memory-Enhanced MCP Server started",
       "files": [

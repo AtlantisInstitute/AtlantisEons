@@ -129,7 +129,7 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     // Initialize character stats
     BaseHealth = 100.0f;
     CurrentHealth = BaseHealth;
-    BaseMP = 100.0f;
+    BaseMP = 100;
     CurrentMP = BaseMP;
 
     // Initialize combat stats
@@ -573,13 +573,13 @@ void AAtlantisEonsCharacter::PostInitializeComponents()
 
 void AAtlantisEonsCharacter::RecoverHealth(int32 Amount)
 {
-    CurrentHealth = FMath::Min(CurrentHealth + Amount, BaseHealth);
+    CurrentHealth = FMath::Min(CurrentHealth + Amount, MaxHealth);
     SettingCircularBar_HP();
 }
 
 void AAtlantisEonsCharacter::RecoverHP(int32 Amount)
 {
-    CurrentHealth = FMath::Min(CurrentHealth + Amount, BaseHealth);
+    CurrentHealth = FMath::Min(CurrentHealth + Amount, MaxHealth);
     SettingCircularBar_HP();
 }
 
@@ -588,7 +588,7 @@ void AAtlantisEonsCharacter::SettingCircularBar_MP()
     if (Main)
     {
         // Update MP bar progress
-        float MPPercentage = CurrentMP / (float)BaseMP;
+        float MPPercentage = MaxMP > 0 ? CurrentMP / (float)MaxMP : 0.0f;
         if (MPBar)
         {
             MPBar->SetPercent(MPPercentage);
@@ -689,6 +689,10 @@ void AAtlantisEonsCharacter::UpdateAllStats()
     {
         WBP_CharacterInfo->UpdateAllStats();
     }
+    
+    // Force update circular bars to reflect new max values
+    SettingCircularBar_HP();
+    SettingCircularBar_MP();
     
     UE_LOG(LogTemp, Log, TEXT("Stats updated - STR: %d, DEX: %d, INT: %d, DEF: %d, DMG: %d, HP: %.1f/%.1f, MP: %d/%d"), 
            CurrentSTR, CurrentDEX, CurrentINT, CurrentDefence, CurrentDamage, CurrentHealth, MaxHealth, CurrentMP, MaxMP);
@@ -1457,8 +1461,7 @@ void AAtlantisEonsCharacter::DragAndDropExchangeItem(UBP_ItemInfo* FromInventory
 
 void AAtlantisEonsCharacter::RecoverMP(int32 Amount)
 {
-    float RecoverAmount = static_cast<float>(Amount);
-    CurrentMP = FMath::Clamp(CurrentMP + RecoverAmount, 0.0f, BaseMP);
+    CurrentMP = FMath::Clamp(CurrentMP + Amount, 0, MaxMP);
     SettingCircularBar_MP();
 }
 
@@ -2284,36 +2287,32 @@ void AAtlantisEonsCharacter::OnEquipmentSlotClicked(EItemEquipSlot EquipSlot)
     {
         UBP_ItemInfo* EquippedItem = EquipmentSlots[EquipSlotIndex];
         
-        // Find an empty inventory slot to move the item to
-        bool bFoundEmptySlot = false;
-        for (int32 i = 0; i < InventoryItems.Num(); ++i)
-        {
-            if (!InventoryItems[i])
-            {
-                // Move the item to inventory
-                InventoryItems[i] = EquippedItem;
-                bFoundEmptySlot = true;
-                
-                UE_LOG(LogTemp, Log, TEXT("✅ Moved equipped item to inventory slot %d"), i);
-                break;
-            }
-        }
-        
-        if (!bFoundEmptySlot)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("❌ Cannot unequip item - inventory is full"));
-            // Show message to player that inventory is full
-            if (GEngine)
-            {
-                GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("Inventory is full! Cannot unequip item."));
-            }
-            return;
-        }
-        
         // Get item data for logging and visual updates
         bool bFound = false;
         FStructure_ItemInfo ItemData;
         EquippedItem->GetItemTableRow(bFound, ItemData);
+        
+        // Find the item in the inventory and mark it as unequipped (instead of creating duplicate)
+        bool bFoundInInventory = false;
+        for (int32 i = 0; i < InventoryItems.Num(); ++i)
+        {
+            if (InventoryItems[i] && InventoryItems[i]->ItemIndex == EquippedItem->ItemIndex && InventoryItems[i]->Equipped)
+            {
+                // Mark as unequipped (keeping it in inventory)
+                InventoryItems[i]->Equipped = false;
+                bFoundInInventory = true;
+                
+                UE_LOG(LogTemp, Log, TEXT("✅ Marked item in inventory slot %d as unequipped"), i);
+                break;
+            }
+        }
+        
+        if (!bFoundInInventory)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("❌ Could not find equipped item in inventory - this shouldn't happen"));
+            // Fallback: mark the equipped item as unequipped
+            EquippedItem->Equipped = false;
+        }
         
         // Clear the equipment slot
         EquipmentSlots[EquipSlotIndex] = nullptr;
@@ -2326,7 +2325,7 @@ void AAtlantisEonsCharacter::OnEquipmentSlotClicked(EItemEquipSlot EquipSlot)
             // Remove stat bonuses from the unequipped item
             SubtractingCharacterStatus(EquippedItem->ItemIndex);
             
-            UE_LOG(LogTemp, Log, TEXT("✅ Successfully unequipped '%s' from %s slot"), 
+            UE_LOG(LogTemp, Log, TEXT("✅ Successfully unequipped '%s' from %s slot (keeping in inventory)"), 
                    *ItemData.ItemName,
                    EquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
                    EquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
@@ -2336,7 +2335,7 @@ void AAtlantisEonsCharacter::OnEquipmentSlotClicked(EItemEquipSlot EquipSlot)
         // Clear equipment slot UI
         ClearEquipmentSlotUI(EquipSlot);
         
-        // Update inventory display
+        // Update inventory display to remove "EQUIPPED" text
         UpdateInventorySlots();
         
         // Update character stats
@@ -2354,7 +2353,7 @@ void AAtlantisEonsCharacter::OnEquipmentSlotClicked(EItemEquipSlot EquipSlot)
         // Show success message
         if (GEngine && bFound)
         {
-            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, 
+            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, 
                 FString::Printf(TEXT("Unequipped %s"), *ItemData.ItemName));
         }
     }
@@ -2386,4 +2385,342 @@ void AAtlantisEonsCharacter::OnCollectableSlotClicked(int32 SlotIndex)
 {
     UE_LOG(LogTemp, Log, TEXT("Collectable slot clicked (SlotIndex: %d)"), SlotIndex);
     OnEquipmentSlotClicked(EItemEquipSlot::Accessory);
+}
+
+void AAtlantisEonsCharacter::EquipInventoryItem(UBP_ItemInfo* ItemInfoRef)
+{
+    if (!ItemInfoRef) return;
+    
+    // Get item information from the data table
+    bool bFound = false;
+    FStructure_ItemInfo ItemData;
+    ItemInfoRef->GetItemTableRow(bFound, ItemData);
+    
+    if (!bFound)
+    {
+        UE_LOG(LogTemp, Error, TEXT("EquipInventoryItem: Failed to get item data for item index %d"), ItemInfoRef->ItemIndex);
+        return;
+    }
+    
+    // Verify this is an equipable item
+    if (ItemData.ItemType != EItemType::Equip)
+    {
+        return;
+    }
+    
+    // Apply the same hotfixes for equipment slots as in the original function
+    bool bIsWeapon = false;
+    bool bIsShield = false;
+    bool bIsHelmet = false;
+    bool bIsBodyArmor = false;
+    
+    // Check by item index (known weapon items)
+    if (ItemInfoRef->ItemIndex == 7 || ItemInfoRef->ItemIndex == 11 || ItemInfoRef->ItemIndex == 12 || 
+        ItemInfoRef->ItemIndex == 13 || ItemInfoRef->ItemIndex == 14 || ItemInfoRef->ItemIndex == 15 || 
+        ItemInfoRef->ItemIndex == 16)
+    {
+        bIsWeapon = true;
+    }
+    // Check by item name patterns for weapons
+    else if (ItemData.ItemName.Contains(TEXT("Sword")) || ItemData.ItemName.Contains(TEXT("Axe")) || 
+             ItemData.ItemName.Contains(TEXT("Pistol")) || ItemData.ItemName.Contains(TEXT("Rifle")) || 
+             ItemData.ItemName.Contains(TEXT("Spike")) || ItemData.ItemName.Contains(TEXT("Laser")) ||
+             ItemData.ItemName.Contains(TEXT("Blade")) || ItemData.ItemName.Contains(TEXT("Gun")) ||
+             ItemData.ItemName.Contains(TEXT("Weapon")) || ItemData.ItemName.Contains(TEXT("Bow")) ||
+             ItemData.ItemName.Contains(TEXT("Staff")) || ItemData.ItemName.Contains(TEXT("Wand")) ||
+             ItemData.ItemName.Contains(TEXT("Hammer")) || ItemData.ItemName.Contains(TEXT("Mace")) ||
+             ItemData.ItemName.Contains(TEXT("Spear")) || ItemData.ItemName.Contains(TEXT("Dagger")) ||
+             ItemData.ItemName.Contains(TEXT("Katana")) || ItemData.ItemName.Contains(TEXT("Scythe")))
+    {
+        bIsWeapon = true;
+    }
+    // Check for shields/accessories
+    else if (ItemInfoRef->ItemIndex == 17 || ItemInfoRef->ItemIndex == 18 ||
+             ItemData.ItemName.Contains(TEXT("Shield")) || ItemData.ItemName.Contains(TEXT("Buckler")))
+    {
+        bIsShield = true;
+    }
+    // Check for helmets/head gear
+    else if (ItemInfoRef->ItemIndex == 19 || ItemInfoRef->ItemIndex == 20 || ItemInfoRef->ItemIndex == 21 || ItemInfoRef->ItemIndex == 22 ||
+             ItemData.ItemName.Contains(TEXT("Helmet")) || ItemData.ItemName.Contains(TEXT("Hat")) || 
+             ItemData.ItemName.Contains(TEXT("Cap")) || ItemData.ItemName.Contains(TEXT("Crown")) ||
+             ItemData.ItemName.Contains(TEXT("Mask")) || ItemData.ItemName.Contains(TEXT("Hood")))
+    {
+        bIsHelmet = true;
+    }
+    // Check for body armor
+    else if (ItemInfoRef->ItemIndex == 23 || ItemInfoRef->ItemIndex == 24 || ItemInfoRef->ItemIndex == 25 || ItemInfoRef->ItemIndex == 26 ||
+             ItemData.ItemName.Contains(TEXT("Suit")) || ItemData.ItemName.Contains(TEXT("Armor")) || 
+             ItemData.ItemName.Contains(TEXT("Chestplate")) || ItemData.ItemName.Contains(TEXT("Vest")) ||
+             ItemData.ItemName.Contains(TEXT("Robe")) || ItemData.ItemName.Contains(TEXT("Tunic")))
+    {
+        bIsBodyArmor = true;
+    }
+    
+    // Apply the corrections
+    if (bIsWeapon)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Weapon;
+    }
+    else if (bIsShield)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Accessory;
+    }
+    else if (bIsHelmet)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Head;
+    }
+    else if (bIsBodyArmor)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Body;
+    }
+    
+    // Check if the item has a valid equipment slot
+    if (ItemData.ItemEquipSlot == EItemEquipSlot::None)
+    {
+        return;
+    }
+    
+    // Calculate equipment slot index
+    int32 EquipSlotIndex = -1;
+    switch (ItemData.ItemEquipSlot)
+    {
+        case EItemEquipSlot::Head:
+            EquipSlotIndex = 0;
+            break;
+        case EItemEquipSlot::Body:
+            EquipSlotIndex = 1;
+            break;
+        case EItemEquipSlot::Weapon:
+            EquipSlotIndex = 2;
+            break;
+        case EItemEquipSlot::Accessory:
+            EquipSlotIndex = 3;
+            break;
+        default:
+            return;
+    }
+    
+    // Check if there's already an item equipped in this slot
+    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num() && EquipmentSlots[EquipSlotIndex])
+    {
+        // Unequip the current item first - but keep it in inventory and mark as unequipped
+        UBP_ItemInfo* CurrentEquippedItem = EquipmentSlots[EquipSlotIndex];
+        if (CurrentEquippedItem)
+        {
+            // Mark the current item as unequipped
+            CurrentEquippedItem->Equipped = false;
+            
+            // Handle visual unequipping
+            HandleDisarmItem(ItemData.ItemEquipSlot, CurrentEquippedItem->MeshID, CurrentEquippedItem->ItemIndex);
+            
+            // Clear equipment slot UI
+            ClearEquipmentSlotUI(ItemData.ItemEquipSlot);
+            
+            // Remove stat bonuses from the unequipped item
+            SubtractingCharacterStatus(CurrentEquippedItem->ItemIndex);
+        }
+    }
+    
+    // Mark the item as equipped (DON'T remove from inventory)
+    ItemInfoRef->Equipped = true;
+    
+    // Equip the new item
+    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num())
+    {
+        EquipmentSlots[EquipSlotIndex] = ItemInfoRef;
+        
+        // Handle visual equipping
+        EquipItemInSlot(ItemData.ItemEquipSlot, ItemData.StaticMeshID, ItemData.ItemThumbnail, 
+                       ItemInfoRef->ItemIndex, nullptr, nullptr);
+        
+        // Apply stat bonuses from the equipped item
+        AddingCharacterStatus(ItemInfoRef->ItemIndex);
+        
+        // Update inventory display to show "Equipped" text
+        UpdateInventorySlots();
+        
+        // Update equipment slot UI
+        UpdateEquipmentSlotUI(ItemData.ItemEquipSlot, ItemInfoRef);
+        
+        // Update character stats
+        UpdateAllStats();
+        
+        // Force refresh the stats display
+        RefreshStatsDisplay();
+        
+        // Play equip sound
+        if (UGameplayStatics::GetCurrentLevelName(this) != TEXT(""))
+        {
+            UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")));
+        }
+        
+        // Show success message
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, 
+                FString::Printf(TEXT("Equipped %s"), *ItemData.ItemName));
+        }
+        
+        UE_LOG(LogTemp, Log, TEXT("✅ Successfully equipped '%s' in %s slot (keeping in inventory)"), 
+               *ItemData.ItemName, 
+               ItemData.ItemEquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
+               ItemData.ItemEquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
+               ItemData.ItemEquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
+    }
+}
+
+void AAtlantisEonsCharacter::UnequipInventoryItem(UBP_ItemInfo* ItemInfoRef)
+{
+    if (!ItemInfoRef) return;
+    
+    // Get item information from the data table
+    bool bFound = false;
+    FStructure_ItemInfo ItemData;
+    ItemInfoRef->GetItemTableRow(bFound, ItemData);
+    
+    if (!bFound)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UnequipInventoryItem: Failed to get item data for item index %d"), ItemInfoRef->ItemIndex);
+        return;
+    }
+    
+    // Verify this is an equipable item and is currently equipped
+    if (ItemData.ItemType != EItemType::Equip || !ItemInfoRef->Equipped)
+    {
+        return;
+    }
+    
+    // Apply the same hotfixes for equipment slots
+    bool bIsWeapon = false;
+    bool bIsShield = false;
+    bool bIsHelmet = false;
+    bool bIsBodyArmor = false;
+    
+    // Check by item index (known weapon items)
+    if (ItemInfoRef->ItemIndex == 7 || ItemInfoRef->ItemIndex == 11 || ItemInfoRef->ItemIndex == 12 || 
+        ItemInfoRef->ItemIndex == 13 || ItemInfoRef->ItemIndex == 14 || ItemInfoRef->ItemIndex == 15 || 
+        ItemInfoRef->ItemIndex == 16)
+    {
+        bIsWeapon = true;
+    }
+    // Check by item name patterns for weapons
+    else if (ItemData.ItemName.Contains(TEXT("Sword")) || ItemData.ItemName.Contains(TEXT("Axe")) || 
+             ItemData.ItemName.Contains(TEXT("Pistol")) || ItemData.ItemName.Contains(TEXT("Rifle")) || 
+             ItemData.ItemName.Contains(TEXT("Spike")) || ItemData.ItemName.Contains(TEXT("Laser")) ||
+             ItemData.ItemName.Contains(TEXT("Blade")) || ItemData.ItemName.Contains(TEXT("Gun")) ||
+             ItemData.ItemName.Contains(TEXT("Weapon")) || ItemData.ItemName.Contains(TEXT("Bow")) ||
+             ItemData.ItemName.Contains(TEXT("Staff")) || ItemData.ItemName.Contains(TEXT("Wand")) ||
+             ItemData.ItemName.Contains(TEXT("Hammer")) || ItemData.ItemName.Contains(TEXT("Mace")) ||
+             ItemData.ItemName.Contains(TEXT("Spear")) || ItemData.ItemName.Contains(TEXT("Dagger")) ||
+             ItemData.ItemName.Contains(TEXT("Katana")) || ItemData.ItemName.Contains(TEXT("Scythe")))
+    {
+        bIsWeapon = true;
+    }
+    // Check for shields/accessories
+    else if (ItemInfoRef->ItemIndex == 17 || ItemInfoRef->ItemIndex == 18 ||
+             ItemData.ItemName.Contains(TEXT("Shield")) || ItemData.ItemName.Contains(TEXT("Buckler")))
+    {
+        bIsShield = true;
+    }
+    // Check for helmets/head gear
+    else if (ItemInfoRef->ItemIndex == 19 || ItemInfoRef->ItemIndex == 20 || ItemInfoRef->ItemIndex == 21 || ItemInfoRef->ItemIndex == 22 ||
+             ItemData.ItemName.Contains(TEXT("Helmet")) || ItemData.ItemName.Contains(TEXT("Hat")) || 
+             ItemData.ItemName.Contains(TEXT("Cap")) || ItemData.ItemName.Contains(TEXT("Crown")) ||
+             ItemData.ItemName.Contains(TEXT("Mask")) || ItemData.ItemName.Contains(TEXT("Hood")))
+    {
+        bIsHelmet = true;
+    }
+    // Check for body armor
+    else if (ItemInfoRef->ItemIndex == 23 || ItemInfoRef->ItemIndex == 24 || ItemInfoRef->ItemIndex == 25 || ItemInfoRef->ItemIndex == 26 ||
+             ItemData.ItemName.Contains(TEXT("Suit")) || ItemData.ItemName.Contains(TEXT("Armor")) || 
+             ItemData.ItemName.Contains(TEXT("Chestplate")) || ItemData.ItemName.Contains(TEXT("Vest")) ||
+             ItemData.ItemName.Contains(TEXT("Robe")) || ItemData.ItemName.Contains(TEXT("Tunic")))
+    {
+        bIsBodyArmor = true;
+    }
+    
+    // Apply the corrections
+    if (bIsWeapon)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Weapon;
+    }
+    else if (bIsShield)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Accessory;
+    }
+    else if (bIsHelmet)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Head;
+    }
+    else if (bIsBodyArmor)
+    {
+        ItemData.ItemEquipSlot = EItemEquipSlot::Body;
+    }
+    
+    // Calculate equipment slot index
+    int32 EquipSlotIndex = -1;
+    switch (ItemData.ItemEquipSlot)
+    {
+        case EItemEquipSlot::Head:
+            EquipSlotIndex = 0;
+            break;
+        case EItemEquipSlot::Body:
+            EquipSlotIndex = 1;
+            break;
+        case EItemEquipSlot::Weapon:
+            EquipSlotIndex = 2;
+            break;
+        case EItemEquipSlot::Accessory:
+            EquipSlotIndex = 3;
+            break;
+        default:
+            return;
+    }
+    
+    // Mark the item as unequipped (but keep in inventory)
+    ItemInfoRef->Equipped = false;
+    
+    // Clear the equipment slot
+    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num())
+    {
+        EquipmentSlots[EquipSlotIndex] = nullptr;
+        
+        // Handle visual unequipping
+        HandleDisarmItem(ItemData.ItemEquipSlot, ItemData.StaticMeshID, ItemInfoRef->ItemIndex);
+        
+        // Remove stat bonuses from the unequipped item
+        SubtractingCharacterStatus(ItemInfoRef->ItemIndex);
+        
+        // Clear equipment slot UI
+        ClearEquipmentSlotUI(ItemData.ItemEquipSlot);
+        
+        // Update inventory display to remove "Equipped" text
+        UpdateInventorySlots();
+        
+        // Update character stats
+        UpdateAllStats();
+        
+        // Force refresh the stats display
+        RefreshStatsDisplay();
+        
+        // Play unequip sound
+        if (UGameplayStatics::GetCurrentLevelName(this) != TEXT(""))
+        {
+            UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")));
+        }
+        
+        // Show success message
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, 
+                FString::Printf(TEXT("Unequipped %s"), *ItemData.ItemName));
+        }
+        
+        UE_LOG(LogTemp, Log, TEXT("✅ Successfully unequipped '%s' from %s slot (keeping in inventory)"), 
+               *ItemData.ItemName,
+               ItemData.ItemEquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
+               ItemData.ItemEquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
+               ItemData.ItemEquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
+    }
 }

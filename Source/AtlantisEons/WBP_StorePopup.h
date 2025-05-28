@@ -6,6 +6,7 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Overlay.h"
+#include "Components/HorizontalBox.h"
 #include "ItemTypes.h"
 #include "UniversalDataTableReader.h"
 #include "WBP_StorePopup.generated.h"
@@ -101,6 +102,19 @@ public:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UOverlay* Overlay_StackCounter;
 
+    // Horizontal box containers for quantity controls
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    class UHorizontalBox* HorizontalBox_1;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    class UHorizontalBox* HorizontalBox;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    class UHorizontalBox* QuantityContainer;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    class UHorizontalBox* StackCounterContainer;
+
     // Alternative UI element names (in case Blueprint uses different naming)
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UButton* ButtonOK;
@@ -170,6 +184,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Store")
     void UpdatePriceDisplay();
 
+    UFUNCTION(BlueprintCallable, Category = "Store")
+    void UpdateQuantityWidgetVisibility();
+
 private:
     // Helper function to bind buttons safely
     void BindButtonSafely(UButton* Button, FScriptDelegate& Delegate);
@@ -185,4 +202,7 @@ private:
     
     // Helper function to get total price
     int32 GetTotalPrice();
+    
+    // Helper function to adjust image position based on quantity control visibility
+    void AdjustImagePositionForLayout(bool bShowQuantityControls);
 };

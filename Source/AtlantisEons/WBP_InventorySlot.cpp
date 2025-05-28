@@ -5,6 +5,7 @@
 #include "Components/TextBlock.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/PanelWidget.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
 #include "AtlantisEonsCharacter.h"
@@ -12,6 +13,8 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Kismet/KismetTextLibrary.h"
 #include "BP_Item.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 UWBP_InventorySlot::UWBP_InventorySlot(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -392,33 +395,8 @@ void UWBP_InventorySlot::UpdateSlot(UBP_ItemInfo* NewItemInfo)
         UE_LOG(LogTemp, Error, TEXT("Slot %d: ItemThumbnail is null!"), SlotIndex);
     }
     
-    // Update stack text
-    if (SlotText)
-    {
-        // Only show stack number if stackable and greater than 1
-        if (NewItemInfo->bIsStackable && NewItemInfo->StackNumber > 1)
-        {
-            // Prevent stacking beyond 99
-            int32 StackNumber = FMath::Min(NewItemInfo->StackNumber, 99);
-            SlotText->SetText(FText::AsNumber(StackNumber));
-            SlotText->SetVisibility(ESlateVisibility::Visible);
-            
-            // Force text layout
-            if (UCanvasPanelSlot* TextSlot = Cast<UCanvasPanelSlot>(SlotText->Slot))
-            {
-                TextSlot->SetAnchors(FAnchors(0.9f, 0.9f, 0.9f, 0.9f));
-                TextSlot->SetAlignment(FVector2D(1.0f, 1.0f));
-                TextSlot->SetSize(FVector2D(40.0f, 20.0f));
-                TextSlot->SetPosition(FVector2D(-5.0f, -5.0f));
-                TextSlot->SetZOrder(20);
-            }
-        }
-        else
-        {
-            SlotText->SetText(FText::GetEmpty());
-            SlotText->SetVisibility(ESlateVisibility::Hidden);
-        }
-    }
+    // Update stack text using the new refresh function
+    RefreshSlotText();
     
     // Final visibility check
     if (ItemThumbnail)
@@ -468,6 +446,9 @@ void UWBP_InventorySlot::ClearSlot()
         SlotText->SetText(FText::GetEmpty());
         SlotText->SetVisibility(ESlateVisibility::Hidden);
     }
+    
+    // Refresh the slot text to ensure proper state
+    RefreshSlotText();
 }
 
 void UWBP_InventorySlot::UpdateStackNumber(int32 NewStackNumber)
@@ -517,8 +498,8 @@ FText UWBP_InventorySlot::GetStackNumberText()
     // Check if it's an equip type item
     if (ItemTableRow.ItemType == EItemType::Equip)
     {
-        // Check if the item is equipped
-        if (inventoryItemInfoRef->Equipped)
+        // Only show "EQUIPPED" text for inventory slots, not equipment slots
+        if (inventoryItemInfoRef->Equipped && SlotType == EInventorySlotType::Inventory)
         {
             // Set font size to 11
             if (SlotText)
@@ -528,7 +509,7 @@ FText UWBP_InventorySlot::GetStackNumberText()
                 FontInfo.Size = 11.0f;
                 SlotText->SetFont(FontInfo);
             }
-            return FText::FromString(TEXT("Equipped"));
+            return FText::FromString(TEXT("EQUIPPED"));
         }
     }
 
@@ -548,6 +529,29 @@ FText UWBP_InventorySlot::GetStackNumberText()
     }
 
     return FText::GetEmpty();
+}
+
+void UWBP_InventorySlot::RefreshSlotText()
+{
+    if (SlotText)
+    {
+        // Force update the text by calling GetStackNumberText and setting it
+        FText NewText = GetStackNumberText();
+        SlotText->SetText(NewText);
+        
+        // Update visibility based on whether we have text to show
+        if (NewText.IsEmpty())
+        {
+            SlotText->SetVisibility(ESlateVisibility::Hidden);
+        }
+        else
+        {
+            SlotText->SetVisibility(ESlateVisibility::Visible);
+        }
+        
+        UE_LOG(LogTemp, Log, TEXT("Slot %d: RefreshSlotText - Updated text to: %s"), 
+            SlotIndex, *NewText.ToString());
+    }
 }
 
 void UWBP_InventorySlot::SetItemThumb_Implementation(const TSoftObjectPtr<UTexture2D>& ItemThumb)
@@ -634,11 +638,20 @@ void UWBP_InventorySlot::MakeSlotClean_Implementation()
 
 void UWBP_InventorySlot::RemoveItemDescription_Implementation()
 {
+    // Remove the old system widget
     if (WidgetItemDescriptionRef)
     {
         WidgetItemDescriptionRef->RemoveFromParent();
         WidgetItemDescriptionRef = nullptr;
     }
+    
+    // Remove the new system widget
+    if (ItemDescription && ItemDescription->IsInViewport())
+    {
+        ItemDescription->RemoveFromParent();
+        UE_LOG(LogTemp, Log, TEXT("Slot %d: Removed item description from viewport"), SlotIndex);
+    }
+    
     OnDescription = false;
 }
 
@@ -646,10 +659,67 @@ void UWBP_InventorySlot::NativeOnMouseEnter(const FGeometry& InGeometry, const F
 {
     Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
 
-    if (!SlotEmpty)
+    if (!SlotEmpty && inventoryItemInfoRef)
     {
+        // Convert UBP_ItemInfo to FStructure_ItemInfo for the description system
+        FStructure_ItemInfo DescriptionItemInfo;
+        
+        // Get item data from the data table using the item index
+        bool bFound = false;
+        inventoryItemInfoRef->GetItemTableRow(bFound, DescriptionItemInfo);
+        
+        if (bFound && DescriptionItemInfo.bIsValid)
+        {
+            // Use the data table information
+            UE_LOG(LogTemp, Log, TEXT("Slot %d: Using data table info for %s"), SlotIndex, *DescriptionItemInfo.ItemName);
+        }
+        else
+        {
+            // Fallback to basic item info from inventoryItemInfoRef
+            DescriptionItemInfo.ItemIndex = inventoryItemInfoRef->ItemIndex;
+            DescriptionItemInfo.ItemName = inventoryItemInfoRef->ItemName;
+            DescriptionItemInfo.ItemDescription = FString::Printf(TEXT("Description for %s"), *inventoryItemInfoRef->ItemName);
+            DescriptionItemInfo.bIsValid = true;
+            DescriptionItemInfo.bIsStackable = inventoryItemInfoRef->bIsStackable;
+            DescriptionItemInfo.StackNumber = inventoryItemInfoRef->StackNumber;
+            
+            // Set some default stats for display
+            DescriptionItemInfo.Damage = 0;
+            DescriptionItemInfo.Defence = 0;
+            DescriptionItemInfo.HP = 0;
+            DescriptionItemInfo.MP = 0;
+            DescriptionItemInfo.STR = 0;
+            DescriptionItemInfo.DEX = 0;
+            DescriptionItemInfo.INT = 0;
+            DescriptionItemInfo.RecoveryHP = 0;
+            DescriptionItemInfo.RecoveryMP = 0;
+            
+            // Try to determine item type and set appropriate stats
+            if (inventoryItemInfoRef->ItemName.Contains(TEXT("Sword")) || inventoryItemInfoRef->ItemName.Contains(TEXT("Weapon")))
+            {
+                DescriptionItemInfo.ItemType = EItemType::Equip;
+                DescriptionItemInfo.Damage = 50; // Default weapon damage
+            }
+            else if (inventoryItemInfoRef->ItemName.Contains(TEXT("Health")) || inventoryItemInfoRef->ItemName.Contains(TEXT("HP")))
+            {
+                DescriptionItemInfo.ItemType = EItemType::Consume_HP;
+                DescriptionItemInfo.RecoveryHP = 50; // Default HP recovery
+            }
+            else if (inventoryItemInfoRef->ItemName.Contains(TEXT("Mana")) || inventoryItemInfoRef->ItemName.Contains(TEXT("MP")))
+            {
+                DescriptionItemInfo.ItemType = EItemType::Consume_MP;
+                DescriptionItemInfo.RecoveryMP = 30; // Default MP recovery
+            }
+            else
+            {
+                DescriptionItemInfo.ItemType = EItemType::Collection;
+            }
+            
+            UE_LOG(LogTemp, Warning, TEXT("Slot %d: Using fallback info for %s"), SlotIndex, *DescriptionItemInfo.ItemName);
+        }
+        
         FVector2D MousePosition = InMouseEvent.GetScreenSpacePosition();
-        UpdateItemDescription(ItemInfo, MousePosition);
+        UpdateItemDescription(DescriptionItemInfo, MousePosition);
     }
 }
 
@@ -657,6 +727,8 @@ void UWBP_InventorySlot::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
 {
     Super::NativeOnMouseLeave(InMouseEvent);
 
+    // Remove the description immediately when mouse leaves
+    UE_LOG(LogTemp, Log, TEXT("Slot %d: Mouse left, removing item description"), SlotIndex);
     RemoveItemDescription();
 }
 
@@ -837,13 +909,31 @@ ESlateVisibility UWBP_InventorySlot::GetItemThumbnailVisibility() const
 
 void UWBP_InventorySlot::MouseLeftButtonDown()
 {
+    // First, close any open context menu to make the UI feel less buggy
+    if (ContextMenuWidget && ContextMenuWidget->IsInViewport())
+    {
+        ContextMenuWidget->RemoveFromParent();
+    }
+    
     if (!SlotEmpty && inventoryItemInfoRef)
     {
-        // Only show context menu for inventory slots, not equipment slots
-        if (SlotType == EInventorySlotType::Inventory)
+        // Check item type to determine left-click behavior
+        bool bFound = false;
+        FStructure_ItemInfo ItemData;
+        inventoryItemInfoRef->GetItemTableRow(bFound, ItemData);
+        
+        if (bFound && SlotType == EInventorySlotType::Inventory)
         {
-            // Create and show context menu directly at mouse position
-            ShowContextMenuAtMousePosition();
+            if (ItemData.ItemType == EItemType::Equip)
+            {
+                // For equipable items, directly handle equip/unequip on left click
+                HandleEquipToggle();
+            }
+            else if (ItemData.ItemType == EItemType::Consume_HP || ItemData.ItemType == EItemType::Consume_MP)
+            {
+                // For consumable items, directly use/consume on left click
+                HandleConsumableUse();
+            }
         }
         
         // Always broadcast the slot clicked event for other systems that might need it
@@ -853,9 +943,89 @@ void UWBP_InventorySlot::MouseLeftButtonDown()
 
 void UWBP_InventorySlot::MouseRightButtonDown()
 {
-    // Right click now just removes item description
-    // Context menu is now on left click
-    RemoveItemDescription();
+    if (!SlotEmpty && inventoryItemInfoRef && SlotType == EInventorySlotType::Inventory)
+    {
+        // Right click shows context menu for ALL items (equipment and consumables)
+        ShowContextMenuAtMousePosition();
+    }
+    else
+    {
+        // If no item or not an inventory slot, just remove item description
+        RemoveItemDescription();
+    }
+}
+
+void UWBP_InventorySlot::HandleEquipToggle()
+{
+    if (!inventoryItemInfoRef)
+    {
+        return;
+    }
+    
+    // Get the player character
+    ACharacter* Character = UGameplayStatics::GetPlayerCharacter(this, 0);
+    AAtlantisEonsCharacter* AtlantisCharacter = Cast<AAtlantisEonsCharacter>(Character);
+    if (!AtlantisCharacter)
+    {
+        UE_LOG(LogTemp, Error, TEXT("HandleEquipToggle: Could not get player character"));
+        return;
+    }
+    
+    // Check if the item is currently equipped
+    if (inventoryItemInfoRef->Equipped)
+    {
+        // Unequip the item
+        AtlantisCharacter->UnequipInventoryItem(inventoryItemInfoRef);
+        UE_LOG(LogTemp, Log, TEXT("HandleEquipToggle: Unequipped item from inventory slot"));
+    }
+    else
+    {
+        // Equip the item
+        AtlantisCharacter->EquipInventoryItem(inventoryItemInfoRef);
+        UE_LOG(LogTemp, Log, TEXT("HandleEquipToggle: Equipped item from inventory slot"));
+    }
+    
+    // Force refresh the slot text to show/hide "EQUIPPED" immediately
+    RefreshSlotText();
+}
+
+void UWBP_InventorySlot::HandleConsumableUse()
+{
+    if (!inventoryItemInfoRef)
+    {
+        return;
+    }
+    
+    // Get the player character
+    ACharacter* Character = UGameplayStatics::GetPlayerCharacter(this, 0);
+    AAtlantisEonsCharacter* AtlantisCharacter = Cast<AAtlantisEonsCharacter>(Character);
+    if (!AtlantisCharacter)
+    {
+        UE_LOG(LogTemp, Error, TEXT("HandleConsumableUse: Could not get player character"));
+        return;
+    }
+    
+    // Get item data to check recovery values
+    bool bFound = false;
+    FStructure_ItemInfo ItemData;
+    inventoryItemInfoRef->GetItemTableRow(bFound, ItemData);
+    
+    if (!bFound)
+    {
+        UE_LOG(LogTemp, Error, TEXT("HandleConsumableUse: Could not get item data"));
+        return;
+    }
+    
+    // Use the character's context menu consume function to handle the consumption
+    AtlantisCharacter->ContextMenuUse_ConsumeItem(
+        inventoryItemInfoRef, 
+        this, 
+        inventoryItemInfoRef->RecoveryHP, 
+        inventoryItemInfoRef->RecoveryMP, 
+        inventoryItemInfoRef->ItemType
+    );
+    
+    UE_LOG(LogTemp, Log, TEXT("HandleConsumableUse: Used consumable item %s"), *ItemData.ItemName);
 }
 
 void UWBP_InventorySlot::OnAssetLoaded()
@@ -872,24 +1042,101 @@ void UWBP_InventorySlot::OnAssetLoaded()
 
 void UWBP_InventorySlot::UpdateItemDescription(const FStructure_ItemInfo& ItemInfo, const FVector2D& MousePosition)
 {
-    if (!ItemDescriptionClass) return;
-
+    // Only show description for inventory slots, not equipment slots
+    if (SlotType != EInventorySlotType::Inventory)
+    {
+        return;
+    }
+    
+    // Create a simple text-based tooltip programmatically to ensure visibility
     if (!ItemDescription)
     {
-        ItemDescription = CreateWidget<UWBP_ItemDescription>(GetWorld(), ItemDescriptionClass);
-    }
-
-    if (ItemDescription)
-    {
-        UpdateDescriptionStats(ItemDescription, ItemInfo);
-        SetDescriptionPosition(MousePosition);
-        
-        // Only add to viewport if it's not already there
-        if (!ItemDescription->IsInViewport())
+        // Try to create the Blueprint widget first
+        ItemDescriptionClass = LoadClass<UWBP_ItemDescription>(nullptr, TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/WBP_ItemDescription.WBP_ItemDescription_C"));
+        if (ItemDescriptionClass)
         {
-            ItemDescription->AddToViewport(100);
+            ItemDescription = CreateWidget<UWBP_ItemDescription>(GetWorld(), ItemDescriptionClass);
+            UE_LOG(LogTemp, Warning, TEXT("Slot %d: Created Blueprint ItemDescription widget"), SlotIndex);
+        }
+        else
+        {
+            // Fallback to C++ class
+            ItemDescription = CreateWidget<UWBP_ItemDescription>(GetWorld(), UWBP_ItemDescription::StaticClass());
+            UE_LOG(LogTemp, Warning, TEXT("Slot %d: Created C++ ItemDescription widget as fallback"), SlotIndex);
+        }
+        
+        if (!ItemDescription)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Slot %d: Failed to create any ItemDescription widget"), SlotIndex);
+            return;
         }
     }
+
+    // Remove from viewport first if it's already there
+    if (ItemDescription->IsInViewport())
+    {
+        ItemDescription->RemoveFromParent();
+    }
+    
+    // Update the description with item stats
+    UpdateDescriptionStats(ItemDescription, ItemInfo);
+    
+    // Add to viewport with maximum Z-order
+    ItemDescription->AddToViewport(32767);
+    UE_LOG(LogTemp, Warning, TEXT("Slot %d: Added item description to viewport with Z-order 32767"), SlotIndex);
+    
+    // Force the widget to be visible with bright colors for debugging
+    ItemDescription->SetVisibility(ESlateVisibility::Visible);
+    ItemDescription->SetRenderOpacity(1.0f);
+    ItemDescription->SetRenderScale(FVector2D(1.0f, 1.0f));
+    
+    // Set a subtle dark background for the tooltip
+    ItemDescription->SetColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f)); // White/normal color for content
+    
+    // Set a reasonable size for the tooltip
+    FVector2D TooltipSize(300.0f, 250.0f);
+    ItemDescription->SetDesiredSizeInViewport(TooltipSize);
+    
+    // Position it near the mouse cursor
+    FVector2D ViewportSize;
+    if (GEngine && GEngine->GameViewport)
+    {
+        GEngine->GameViewport->GetViewportSize(ViewportSize);
+    }
+    else
+    {
+        ViewportSize = FVector2D(1920.0f, 1080.0f);
+    }
+    
+    // Position tooltip to the left of the cursor, higher up
+    FVector2D TooltipPosition = MousePosition + FVector2D(-TooltipSize.X - 10.0f, -120.0f);
+
+    // Adjust position if tooltip would go off screen
+    if (TooltipPosition.X < 10.0f)
+    {
+        // If it goes off the left edge, put it to the right of the cursor instead
+        TooltipPosition.X = MousePosition.X + 15.0f;
+    }
+    if (TooltipPosition.Y < 10.0f)
+    {
+        TooltipPosition.Y = 10.0f; // Keep it on screen
+    }
+    if (TooltipPosition.Y + TooltipSize.Y > ViewportSize.Y)
+    {
+        TooltipPosition.Y = ViewportSize.Y - TooltipSize.Y - 10.0f; // 10px margin from bottom
+    }
+    
+    // Final bounds check
+    TooltipPosition.X = FMath::Max(TooltipPosition.X, 10.0f);
+    TooltipPosition.Y = FMath::Max(TooltipPosition.Y, 10.0f);
+    
+    ItemDescription->SetPositionInViewport(TooltipPosition, false);
+    
+    // Force layout updates
+    ItemDescription->ForceLayoutPrepass();
+    ItemDescription->InvalidateLayoutAndVolatility();
+    
+    UE_LOG(LogTemp, Log, TEXT("Slot %d: Item description tooltip positioned at center for %s"), SlotIndex, *ItemInfo.ItemName);
 }
 
 void UWBP_InventorySlot::SetDescriptionPosition(const FVector2D& MousePosition)
@@ -897,22 +1144,46 @@ void UWBP_InventorySlot::SetDescriptionPosition(const FVector2D& MousePosition)
     if (!ItemDescription) return;
 
     FVector2D ViewportSize;
-    GEngine->GameViewport->GetViewportSize(ViewportSize);
+    if (GEngine && GEngine->GameViewport)
+    {
+        GEngine->GameViewport->GetViewportSize(ViewportSize);
+    }
+    else
+    {
+        // Fallback viewport size
+        ViewportSize = FVector2D(1920.0f, 1080.0f);
+    }
 
+    // Get the desired size of the description widget
     FVector2D DescriptionSize = ItemDescription->GetDesiredSize();
-    FVector2D NewPosition = MousePosition;
+    
+    // If the desired size is too small, use a reasonable default
+    if (DescriptionSize.X < 100.0f || DescriptionSize.Y < 50.0f)
+    {
+        DescriptionSize = FVector2D(300.0f, 200.0f); // Default size for item descriptions
+    }
+    
+    // Start with mouse position, but offset it slightly so it doesn't cover the cursor
+    FVector2D NewPosition = MousePosition + FVector2D(15.0f, 15.0f);
 
     // Adjust position if description would go off screen
     if (NewPosition.X + DescriptionSize.X > ViewportSize.X)
     {
-        NewPosition.X = ViewportSize.X - DescriptionSize.X;
+        NewPosition.X = ViewportSize.X - DescriptionSize.X - 10.0f; // 10px margin from edge
     }
     if (NewPosition.Y + DescriptionSize.Y > ViewportSize.Y)
     {
-        NewPosition.Y = ViewportSize.Y - DescriptionSize.Y;
+        NewPosition.Y = ViewportSize.Y - DescriptionSize.Y - 10.0f; // 10px margin from edge
     }
+    
+    // Ensure position is not negative
+    NewPosition.X = FMath::Max(NewPosition.X, 10.0f);
+    NewPosition.Y = FMath::Max(NewPosition.Y, 10.0f);
 
     ItemDescription->SetPositionInViewport(NewPosition, false);
+    
+    UE_LOG(LogTemp, Log, TEXT("Slot %d: Set description position to (%f, %f), size (%f, %f), viewport (%f, %f)"), 
+           SlotIndex, NewPosition.X, NewPosition.Y, DescriptionSize.X, DescriptionSize.Y, ViewportSize.X, ViewportSize.Y);
 }
 
 FString UWBP_InventorySlot::GetStatString(const FString& Prefix, int32 Value) const
@@ -924,8 +1195,10 @@ void UWBP_InventorySlot::UpdateDescriptionStats(UWBP_ItemDescription* Descriptio
 {
     if (!Description) return;
 
-    // Update description stats based on item info
-    // Implementation depends on your specific needs
+    // Call the proper UpdateDescription function that's already implemented
+    Description->UpdateDescription(ItemInfo);
+    
+    UE_LOG(LogTemp, Log, TEXT("Slot %d: Updated item description for %s"), SlotIndex, *ItemInfo.ItemName);
 }
 
 bool UWBP_InventorySlot::IsValidItemInfo()

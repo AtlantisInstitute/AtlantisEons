@@ -80,37 +80,79 @@ void UWBP_StorePopup::UpdateItemDisplay()
         ItemDescriptionText->SetText(FText::FromString(ItemInfo.ItemDescription));
     }
 
-    // Update the confirmed ItemThumbnail widget using Universal Item Loader
-    if (ItemThumbnail)
+    // Load and set the item thumbnail using Universal Item Loader
+    UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
+    
+    if (LoadedTexture)
     {
-        UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
-        if (LoadedTexture)
+        // Update the confirmed ItemThumbnail widget
+        if (ItemThumbnail)
         {
             ItemThumbnail->SetBrushFromTexture(LoadedTexture);
+            ItemThumbnail->SetVisibility(ESlateVisibility::Visible);
+            ItemThumbnail->SetRenderOpacity(1.0f);
+            UE_LOG(LogTemp, Log, TEXT("StorePopup: Set ItemThumbnail with texture %s"), *LoadedTexture->GetName());
         }
-    }
 
-    // Update legacy thumbnail images using Universal Item Loader
-    if (ItemThumbnailImage)
-    {
-        UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
-        if (LoadedTexture)
+        // Update legacy thumbnail images
+        if (ItemThumbnailImage)
         {
             ItemThumbnailImage->SetBrushFromTexture(LoadedTexture);
+            ItemThumbnailImage->SetVisibility(ESlateVisibility::Visible);
+            ItemThumbnailImage->SetRenderOpacity(1.0f);
         }
-    }
 
-    if (Image_ItemThumbnail)
-    {
-        UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
-        if (LoadedTexture)
+        if (Image_ItemThumbnail)
         {
             Image_ItemThumbnail->SetBrushFromTexture(LoadedTexture);
+            Image_ItemThumbnail->SetVisibility(ESlateVisibility::Visible);
+            Image_ItemThumbnail->SetRenderOpacity(1.0f);
+        }
+        
+        // Try to find any Image widget that might be the thumbnail
+        TArray<FString> PossibleImageWidgetNames = {
+            TEXT("ItemImage"),
+            TEXT("Image_Item"),
+            TEXT("Thumbnail"),
+            TEXT("Image_Thumbnail"),
+            TEXT("ItemIcon"),
+            TEXT("Image_Icon"),
+            TEXT("ProductImage"),
+            TEXT("Image_Product")
+        };
+        
+        for (const FString& WidgetName : PossibleImageWidgetNames)
+        {
+            if (UImage* ImageWidget = Cast<UImage>(GetWidgetFromName(*WidgetName)))
+            {
+                ImageWidget->SetBrushFromTexture(LoadedTexture);
+                ImageWidget->SetVisibility(ESlateVisibility::Visible);
+                ImageWidget->SetRenderOpacity(1.0f);
+                UE_LOG(LogTemp, Log, TEXT("StorePopup: Set %s with texture"), *WidgetName);
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("StorePopup: Failed to load texture for item %s"), *ItemInfo.ItemName);
+        
+        // Set a default texture if available
+        UTexture2D* DefaultTexture = Cast<UTexture2D>(StaticLoadObject(UTexture2D::StaticClass(), nullptr, TEXT("/Engine/EditorResources/S_Actor")));
+        if (DefaultTexture)
+        {
+            if (ItemThumbnail)
+            {
+                ItemThumbnail->SetBrushFromTexture(DefaultTexture);
+                ItemThumbnail->SetVisibility(ESlateVisibility::Visible);
+            }
         }
     }
 
     // Update price displays
     UpdatePriceDisplay();
+    
+    // Update quantity widget visibility based on item type
+    UpdateQuantityWidgetVisibility();
 }
 
 void UWBP_StorePopup::UpdateQuantityDisplay()
@@ -575,4 +617,159 @@ void UWBP_StorePopup::UpdateTextSafely(UTextBlock* TextBlock, const FText& NewTe
 int32 UWBP_StorePopup::GetTotalPrice()
 {
     return ItemInfo.Price * SelectedQuantity;
+}
+
+void UWBP_StorePopup::UpdateQuantityWidgetVisibility()
+{
+    // Determine if quantity controls should be visible
+    // Only show for consumable items (HP/MP potions), hide for equipment and collectibles
+    bool bShowQuantityControls = (ItemInfo.ItemType == EItemType::Consume_HP || ItemInfo.ItemType == EItemType::Consume_MP);
+    
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Setting quantity widget visibility to %s for item type %d"), 
+           bShowQuantityControls ? TEXT("Visible") : TEXT("Hidden"), (int32)ItemInfo.ItemType);
+    
+    // Hide/show quantity text widgets (but NOT the purchase button)
+    if (Quantity)
+    {
+        Quantity->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    if (QuantityText)
+    {
+        QuantityText->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    if (TextBlock_StackCounter)
+    {
+        TextBlock_StackCounter->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    if (StackCounterText)
+    {
+        StackCounterText->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    // Hide/show quantity control buttons (up/down buttons)
+    if (Button_Up)
+    {
+        Button_Up->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    if (Button_Down)
+    {
+        Button_Down->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    if (UpButton)
+    {
+        UpButton->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    if (DownButton)
+    {
+        DownButton->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    if (IncreaseQuantityButton)
+    {
+        IncreaseQuantityButton->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    if (DecreaseQuantityButton)
+    {
+        DecreaseQuantityButton->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+    
+    // KEEP PURCHASE BUTTONS VISIBLE FOR ALL ITEMS
+    // Don't hide OKButton, ConfirmButton, or ConfirmPurchaseButton
+    
+    // Only hide the specific overlay that contains the stack counter (the small grey box)
+    if (Overlay_StackCounter)
+    {
+        Overlay_StackCounter->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set Overlay_StackCounter visibility to %s"), bShowQuantityControls ? TEXT("Visible") : TEXT("Hidden"));
+    }
+    
+    // Only hide the specific container that holds quantity controls, not main containers
+    if (StackCounterContainer)
+    {
+        StackCounterContainer->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+        UE_LOG(LogTemp, Log, TEXT("StorePopup: Set StackCounterContainer visibility to %s"), bShowQuantityControls ? TEXT("Visible") : TEXT("Hidden"));
+    }
+    
+    // Hide the StackCounterBackground widget (the grey box)
+    if (UWidget* StackCounterBackground = GetWidgetFromName(TEXT("StackCounterBackground")))
+    {
+        StackCounterBackground->SetVisibility(bShowQuantityControls ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+        UE_LOG(LogTemp, Warning, TEXT("StorePopup: Set StackCounterBackground visibility to %s"), bShowQuantityControls ? TEXT("Visible") : TEXT("Hidden"));
+    }
+    
+    // Adjust item image position for equipment and collectible items
+    // When quantity controls are hidden, move the image down to fill the empty space
+    AdjustImagePositionForLayout(bShowQuantityControls);
+    
+    // For non-consumable items, force quantity to 1
+    if (!bShowQuantityControls)
+    {
+        SelectedQuantity = 1;
+        StackNumber = 1;
+        UpdateQuantityDisplay();
+        UpdatePriceDisplay();
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Quantity widget visibility updated for %s (Purchase buttons remain visible)"), *ItemInfo.ItemName);
+}
+
+void UWBP_StorePopup::AdjustImagePositionForLayout(bool bShowQuantityControls)
+{
+    // Define the offset amount to move the image down when quantity controls are hidden
+    float VerticalOffset = bShowQuantityControls ? 0.0f : 30.0f; // Move down by 30 pixels for equipment items
+    
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Adjusting image position - Offset: %.1f (Quantity controls: %s)"), 
+           VerticalOffset, bShowQuantityControls ? TEXT("Visible") : TEXT("Hidden"));
+    
+    // Apply the offset to all possible item image widgets
+    TArray<UImage*> ImageWidgets = {
+        ItemThumbnail,
+        ItemThumbnailImage,
+        Image_ItemThumbnail
+    };
+    
+    // Also try to find additional image widgets by name
+    TArray<FString> PossibleImageWidgetNames = {
+        TEXT("ItemImage"),
+        TEXT("Image_Item"),
+        TEXT("Thumbnail"),
+        TEXT("Image_Thumbnail"),
+        TEXT("ItemIcon"),
+        TEXT("Image_Icon"),
+        TEXT("ProductImage"),
+        TEXT("Image_Product")
+    };
+    
+    for (const FString& WidgetName : PossibleImageWidgetNames)
+    {
+        if (UImage* ImageWidget = Cast<UImage>(GetWidgetFromName(*WidgetName)))
+        {
+            ImageWidgets.Add(ImageWidget);
+        }
+    }
+    
+    // Apply the vertical offset to all found image widgets
+    int32 AdjustedImages = 0;
+    for (UImage* ImageWidget : ImageWidgets)
+    {
+        if (ImageWidget)
+        {
+            // Create a render transform with the vertical offset
+            FWidgetTransform Transform = ImageWidget->GetRenderTransform();
+            Transform.Translation.Y = VerticalOffset;
+            ImageWidget->SetRenderTransform(Transform);
+            
+            AdjustedImages++;
+            UE_LOG(LogTemp, Verbose, TEXT("StorePopup: Applied vertical offset %.1f to image widget"), VerticalOffset);
+        }
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("StorePopup: Adjusted position for %d image widgets with offset %.1f"), AdjustedImages, VerticalOffset);
 }

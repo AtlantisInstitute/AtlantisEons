@@ -89,67 +89,148 @@ void UWBP_StoreItemElement::UpdateItemDisplay()
         ItemSlotType->SetText(FText::FromString(SlotTypeString));
     }
 
-    // Update Recovery HP
+    // Update Recovery HP (only for consumables)
     if (RecoveryHP)
     {
-        FString HPRecoveryText = FString::Printf(TEXT("HP %d"), ItemInfo.RecoveryHP);
-        RecoveryHP->SetText(FText::FromString(HPRecoveryText));
+        bool bIsConsumable = (ItemInfo.ItemType == EItemType::Consume_HP || ItemInfo.ItemType == EItemType::Consume_MP);
+        if (bIsConsumable && ItemInfo.RecoveryHP > 0)
+        {
+            FString HPRecoveryText = FString::Printf(TEXT("HP %d"), ItemInfo.RecoveryHP);
+            RecoveryHP->SetText(FText::FromString(HPRecoveryText));
+            RecoveryHP->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            RecoveryHP->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
-    // Update Recovery MP
+    // Update Recovery MP (only for consumables)
     if (RecoveryMP)
     {
-        FString MPRecoveryText = FString::Printf(TEXT("MP %d"), ItemInfo.RecoveryMP);
-        RecoveryMP->SetText(FText::FromString(MPRecoveryText));
+        bool bIsConsumable = (ItemInfo.ItemType == EItemType::Consume_HP || ItemInfo.ItemType == EItemType::Consume_MP);
+        if (bIsConsumable && ItemInfo.RecoveryMP > 0)
+        {
+            FString MPRecoveryText = FString::Printf(TEXT("MP %d"), ItemInfo.RecoveryMP);
+            RecoveryMP->SetText(FText::FromString(MPRecoveryText));
+            RecoveryMP->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            RecoveryMP->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
-    // Update Damage
+    // Update Damage (only for equipment)
     if (DamageText)
     {
-        FString DamageString = FString::Printf(TEXT("DAMAGE %d"), ItemInfo.Damage);
-        DamageText->SetText(FText::FromString(DamageString));
+        bool bIsEquipment = (ItemInfo.ItemType == EItemType::Equip);
+        if (bIsEquipment && ItemInfo.Damage > 0)
+        {
+            FString DamageString = FString::Printf(TEXT("DAMAGE %d"), ItemInfo.Damage);
+            DamageText->SetText(FText::FromString(DamageString));
+            DamageText->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            DamageText->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
-    // Update Defence
+    // Update Defence (only for equipment)
     if (DefenceText)
     {
-        FString DefenceString = FString::Printf(TEXT("DEFENCE %d"), ItemInfo.Defence);
-        DefenceText->SetText(FText::FromString(DefenceString));
+        bool bIsEquipment = (ItemInfo.ItemType == EItemType::Equip);
+        if (bIsEquipment && ItemInfo.Defence > 0)
+        {
+            FString DefenceString = FString::Printf(TEXT("DEFENCE %d"), ItemInfo.Defence);
+            DefenceText->SetText(FText::FromString(DefenceString));
+            DefenceText->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            DefenceText->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
-    // Update HP stat
+    // Update HP stat (only for equipment)
     if (HPText)
     {
-        FString HPString = FString::Printf(TEXT("HP %d"), ItemInfo.HP);
-        HPText->SetText(FText::FromString(HPString));
+        bool bIsEquipment = (ItemInfo.ItemType == EItemType::Equip);
+        if (bIsEquipment && ItemInfo.HP > 0)
+        {
+            FString HPString = FString::Printf(TEXT("HP %d"), ItemInfo.HP);
+            HPText->SetText(FText::FromString(HPString));
+            HPText->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            HPText->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
-    // Update MP stat
+    // Update MP stat (only for equipment)
     if (MPText)
     {
-        FString MPString = FString::Printf(TEXT("MP %d"), ItemInfo.MP);
-        MPText->SetText(FText::FromString(MPString));
+        bool bIsEquipment = (ItemInfo.ItemType == EItemType::Equip);
+        if (bIsEquipment && ItemInfo.MP > 0)
+        {
+            FString MPString = FString::Printf(TEXT("MP %d"), ItemInfo.MP);
+            MPText->SetText(FText::FromString(MPString));
+            MPText->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            MPText->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
-    // Update STR stat
+    // Update STR stat (only for equipment)
     if (STRText)
     {
-        FString STRString = FString::Printf(TEXT("STR %d"), ItemInfo.STR);
-        STRText->SetText(FText::FromString(STRString));
+        bool bIsEquipment = (ItemInfo.ItemType == EItemType::Equip);
+        if (bIsEquipment && ItemInfo.STR > 0)
+        {
+            FString STRString = FString::Printf(TEXT("STR %d"), ItemInfo.STR);
+            STRText->SetText(FText::FromString(STRString));
+            STRText->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            STRText->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
-    // Update DEX stat
+    // Update DEX stat (only for equipment)
     if (DEXText)
     {
-        FString DEXString = FString::Printf(TEXT("DEX %d"), ItemInfo.DEX);
-        DEXText->SetText(FText::FromString(DEXString));
+        bool bIsEquipment = (ItemInfo.ItemType == EItemType::Equip);
+        if (bIsEquipment && ItemInfo.DEX > 0)
+        {
+            FString DEXString = FString::Printf(TEXT("DEX %d"), ItemInfo.DEX);
+            DEXText->SetText(FText::FromString(DEXString));
+            DEXText->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            DEXText->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
-    // Update INT stat
+    // Update INT stat (only for equipment)
     if (INTText)
     {
-        FString INTString = FString::Printf(TEXT("INT %d"), ItemInfo.INT);
-        INTText->SetText(FText::FromString(INTString));
+        bool bIsEquipment = (ItemInfo.ItemType == EItemType::Equip);
+        if (bIsEquipment && ItemInfo.INT > 0)
+        {
+            FString INTString = FString::Printf(TEXT("INT %d"), ItemInfo.INT);
+            INTText->SetText(FText::FromString(INTString));
+            INTText->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            INTText->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 
     // Update description

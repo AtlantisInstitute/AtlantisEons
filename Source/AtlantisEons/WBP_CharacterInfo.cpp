@@ -198,10 +198,12 @@ void UWBP_CharacterInfo::SetupTextBindings()
         UE_LOG(LogTemp, Warning, TEXT("%s: MP text block is invalid"), *GetName());
     }
 
+    // Note: These text blocks should show LABELS like "DAMAGE", "STR", etc.
+    // The actual values are handled by separate DamageValue, StrengthValue text blocks
     if (Damage) 
     {
         Damage->TextDelegate.Clear();
-        Damage->TextDelegate.BindUFunction(this, FName("GetDamageText"));
+        Damage->TextDelegate.BindUFunction(this, FName("GetText_CharacterDamage"));
     }
     else 
     {
@@ -211,7 +213,7 @@ void UWBP_CharacterInfo::SetupTextBindings()
     if (Defence) 
     {
         Defence->TextDelegate.Clear();
-        Defence->TextDelegate.BindUFunction(this, FName("GetDefenceText"));
+        Defence->TextDelegate.BindUFunction(this, FName("GetText_CharacterDefence"));
     }
     else 
     {
@@ -221,7 +223,7 @@ void UWBP_CharacterInfo::SetupTextBindings()
     if (Strength) 
     {
         Strength->TextDelegate.Clear();
-        Strength->TextDelegate.BindUFunction(this, FName("GetStrengthText"));
+        Strength->TextDelegate.BindUFunction(this, FName("GetText_CharacterSTR"));
     }
     else 
     {
@@ -231,7 +233,7 @@ void UWBP_CharacterInfo::SetupTextBindings()
     if (Dex) 
     {
         Dex->TextDelegate.Clear();
-        Dex->TextDelegate.BindUFunction(this, FName("GetDexText"));
+        Dex->TextDelegate.BindUFunction(this, FName("GetText_CharacterDEX"));
     }
     else 
     {
@@ -241,7 +243,7 @@ void UWBP_CharacterInfo::SetupTextBindings()
     if (Intelligence) 
     {
         Intelligence->TextDelegate.Clear();
-        Intelligence->TextDelegate.BindUFunction(this, FName("GetIntelligenceText"));
+        Intelligence->TextDelegate.BindUFunction(this, FName("GetText_CharacterINT"));
     }
     else 
     {
@@ -254,7 +256,7 @@ void UWBP_CharacterInfo::SetupTextBindings()
 FText UWBP_CharacterInfo::GetHPText() const
 {
     if (!Character) return FText::FromString(TEXT("N/A"));
-    return FText::FromString(FString::Printf(TEXT("%d/%d"), FMath::RoundToInt(Character->GetCurrentHealth()), FMath::RoundToInt(Character->GetBaseHealth())));
+    return FText::FromString(FString::Printf(TEXT("%d/%d"), FMath::RoundToInt(Character->GetCurrentHealth()), FMath::RoundToInt(Character->GetMaxHealth())));
 }
 
 FText UWBP_CharacterInfo::GetMPText() const
@@ -366,53 +368,89 @@ void UWBP_CharacterInfo::UpdateAllStats()
         MP->SynchronizeProperties();
     }
 
-    // Damage stat
+    // Damage stat label
     if (IsValid(Damage))
     {
-        Damage->TextDelegate.BindUFunction(this, FName(TEXT("GetDamageText")));
+        Damage->TextDelegate.BindUFunction(this, FName(TEXT("GetText_CharacterDamage")));
         Damage->SynchronizeProperties();
     }
 
-    // Defence stat
+    // Defence stat label
     if (IsValid(Defence))
     {
-        Defence->TextDelegate.BindUFunction(this, FName(TEXT("GetDefenceText")));
+        Defence->TextDelegate.BindUFunction(this, FName(TEXT("GetText_CharacterDefence")));
         Defence->SynchronizeProperties();
     }
 
-    // Strength stat
+    // Strength stat label
     if (IsValid(Strength))
     {
-        Strength->TextDelegate.BindUFunction(this, FName(TEXT("GetStrengthText")));
+        Strength->TextDelegate.BindUFunction(this, FName(TEXT("GetText_CharacterSTR")));
         Strength->SynchronizeProperties();
     }
 
-    // Dex stat
+    // Dex stat label
     if (IsValid(Dex))
     {
-        Dex->TextDelegate.BindUFunction(this, FName(TEXT("GetDexText")));
+        Dex->TextDelegate.BindUFunction(this, FName(TEXT("GetText_CharacterDEX")));
         Dex->SynchronizeProperties();
     }
 
-    // Intelligence stat
+    // Intelligence stat label
     if (IsValid(Intelligence))
     {
-        Intelligence->TextDelegate.BindUFunction(this, FName(TEXT("GetIntelligenceText")));
+        Intelligence->TextDelegate.BindUFunction(this, FName(TEXT("GetText_CharacterINT")));
         Intelligence->SynchronizeProperties();
     }
 
-    // Update bars if Character is valid and has MP
-    if (Character->GetMaxMP() > 0)
+    // Update value text blocks
+    if (IsValid(DamageValue))
     {
-        float MPPercentage = static_cast<float>(Character->GetCurrentMP()) / Character->GetMaxMP();
-        UpdateMPBar(MPPercentage);
+        DamageValue->TextDelegate.BindUFunction(this, FName(TEXT("GetText_DamageValue")));
+        DamageValue->SynchronizeProperties();
     }
 
-    // Update HP bar if Character has health
-    if (Character->GetBaseHealth() > 0)
+    if (IsValid(DefenceValue))
     {
-        float HPPercentage = static_cast<float>(Character->GetCurrentHealth()) / Character->GetBaseHealth();
-        UpdateHPBar();
+        DefenceValue->TextDelegate.BindUFunction(this, FName(TEXT("GetText_DefenceValue")));
+        DefenceValue->SynchronizeProperties();
+    }
+
+    if (IsValid(StrengthValue))
+    {
+        StrengthValue->TextDelegate.BindUFunction(this, FName(TEXT("GetText_StrengthValue")));
+        StrengthValue->SynchronizeProperties();
+    }
+
+    if (IsValid(DexValue))
+    {
+        DexValue->TextDelegate.BindUFunction(this, FName(TEXT("GetText_DexValue")));
+        DexValue->SynchronizeProperties();
+    }
+
+    if (IsValid(IntelligenceValue))
+    {
+        IntelligenceValue->TextDelegate.BindUFunction(this, FName(TEXT("GetText_IntelligenceValue")));
+        IntelligenceValue->SynchronizeProperties();
+    }
+
+    // Update circular bars if Character is valid
+    if (Character)
+    {
+        // Update HP bar
+        if (Character->GetMaxHealth() > 0)
+        {
+            UpdateHPBar();
+            UE_LOG(LogTemp, Log, TEXT("WBP_CharacterInfo: Updated HP bar"));
+        }
+        
+        // Update MP bar
+        if (Character->GetMaxMP() > 0)
+        {
+            float MPPercentage = static_cast<float>(Character->GetCurrentMP()) / Character->GetMaxMP();
+            UpdateMPBar(MPPercentage);
+            UE_LOG(LogTemp, Log, TEXT("WBP_CharacterInfo: Updated MP bar with percentage: %f"), MPPercentage);
+        }
     }
 
     UE_LOG(LogTemp, Warning, TEXT("%s::UpdateAllStats() - All stats updated"), *GetName());
@@ -422,8 +460,8 @@ void UWBP_CharacterInfo::UpdateHPBar()
 {
     if (!CircularBarHP) return;
 
-    // Try to load the base material with better error handling
-    UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/AtlantisEons/Materials/M_CircularBar"));
+    // Try to load the base material with correct path
+    UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/AtlantisEons/Materials/M_Circular"));
     if (!BaseMaterial)
     {
         // Try alternative paths or use a default material
@@ -431,6 +469,7 @@ void UWBP_CharacterInfo::UpdateHPBar()
         if (!BaseMaterial)
         {
             // Skip material update if we can't load any material
+            UE_LOG(LogTemp, Warning, TEXT("WBP_CharacterInfo: Could not load circular bar material"));
             return;
         }
     }
@@ -451,11 +490,17 @@ void UWBP_CharacterInfo::UpdateHPBar()
     // Update the material parameters if we have the dynamic material
     if (DynamicHPMaterial && Character)
     {
-        float HPPercent = Character->GetCurrentHealth() > 0 ? 
-            Character->GetCurrentHealth() / Character->GetBaseHealth() : 0.0f;
+        float HPPercent = Character->GetMaxHealth() > 0 ? 
+            Character->GetCurrentHealth() / Character->GetMaxHealth() : 0.0f;
+        
+        // Clamp the percentage between 0 and 1
+        HPPercent = FMath::Clamp(HPPercent, 0.0f, 1.0f);
         
         DynamicHPMaterial->SetScalarParameterValue(TEXT("Percent"), HPPercent);
         DynamicHPMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor::Red);
+        
+        UE_LOG(LogTemp, Log, TEXT("WBP_CharacterInfo: Set HP bar percentage to %f (HP: %f/%f)"), 
+               HPPercent, Character->GetCurrentHealth(), Character->GetMaxHealth());
     }
 }
 
@@ -475,8 +520,8 @@ void UWBP_CharacterInfo::UpdateMPBar(float Percentage)
     
     if (!IsValid(MPMaterial))
     {
-        // Try to load the base material with better error handling
-        UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/AtlantisEons/Materials/M_CircularBar"));
+        // Try to load the base material with correct path
+        UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/AtlantisEons/Materials/M_Circular"));
         if (!BaseMaterial)
         {
             // Try alternative paths or use a default material
@@ -484,6 +529,7 @@ void UWBP_CharacterInfo::UpdateMPBar(float Percentage)
             if (!BaseMaterial)
             {
                 // Skip material update if we can't load any material
+                UE_LOG(LogTemp, Warning, TEXT("WBP_CharacterInfo: Could not load circular bar material for MP"));
                 return;
             }
         }
@@ -506,6 +552,8 @@ void UWBP_CharacterInfo::UpdateMPBar(float Percentage)
     // Set color to blue for MP
     FLinearColor MPColor = FLinearColor(0.0f, 0.0f, 1.0f, 1.0f);
     MPMaterial->SetVectorParameterValue(TEXT("Color"), MPColor);
+    
+    UE_LOG(LogTemp, Log, TEXT("WBP_CharacterInfo: Set MP bar percentage to %f"), Percentage);
 }
 
 void UWBP_CharacterInfo::OnQuitButtonClicked()
@@ -646,65 +694,37 @@ void UWBP_CharacterInfo::OnResumeButtonClicked()
 
 FText UWBP_CharacterInfo::GetText_CharacterHP()
 {
-    if (!Character)
-    {
-        return FText::GetEmpty();
-    }
-    return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentHealth());
+    return FText::FromString(TEXT("HP"));
 }
 
 FText UWBP_CharacterInfo::GetText_CharacterMP()
 {
-    if (!Character)
-    {
-        return FText::GetEmpty();
-    }
-    return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentMP());
+    return FText::FromString(TEXT("MP"));
 }
 
 FText UWBP_CharacterInfo::GetText_CharacterDamage()
 {
-    if (!Character)
-    {
-        return FText::GetEmpty();
-    }
-    return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentDamage());
+    return FText::FromString(TEXT("DAMAGE"));
 }
 
 FText UWBP_CharacterInfo::GetText_CharacterDefence()
 {
-    if (!Character)
-    {
-        return FText::GetEmpty();
-    }
-    return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentDefence());
+    return FText::FromString(TEXT("DEFENCE"));
 }
 
 FText UWBP_CharacterInfo::GetText_CharacterSTR()
 {
-    if (!Character)
-    {
-        return FText::GetEmpty();
-    }
-    return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentSTR());
+    return FText::FromString(TEXT("STR"));
 }
 
 FText UWBP_CharacterInfo::GetText_CharacterDEX()
 {
-    if (!Character)
-    {
-        return FText::GetEmpty();
-    }
-    return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentDEX());
+    return FText::FromString(TEXT("DEX"));
 }
 
 FText UWBP_CharacterInfo::GetText_CharacterINT()
 {
-    if (!Character)
-    {
-        return FText::FromString(TEXT("0"));
-    }
-    return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentINT());
+    return FText::FromString(TEXT("INT"));
 }
 
 FText UWBP_CharacterInfo::GetText_HPPercentage()
@@ -713,7 +733,7 @@ FText UWBP_CharacterInfo::GetText_HPPercentage()
     {
         return FText::FromString(TEXT("0%"));
     }
-    float HPPercentage = (Character->GetCurrentHealth() / Character->GetBaseHealth()) * 100.0f;
+    float HPPercentage = (Character->GetCurrentHealth() / Character->GetMaxHealth()) * 100.0f;
     return FText::FromString(FString::Printf(TEXT("%.1f%%"), HPPercentage));
 }
 
@@ -770,6 +790,24 @@ FText UWBP_CharacterInfo::GetText_IntelligenceValue()
         return FText::FromString(TEXT("0"));
     }
     return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentINT());
+}
+
+FText UWBP_CharacterInfo::GetText_HPValue()
+{
+    if (!Character)
+    {
+        return FText::FromString(TEXT("0"));
+    }
+    return FText::FromString(FString::Printf(TEXT("%.0f"), Character->GetCurrentHealth()));
+}
+
+FText UWBP_CharacterInfo::GetText_MPValue()
+{
+    if (!Character)
+    {
+        return FText::FromString(TEXT("0"));
+    }
+    return UKismetTextLibrary::Conv_IntToText(Character->GetCurrentMP());
 }
 
 void UWBP_CharacterInfo::HandleResumeClicked()
@@ -860,6 +898,14 @@ void UWBP_CharacterInfo::SetCharacterReference(AAtlantisEonsCharacter* NewCharac
         
         // Update all stats
         UpdateAllStats();
+        
+        // Force update circular bars
+        UpdateHPBar();
+        if (Character->GetMaxMP() > 0)
+        {
+            float MPPercentage = static_cast<float>(Character->GetCurrentMP()) / Character->GetMaxMP();
+            UpdateMPBar(MPPercentage);
+        }
     }
     else
     {

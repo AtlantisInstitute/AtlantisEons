@@ -90,6 +90,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "Character Info")
     FText GetText_IntelligenceValue();
 
+    UFUNCTION(BlueprintPure, Category = "Character Info")
+    FText GetText_HPValue();
+
+    UFUNCTION(BlueprintPure, Category = "Character Info")
+    FText GetText_MPValue();
+
     // Character stat updaters
     UFUNCTION(BlueprintCallable, Category = "Character Info")
     void UpdateAllStats();

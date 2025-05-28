@@ -80,12 +80,83 @@ void UWBP_Store::InitializeStoreElements()
     // Get all store items using the universal loader (which uses the established JSON system)
     TArray<FStructure_ItemInfo> StoreItems = UUniversalItemLoader::GetAllItems();
 
+    // Apply equipment slot corrections to match character system
+    for (FStructure_ItemInfo& ItemInfo : StoreItems)
+    {
+        ApplyEquipmentSlotCorrections(ItemInfo);
+    }
+
     // Create store elements for each item
     for (const FStructure_ItemInfo& ItemInfo : StoreItems)
     {
         if (ItemInfo.bIsValid && ItemInfo.ItemIndex > 0)
         {
             AddingStoreElement(ItemInfo);
+        }
+    }
+}
+
+void UWBP_Store::ApplyEquipmentSlotCorrections(FStructure_ItemInfo& ItemInfo)
+{
+    // Apply equipment slot corrections to match character system
+    if (ItemInfo.ItemName.Contains(TEXT("Sword")) || ItemInfo.ItemName.Contains(TEXT("Axe")) || 
+        ItemInfo.ItemName.Contains(TEXT("Pistol")) || ItemInfo.ItemName.Contains(TEXT("Rifle")) || 
+        ItemInfo.ItemName.Contains(TEXT("Spike")) || ItemInfo.ItemName.Contains(TEXT("Laser")))
+    {
+        if (ItemInfo.ItemEquipSlot != EItemEquipSlot::Weapon)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Store: Corrected '%s' (Index: %d) from slot %d to slot %d"), 
+                   *ItemInfo.ItemName, ItemInfo.ItemIndex, (int32)ItemInfo.ItemEquipSlot, (int32)EItemEquipSlot::Weapon);
+            ItemInfo.ItemEquipSlot = EItemEquipSlot::Weapon;
+        }
+    }
+    else if (ItemInfo.ItemName.Contains(TEXT("Shield")))
+    {
+        if (ItemInfo.ItemEquipSlot != EItemEquipSlot::Accessory)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Store: Corrected '%s' (Index: %d) from slot %d to slot %d"), 
+                   *ItemInfo.ItemName, ItemInfo.ItemIndex, (int32)ItemInfo.ItemEquipSlot, (int32)EItemEquipSlot::Accessory);
+            ItemInfo.ItemEquipSlot = EItemEquipSlot::Accessory;
+        }
+    }
+    else if (ItemInfo.ItemName.Contains(TEXT("Helmet")) || ItemInfo.ItemName.Contains(TEXT("Hat")) || 
+             ItemInfo.ItemName.Contains(TEXT("Mask")) || ItemInfo.ItemName.Contains(TEXT("SWAT")))
+    {
+        if (ItemInfo.ItemEquipSlot != EItemEquipSlot::Head)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Store: Corrected '%s' (Index: %d) from slot %d to slot %d"), 
+                   *ItemInfo.ItemName, ItemInfo.ItemIndex, (int32)ItemInfo.ItemEquipSlot, (int32)EItemEquipSlot::Head);
+            ItemInfo.ItemEquipSlot = EItemEquipSlot::Head;
+        }
+    }
+    else if (ItemInfo.ItemName.Contains(TEXT("Suit")))
+    {
+        if (ItemInfo.ItemEquipSlot != EItemEquipSlot::Body)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Store: Corrected '%s' (Index: %d) from slot %d to slot %d"), 
+                   *ItemInfo.ItemName, ItemInfo.ItemIndex, (int32)ItemInfo.ItemEquipSlot, (int32)EItemEquipSlot::Body);
+            ItemInfo.ItemEquipSlot = EItemEquipSlot::Body;
+        }
+    }
+    
+    // Fix consumable item data - move HP/MP values to RecoveryHP/RecoveryMP for potions
+    if (ItemInfo.ItemType == EItemType::Consume_HP || ItemInfo.ItemType == EItemType::Consume_MP)
+    {
+        // If RecoveryHP/RecoveryMP are 0 but HP/MP have values, move them
+        if (ItemInfo.RecoveryHP == 0 && ItemInfo.HP > 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Store: Fixed consumable '%s' - moved HP %d to RecoveryHP"), 
+                   *ItemInfo.ItemName, ItemInfo.HP);
+            ItemInfo.RecoveryHP = ItemInfo.HP;
+            ItemInfo.HP = 0; // Clear the base HP since it's not used for consumables
+        }
+        
+        if (ItemInfo.RecoveryMP == 0 && ItemInfo.MP > 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Store: Fixed consumable '%s' - moved MP %d to RecoveryMP"), 
+                   *ItemInfo.ItemName, ItemInfo.MP);
+            ItemInfo.RecoveryMP = ItemInfo.MP;
+            ItemInfo.MP = 0; // Clear the base MP since it's not used for consumables
         }
     }
 }
@@ -495,9 +566,8 @@ void UWBP_Store::UpdateElementVisibility(uint8 EquipSlotType)
 
 FText UWBP_Store::GetText_ALL() const
 {
-    FString Text = TEXT("ALL");
     int32 TotalItems = StoreElements.Num();
-    return FText::FromString(FString::Printf(TEXT("%s (%d)"), *Text, TotalItems));
+    return FText::AsNumber(TotalItems);
 }
 
 FText UWBP_Store::GetItemNumber(EItemEquipSlot ItemEquipSlotType, FText& TotalNumber)
@@ -511,33 +581,21 @@ FText UWBP_Store::GetItemNumber(EItemEquipSlot ItemEquipSlotType, FText& TotalNu
         }
     }
 
-    FString TypeName;
-    switch (ItemEquipSlotType)
-    {
-        case EItemEquipSlot::Weapon:
-            TypeName = TEXT("WEAPON");
-            break;
-        case EItemEquipSlot::Head:
-            TypeName = TEXT("HELMET");
-            break;
-        case EItemEquipSlot::Body:
-            TypeName = TEXT("SUIT");
-            break;
-        case EItemEquipSlot::Accessory:
-            TypeName = TEXT("SHIELD");
-            break;
-        default:
-            TypeName = TEXT("NONE");
-            break;
-    }
-
     TotalNumber = FText::AsNumber(Count);
-    return FText::FromString(FString::Printf(TEXT("%s (%d)"), *TypeName, Count));
+    return FText::AsNumber(Count);
 }
 
 FText UWBP_Store::GetText_NONE()
 {
-    return FText::FromString(TEXT("NONE (0)"));
+    int32 Count = 0;
+    for (const auto* Element : StoreElements)
+    {
+        if (Element && Element->GetItemInfo().ItemEquipSlot == EItemEquipSlot::None)
+        {
+            Count++;
+        }
+    }
+    return FText::AsNumber(Count);
 }
 
 FText UWBP_Store::GetText_WEAPON()
@@ -560,8 +618,7 @@ FText UWBP_Store::GetText_SHIELD()
 
 FText UWBP_Store::GetText_HELMET()
 {
-    // Create a local variable to pass as reference parameter
-    FText TotalNumber = FText::FromString("Helmet");
+    FText TotalNumber;
     return GetItemNumber(EItemEquipSlot::Head, TotalNumber);
 }
 

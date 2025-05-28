@@ -478,6 +478,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Character|Stats")
     float GetBaseHealth() const { return BaseHealth; }
 
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    float GetMaxHealth() const { return MaxHealth; }
+
     UFUNCTION(BlueprintImplementableEvent, Category = "Stats")
     void SetBaseHealth(float NewBaseHealth);
 
@@ -722,4 +725,10 @@ public:
 
     UFUNCTION()
     void OnContextMenuThrow(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot);
+
+    UFUNCTION(BlueprintCallable, Category = "Equipment")
+    void EquipInventoryItem(UBP_ItemInfo* ItemInfoRef);
+
+    UFUNCTION(BlueprintCallable, Category = "Equipment")
+    void UnequipInventoryItem(UBP_ItemInfo* ItemInfoRef);
 };
