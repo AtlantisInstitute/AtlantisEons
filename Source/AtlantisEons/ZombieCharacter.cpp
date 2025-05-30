@@ -8,6 +8,7 @@
 #include "DamageNumberSystem.h"
 #include "EngineUtils.h" // For TActorIterator
 #include "Engine/OverlapResult.h"  // Corrected include for FOverlapResult definition
+#include "WBP_ZombieHealthBar.h"
 
 AZombieCharacter::AZombieCharacter()
 {
@@ -25,14 +26,21 @@ AZombieCharacter::AZombieCharacter()
         HealthBarWidget->SetRelativeLocation(FVector(0.0f, 0.0f, 120.0f)); // Position above zombie head
         HealthBarWidget->SetWidgetSpace(EWidgetSpace::Screen); // Always face camera
         HealthBarWidget->SetDrawSize(FVector2D(200.0f, 50.0f)); // Set appropriate size
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Created health bar widget component"));
+        
+        // Set scale and opacity
+        HealthBarWidget->SetRelativeScale3D(FVector(0.75f, 0.25f, 1.0f)); // Scale X to 0.75, Y to 0.25
+        
+        // Set the widget class to our custom zombie health bar
+        HealthBarWidget->SetWidgetClass(UWBP_ZombieHealthBar::StaticClass());
+        
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Created health bar widget component with UWBP_ZombieHealthBar class, X scale 0.75, Y scale 0.25"));
     }
 
     // Configure character movement
     GetCharacterMovement()->bOrientRotationToMovement = true;  // Character should face movement direction
     bUseControllerRotationYaw = false;  // Don't use controller rotation
     GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
-    GetCharacterMovement()->MaxWalkSpeed = 100.0f; // REVERTED: Back to 100.0f as requested
+    GetCharacterMovement()->MaxWalkSpeed = 0.0f; // DISABLED: Set to 0 for combat testing - zombie won't move
     GetCharacterMovement()->bUseRVOAvoidance = true; // Enable avoidance to prevent zombies getting stuck
     GetCharacterMovement()->bRequestedMoveUseAcceleration = true;
     GetCharacterMovement()->MaxAcceleration = 1024.0f; // FIXED: Reduced for more zombie-like movement
@@ -44,24 +52,39 @@ AZombieCharacter::AZombieCharacter()
     GetCharacterMovement()->bUseControllerDesiredRotation = true;
     GetCharacterMovement()->GravityScale = 1.0f;  // Make sure gravity is enabled
 
-    // FIXED: Configure collision to prevent physics impulse issues
-    GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-    GetCapsuleComponent()->SetCollisionObjectType(ECC_Pawn);
-    GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block); // Block by default
-    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap); // But overlap with other pawns
-    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
-    
+    // FIXED: Configure collision to prevent physics impulse issues AND block player movement
+    if (GetCapsuleComponent())
+    {
+        GetCapsuleComponent()->SetSimulatePhysics(false);
+        GetCapsuleComponent()->SetEnableGravity(false);
+        GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+        GetCapsuleComponent()->SetCollisionObjectType(ECC_Pawn);
+        
+        // CRITICAL: Ensure zombie blocks player movement during attacks
+        GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block);
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // Block other pawns (including player)
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Block visibility traces
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
+        
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: COMBAT BLOCKING - Zombie will block player attacks/movement"));
+    }
+
     // FIXED: Disable physics simulation to prevent flying when hit
     GetCapsuleComponent()->SetSimulatePhysics(false);
     GetCapsuleComponent()->SetEnableGravity(false); // Let character movement handle gravity
     
-    // FIXED: Configure mesh to not simulate physics
+    // FIXED: Configure mesh to not simulate physics but support collision queries
     if (GetMesh())
     {
         GetMesh()->SetSimulatePhysics(false);
         GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
         GetMesh()->SetCollisionResponseToAllChannels(ECR_Ignore);
-        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // Let capsule handle pawn collision
+        GetMesh()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Support visibility/line traces
+        
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Mesh collision configured for combat (QueryOnly)"));
     }
 
     // Set default values - adjusted for better gameplay
@@ -92,7 +115,7 @@ void AZombieCharacter::BeginPlay()
     Super::BeginPlay();
 
     // Initialize zombie stats - INCREASED for better combat testing
-    MaxHealth = 500.0f;  // Increased from 100 to 500 for testing
+    MaxHealth = 10000.0f;  // Increased to 10,000 for combat system testing
     CurrentHealth = MaxHealth;
     BaseDamage = 25.0f;
     
@@ -107,7 +130,7 @@ void AZombieCharacter::BeginPlay()
         
         // CRITICAL: Prevent any physics responses that could launch the zombie
         GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block);
-        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap); // Overlap with other pawns
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // COMBAT: Block player movement
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
@@ -172,6 +195,11 @@ void AZombieCharacter::BeginPlay()
         
         UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Enhanced movement physics - Mass: 10000kg, High friction"));
         
+        // COMBAT TESTING: Additional movement restrictions to keep zombie stationary
+        GetCharacterMovement()->DisableMovement();
+        GetCharacterMovement()->StopMovementImmediately();
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Movement disabled for combat testing"));
+        
         // FIXED: Log movement settings to verify animation sync
         UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Movement Speed Settings - MaxWalkSpeed: %.1f, MaxAcceleration: %.1f"), 
                GetCharacterMovement()->MaxWalkSpeed, GetCharacterMovement()->MaxAcceleration);
@@ -217,10 +245,29 @@ void AZombieCharacter::BeginPlay()
     UE_LOG(LogTemp, Warning, TEXT("  - HitReactMontage: %s"), HitReactMontage ? TEXT("Valid") : TEXT("NULL"));
     UE_LOG(LogTemp, Warning, TEXT("  - AttackMontage: %s"), AttackMontage ? TEXT("Valid") : TEXT("NULL"));
     UE_LOG(LogTemp, Warning, TEXT("  - DeathMontage: %s"), DeathMontage ? TEXT("Valid") : TEXT("NULL"));
+
+    // Set health bar widget opacity after initialization
+    if (HealthBarWidget)
+    {
+        // Set the widget opacity using a timer to ensure the widget is created
+        FTimerHandle OpacityTimer;
+        GetWorld()->GetTimerManager().SetTimer(OpacityTimer, [this]()
+        {
+            if (HealthBarWidget && HealthBarWidget->GetWidget())
+            {
+                HealthBarWidget->GetWidget()->SetRenderOpacity(1.0f);
+                UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Set health bar widget opacity to 1.0"));
+            }
+        }, 0.1f, false);
+    }
 }
 
 void AZombieCharacter::PerformAttack()
 {
+    // COMBAT TESTING: Temporarily disable zombie attacks
+    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: PerformAttack disabled for combat testing"));
+    return;
+    
     if (bIsAttacking || bIsDead)
     {
         return; // Don't start another attack while one is in progress or if dead
@@ -247,6 +294,10 @@ void AZombieCharacter::PerformAttack()
 
 void AZombieCharacter::OnAttackHit()
 {
+    // COMBAT TESTING: Temporarily disable zombie attack damage
+    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: OnAttackHit disabled for combat testing"));
+    return;
+    
     if (bIsDead) return; // Don't attack if dead
     
     UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: OnAttackHit called"));
@@ -269,8 +320,8 @@ void AZombieCharacter::OnAttackHit()
     QueryParams.AddIgnoredActor(this);
     
     // Draw debug visual to see the attack range
-    DrawDebugLine(GetWorld(), StartLocation, EndLocation, FColor::Red, false, 2.0f, 0, 3.0f);
-    DrawDebugSphere(GetWorld(), StartLocation, SphereRadius, 12, FColor::Yellow, false, 2.0f);
+    // DrawDebugLine(GetWorld(), StartLocation, EndLocation, FColor::Red, false, 2.0f, 0, 3.0f);
+    // DrawDebugSphere(GetWorld(), StartLocation, SphereRadius, 12, FColor::Yellow, false, 2.0f);
     
     // Look for the player in the world first as a direct approach
     AAtlantisEonsCharacter* PlayerCharacter = nullptr;
@@ -320,7 +371,7 @@ void AZombieCharacter::OnAttackHit()
                        PlayerCharacter->GetCurrentHealth());
                 
                 // Visual feedback
-                DrawDebugSphere(GetWorld(), PlayerCharacter->GetActorLocation(), 50.0f, 12, FColor::Red, false, 2.0f);
+                // DrawDebugSphere(GetWorld(), PlayerCharacter->GetActorLocation(), 50.0f, 12, FColor::Red, false, 2.0f);
                 
                 // Attempt to play hit react animation
                 PlayerCharacter->PlayHitReactMontage();
@@ -395,7 +446,7 @@ void AZombieCharacter::OnAttackHit()
                            PlayerCharacter->GetCurrentHealth());
                     
                     // Visual feedback
-                    DrawDebugSphere(GetWorld(), HitActor->GetActorLocation(), 35.0f, 12, FColor::Green, false, 2.0f);
+                    // DrawDebugSphere(GetWorld(), HitActor->GetActorLocation(), 35.0f, 12, FColor::Green, false, 2.0f);
                     
                     // Attempt to play hit react animation on the player
                     PlayerCharacter->PlayHitReactMontage();
@@ -412,6 +463,10 @@ void AZombieCharacter::OnAttackHit()
 
 void AZombieCharacter::AttackPlayer()
 {
+    // COMBAT TESTING: Temporarily disable zombie attacks
+    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: AttackPlayer disabled for combat testing"));
+    return;
+    
     if (!bIsDead && !bIsAttacking)
     {
         PerformAttack();
@@ -838,7 +893,7 @@ float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damag
             UE_LOG(LogTemp, Warning, TEXT("💥 ZombieCharacter: Spawned damage number for %.1f damage"), ActualDamage);
             
             // Visual debug
-            DrawDebugSphere(GetWorld(), DamageLocation, 15.0f, 8, FColor::Orange, false, 3.0f, 0, 2.0f);
+            // DrawDebugSphere(GetWorld(), DamageLocation, 15.0f, 8, FColor::Orange, false, 3.0f, 0, 2.0f);
         }
         else
         {
@@ -966,33 +1021,56 @@ void AZombieCharacter::UpdateHealthBar()
 {
     if (HealthBarWidget && HealthBarWidget->GetWidget())
     {
-        // Try to find and update health bar percentage
-        UUserWidget* HealthWidget = HealthBarWidget->GetWidget();
-        if (HealthWidget)
+        // Cast to our custom zombie health bar widget
+        UWBP_ZombieHealthBar* ZombieHealthBarWidget = Cast<UWBP_ZombieHealthBar>(HealthBarWidget->GetWidget());
+        if (ZombieHealthBarWidget)
         {
             // Calculate health percentage
             float HealthPercentage = MaxHealth > 0 ? CurrentHealth / MaxHealth : 0.0f;
             HealthPercentage = FMath::Clamp(HealthPercentage, 0.0f, 1.0f);
             
-            // Try to call UpdateHealth function if it exists in the widget
-            if (UFunction* UpdateHealthFunction = HealthWidget->FindFunction(FName("UpdateHealth")))
+            // Update the widget with current health values
+            ZombieHealthBarWidget->UpdateHealth(CurrentHealth, MaxHealth, HealthPercentage);
+            
+            UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Updated zombie health bar widget - %.1f/%.1f (%.1f%%)"), 
+                   CurrentHealth, MaxHealth, HealthPercentage * 100.0f);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Could not cast to UWBP_ZombieHealthBar - using fallback method"));
+            
+            // Fallback to generic widget approach
+            UUserWidget* HealthWidget = HealthBarWidget->GetWidget();
+            if (HealthWidget)
             {
-                struct
+                // Calculate health percentage
+                float HealthPercentage = MaxHealth > 0 ? CurrentHealth / MaxHealth : 0.0f;
+                HealthPercentage = FMath::Clamp(HealthPercentage, 0.0f, 1.0f);
+                
+                // Try to call UpdateHealth function if it exists in the widget
+                if (UFunction* UpdateHealthFunction = HealthWidget->FindFunction(FName("UpdateHealth")))
                 {
-                    float CurrentHealth;
-                    float MaxHealth;
-                    float Percentage;
-                } Params;
-                
-                Params.CurrentHealth = CurrentHealth;
-                Params.MaxHealth = MaxHealth;
-                Params.Percentage = HealthPercentage;
-                
-                HealthWidget->ProcessEvent(UpdateHealthFunction, &Params);
-                UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Updated health bar - %.1f/%.1f (%.1f%%)"), 
-                       CurrentHealth, MaxHealth, HealthPercentage * 100.0f);
+                    struct
+                    {
+                        float CurrentHealth;
+                        float MaxHealth;
+                        float Percentage;
+                    } Params;
+                    
+                    Params.CurrentHealth = CurrentHealth;
+                    Params.MaxHealth = MaxHealth;
+                    Params.Percentage = HealthPercentage;
+                    
+                    HealthWidget->ProcessEvent(UpdateHealthFunction, &Params);
+                    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Updated health bar via fallback - %.1f/%.1f (%.1f%%)"), 
+                           CurrentHealth, MaxHealth, HealthPercentage * 100.0f);
+                }
             }
         }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: HealthBarWidget or its widget is NULL"));
     }
 }
 

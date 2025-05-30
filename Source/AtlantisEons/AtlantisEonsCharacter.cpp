@@ -88,11 +88,11 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
         UE_LOG(LogTemp, Warning, TEXT("Character Constructor: Mesh transforms configured. Mesh asset should be set in Blueprint."));
     }
     
-    // ENHANCED: Configure collision to prevent physics impulse issues (similar to zombie)
+    // ENHANCED: Configure collision to prevent physics impulse issues and BLOCK other pawns
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     GetCapsuleComponent()->SetCollisionObjectType(ECC_Pawn);
     GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block); // Block by default
-    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap); // But overlap with other pawns
+    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // COMBAT: Block other pawns (including zombies)
     GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
     
     // ENHANCED: Disable physics simulation to prevent flying when hit
@@ -300,12 +300,17 @@ void AAtlantisEonsCharacter::BeginPlay()
         GetCapsuleComponent()->SetEnableGravity(false);
         GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
         
+        // COMBAT: Ensure player blocks other pawns (zombies) for proper collision
+        GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block);
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // Block pawns including zombies
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
+        
         // ENHANCED: Simplified physics prevention - removed aggressive mass override that could interfere with rendering
         GetCapsuleComponent()->SetLinearDamping(5.0f); // Moderate damping to resist movement
         GetCapsuleComponent()->SetAngularDamping(5.0f); // Moderate rotational damping
         GetCapsuleComponent()->SetUseCCD(false); // Disable continuous collision detection
         
-        UE_LOG(LogTemp, Warning, TEXT("Player: Enhanced capsule physics - SimulatePhysics: false, EnableGravity: false"));
+        UE_LOG(LogTemp, Warning, TEXT("Player: COMBAT COLLISION - Player will block zombies and other pawns"));
     }
     
     if (GetMesh())

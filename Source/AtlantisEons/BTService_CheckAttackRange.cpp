@@ -77,31 +77,31 @@ void UBTService_CheckAttackRange::CheckRangeAndUpdateBlackboard(UBehaviorTreeCom
     }
 
     // Debug visualization
-    if (bShowDebugSphere)
-    {
-        FColor SphereColor = bIsInRange ? FColor::Green : FColor::Red;
-        DrawDebugSphere(
-            GetWorld(),
-            Zombie->GetActorLocation(),
-            EffectiveRange,
-            12,
-            SphereColor,
-            false,
-            0.5f
-        );
+    // if (bShowDebugSphere)
+    // {
+    //     FColor SphereColor = bIsInRange ? FColor::Green : FColor::Red;
+    //     DrawDebugSphere(
+    //         GetWorld(),
+    //         Zombie->GetActorLocation(),
+    //         EffectiveRange,
+    //         12,
+    //         SphereColor,
+    //         false,
+    //         0.5f
+    //     );
 
-        // Show line to player
-        DrawDebugLine(
-            GetWorld(),
-            Zombie->GetActorLocation(),
-            Player->GetActorLocation(),
-            bIsInRange ? FColor::Green : FColor::Red,
-            false,
-            0.5f
-        );
+    //     // Show line to player
+    //     DrawDebugLine(
+    //         GetWorld(),
+    //         Zombie->GetActorLocation(),
+    //         Player->GetActorLocation(),
+    //         bIsInRange ? FColor::Green : FColor::Red,
+    //         false,
+    //         0.5f
+    //     );
 
-        // Show distance on screen
-        FString DebugMessage = FString::Printf(TEXT("Distance: %.1f / %.1f"), DistanceToPlayer, EffectiveRange);
-        GEngine->AddOnScreenDebugMessage(-1, 0.5f, bIsInRange ? FColor::Green : FColor::Red, DebugMessage);
-    }
+    //     // Show distance on screen
+    //     FString DebugMessage = FString::Printf(TEXT("Distance: %.1f / %.1f"), DistanceToPlayer, EffectiveRange);
+    //     GEngine->AddOnScreenDebugMessage(-1, 0.5f, bIsInRange ? FColor::Green : FColor::Red, DebugMessage);
+    // }
 }
