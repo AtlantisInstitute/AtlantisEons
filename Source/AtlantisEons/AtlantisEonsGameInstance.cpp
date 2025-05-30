@@ -12,11 +12,29 @@ void UAtlantisEonsGameInstance::Init()
     // Load the item data table if it hasn't been loaded
     if (!ItemDataTable)
     {
-        // You can load the data table asset here if you have a reference path
-        static ConstructorHelpers::FObjectFinder<UDataTable> ItemDataTableAsset(TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList"));
-        if (ItemDataTableAsset.Succeeded())
+        // Use StaticLoadObject instead of ConstructorHelpers for safer loading
+        ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, 
+            TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList.Table_ItemList")));
+            
+        if (ItemDataTable)
         {
-            ItemDataTable = ItemDataTableAsset.Object;
+            UE_LOG(LogTemp, Log, TEXT("GameInstance: Successfully loaded ItemDataTable"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("GameInstance: Failed to load ItemDataTable - trying alternative path"));
+            // Try alternative path without .Table_ItemList suffix
+            ItemDataTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, 
+                TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList")));
+                
+            if (ItemDataTable)
+            {
+                UE_LOG(LogTemp, Log, TEXT("GameInstance: Successfully loaded ItemDataTable with alternative path"));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("GameInstance: Failed to load ItemDataTable with both paths"));
+            }
         }
     }
 }

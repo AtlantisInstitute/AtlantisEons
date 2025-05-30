@@ -27,11 +27,47 @@ ABP_Item::ABP_Item()
     ItemIndex = 0;
     StackNumber = 0;
 
-    // Load the item data table
-    static ConstructorHelpers::FObjectFinder<UDataTable> ItemDataTableObj(TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList"));
-    if (ItemDataTableObj.Succeeded())
+    // Don't load data table in constructor - this can cause initialization order issues
+    ItemDataTable = nullptr;
+}
+
+void ABP_Item::PostInitProperties()
+{
+    Super::PostInitProperties();
+    
+    // Load the item data table after object initialization is complete
+    if (!ItemDataTable)
     {
-        ItemDataTable = ItemDataTableObj.Object;
+        LoadItemDataTable();
+    }
+}
+
+void ABP_Item::LoadItemDataTable()
+{
+    // Try to load the data table synchronously
+    UDataTable* LoadedTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, 
+        TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList.Table_ItemList")));
+        
+    if (LoadedTable)
+    {
+        ItemDataTable = LoadedTable;
+        UE_LOG(LogTemp, Log, TEXT("BP_Item: Successfully loaded item data table"));
+    }
+    else
+    {
+        // Try alternative path
+        LoadedTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, 
+            TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList")));
+        
+        if (LoadedTable)
+        {
+            ItemDataTable = LoadedTable;
+            UE_LOG(LogTemp, Log, TEXT("BP_Item: Successfully loaded item data table with alternative path"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("BP_Item: Failed to load ItemDataTable"));
+        }
     }
 }
 

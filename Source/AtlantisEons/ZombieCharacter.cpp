@@ -17,15 +17,26 @@ AZombieCharacter::AZombieCharacter()
     // Set default team ID
     TeamId = FGenericTeamId(2);
 
+    // Create health bar widget component
+    HealthBarWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("HealthBarWidget"));
+    if (HealthBarWidget)
+    {
+        HealthBarWidget->SetupAttachment(RootComponent);
+        HealthBarWidget->SetRelativeLocation(FVector(0.0f, 0.0f, 120.0f)); // Position above zombie head
+        HealthBarWidget->SetWidgetSpace(EWidgetSpace::Screen); // Always face camera
+        HealthBarWidget->SetDrawSize(FVector2D(200.0f, 50.0f)); // Set appropriate size
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Created health bar widget component"));
+    }
+
     // Configure character movement
     GetCharacterMovement()->bOrientRotationToMovement = true;  // Character should face movement direction
     bUseControllerRotationYaw = false;  // Don't use controller rotation
     GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
-    GetCharacterMovement()->MaxWalkSpeed = 400.0f; // Reduced slightly to make zombie easier to escape
+    GetCharacterMovement()->MaxWalkSpeed = 100.0f; // REVERTED: Back to 100.0f as requested
     GetCharacterMovement()->bUseRVOAvoidance = true; // Enable avoidance to prevent zombies getting stuck
     GetCharacterMovement()->bRequestedMoveUseAcceleration = true;
-    GetCharacterMovement()->MaxAcceleration = 2048.0f;
-    GetCharacterMovement()->BrakingDecelerationWalking = 2048.0f;
+    GetCharacterMovement()->MaxAcceleration = 1024.0f; // FIXED: Reduced for more zombie-like movement
+    GetCharacterMovement()->BrakingDecelerationWalking = 1024.0f; // FIXED: Reduced for smoother stopping
     GetCharacterMovement()->NavAgentProps.bCanCrouch = false;
     GetCharacterMovement()->NavAgentProps.bCanJump = false;
     GetCharacterMovement()->bConstrainToPlane = true;
@@ -87,20 +98,41 @@ void AZombieCharacter::BeginPlay()
     
     UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter initialized with %f health"), CurrentHealth);
 
-    // FIXED: Ensure physics settings are properly configured at runtime
+    // CRITICAL: Completely prevent physics launching - Enhanced setup
     if (GetCapsuleComponent())
     {
         GetCapsuleComponent()->SetSimulatePhysics(false);
         GetCapsuleComponent()->SetEnableGravity(false);
         GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
         
-        // ENHANCED: More robust physics prevention
-        GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 1000.0f, true); // Make very heavy
-        GetCapsuleComponent()->SetLinearDamping(10.0f); // High damping to resist movement
-        GetCapsuleComponent()->SetAngularDamping(10.0f); // High rotational damping
-        GetCapsuleComponent()->SetUseCCD(false); // Disable continuous collision detection
+        // CRITICAL: Prevent any physics responses that could launch the zombie
+        GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block);
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap); // Overlap with other pawns
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
         
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Enhanced capsule physics - SimulatePhysics: false, EnableGravity: false, Mass: 1000kg"));
+        // ENHANCED: Lock down all physics properties completely
+        GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 10000.0f, true); // Extremely heavy
+        GetCapsuleComponent()->SetLinearDamping(50.0f); // Maximum damping
+        GetCapsuleComponent()->SetAngularDamping(50.0f); // Maximum rotational damping
+        GetCapsuleComponent()->SetUseCCD(false); // No continuous collision
+        GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // No collision events
+        
+        // CRITICAL: Disable any physics body responses
+        if (GetCapsuleComponent()->GetBodyInstance())
+        {
+            GetCapsuleComponent()->GetBodyInstance()->SetResponseToAllChannels(ECR_Block);
+            GetCapsuleComponent()->GetBodyInstance()->SetResponseToChannel(ECC_Pawn, ECR_Overlap);
+            GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow movement but controlled
+            GetCapsuleComponent()->GetBodyInstance()->bLockYTranslation = false;
+            GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock Z to prevent flying
+            GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true; // Lock rotations
+            GetCapsuleComponent()->GetBodyInstance()->bLockYRotation = true;
+            GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = false; // Allow yaw rotation only
+        }
+        
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Enhanced capsule physics - SimulatePhysics: false, EnableGravity: false, Mass: 10000kg"));
     }
     
     if (GetMesh())
@@ -108,28 +140,41 @@ void AZombieCharacter::BeginPlay()
         GetMesh()->SetSimulatePhysics(false);
         GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
         
-        // ENHANCED: Ensure mesh has no physics interactions
+        // ENHANCED: Ensure mesh has no physics interactions whatsoever
         GetMesh()->SetMassOverrideInKg(NAME_None, 0.0f, false); // Zero mass
         GetMesh()->SetEnableGravity(false);
         GetMesh()->SetUseCCD(false);
+        GetMesh()->SetCollisionResponseToAllChannels(ECR_Ignore);
+        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+        GetMesh()->SetNotifyRigidBodyCollision(false); // No collision events
         
         UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Enhanced mesh physics - SimulatePhysics: false, Mass: 0kg"));
     }
     
-    // ENHANCED: Configure character movement to resist external forces
+    // ENHANCED: Configure character movement to resist external forces completely
     if (GetCharacterMovement())
     {
         GetCharacterMovement()->bIgnoreBaseRotation = true;
         GetCharacterMovement()->bIgnoreClientMovementErrorChecksAndCorrection = true;
-        GetCharacterMovement()->Mass = 1000.0f; // Very heavy to resist physics impulses
-        GetCharacterMovement()->GroundFriction = 20.0f; // High friction to resist sliding
+        GetCharacterMovement()->Mass = 10000.0f; // Extremely heavy to resist any physics impulses
+        GetCharacterMovement()->GroundFriction = 50.0f; // Maximum friction
         GetCharacterMovement()->MaxAcceleration = 2048.0f;
         GetCharacterMovement()->BrakingDecelerationWalking = 4096.0f; // High braking
         GetCharacterMovement()->bApplyGravityWhileJumping = false;
         GetCharacterMovement()->bNotifyApex = false;
         GetCharacterMovement()->bCanWalkOffLedges = false; // Prevent falling off edges
+        GetCharacterMovement()->bIgnoreBaseRotation = true;
         
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Enhanced movement physics - Mass: 1000kg, High friction"));
+        // CRITICAL: Prevent any external velocity changes
+        GetCharacterMovement()->bRequestedMoveUseAcceleration = true;
+        GetCharacterMovement()->bForceMaxAccel = false;
+        GetCharacterMovement()->bRunPhysicsWithNoController = false;
+        
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Enhanced movement physics - Mass: 10000kg, High friction"));
+        
+        // FIXED: Log movement settings to verify animation sync
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Movement Speed Settings - MaxWalkSpeed: %.1f, MaxAcceleration: %.1f"), 
+               GetCharacterMovement()->MaxWalkSpeed, GetCharacterMovement()->MaxAcceleration);
     }
 
     // Debug log the team ID
@@ -375,43 +420,214 @@ void AZombieCharacter::AttackPlayer()
 
 void AZombieCharacter::PlayHitReactMontage()
 {
-    // FIXED: Enhanced hit reaction animation system
-    if (!HitReactMontage)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🎭 ZombieCharacter: No HitReactMontage assigned!"));
-        return;
-    }
+    UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE HIT REACTION CALLED! Starting comprehensive hit reaction system..."));
     
+    // Enhanced hit reaction animation system with comprehensive error handling
     if (!GetMesh())
     {
-        UE_LOG(LogTemp, Error, TEXT("🎭 ZombieCharacter: No mesh component found!"));
+        UE_LOG(LogTemp, Error, TEXT("🎭 ZombieCharacter: No mesh component found for hit reaction!"));
         return;
     }
     
     UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
     if (!AnimInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("🎭 ZombieCharacter: No AnimInstance found!"));
+        UE_LOG(LogTemp, Error, TEXT("🎭 ZombieCharacter: No AnimInstance found for hit reaction!"));
         return;
     }
     
-    // Stop any currently playing montage first
-    if (AnimInstance->IsAnyMontagePlaying())
+    // FORCE PLAY the hit reaction montage with maximum priority and correct slot
+    UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: About to force play montage - HitReactMontage: %s"), 
+           HitReactMontage ? *HitReactMontage->GetName() : TEXT("NULL"));
+    
+    // DEBUG: Check animation blueprint state
+    if (AnimInstance)
     {
-        AnimInstance->StopAllMontages(0.1f);
-        UE_LOG(LogTemp, Warning, TEXT("🎭 ZombieCharacter: Stopped existing montages"));
+        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE ANIM DEBUG: AnimInstance class: %s"), *AnimInstance->GetClass()->GetName());
+        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE ANIM DEBUG: Is any montage playing: %s"), AnimInstance->IsAnyMontagePlaying() ? TEXT("YES") : TEXT("NO"));
+        
+        if (AnimInstance->IsAnyMontagePlaying())
+        {
+            UAnimMontage* CurrentMontage = AnimInstance->GetCurrentActiveMontage();
+            UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE ANIM DEBUG: Current active montage: %s"), 
+                   CurrentMontage ? *CurrentMontage->GetName() : TEXT("NULL"));
+        }
     }
     
-    // Play the hit reaction montage
-    float MontageLength = AnimInstance->Montage_Play(HitReactMontage, 1.0f);
+    // CRITICAL FIX: Play montage with UpperBody slot to avoid locomotion interference
+    float MontageLength = AnimInstance->Montage_Play(HitReactMontage, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f, true);
+    
+    // If that doesn't work, try with the default slot but force stop all other montages first
+    if (MontageLength <= 0.0f)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: First play attempt failed, trying with force stop"));
+        AnimInstance->StopAllMontages(0.1f); // Stop all montages with short blend out
+        
+        // Wait a frame and try again
+        FTimerHandle RetryTimer;
+        GetWorld()->GetTimerManager().SetTimer(
+            RetryTimer,
+            [this]()
+            {
+                if (IsValid(this) && GetMesh() && GetMesh()->GetAnimInstance() && HitReactMontage)
+                {
+                    UAnimInstance* AI = GetMesh()->GetAnimInstance();
+                    float RetryLength = AI->Montage_Play(HitReactMontage, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f, true);
+                    UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: RETRY montage play returned: %.2f"), RetryLength);
+                    
+                    if (RetryLength > 0.0f)
+                    {
+                        // Set blend in/out to prevent state machine interference
+                        FOnMontageBlendingOutStarted BlendOutDelegate = FOnMontageBlendingOutStarted::CreateUObject(this, &AZombieCharacter::OnHitReactMontageBlendOut);
+                        AI->Montage_SetBlendingOutDelegate(BlendOutDelegate);
+                        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: ✅ RETRY SUCCESS - Hit reaction montage now playing!"));
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: ❌ RETRY FAILED - Animation Blueprint may be blocking montages"));
+                    }
+                }
+            },
+            0.1f,
+            false
+        );
+        return;
+    }
+    
+    // IMMEDIATE DEBUG: Check if montage actually started
+    UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: Montage_Play returned length: %.2f"), MontageLength);
     
     if (MontageLength > 0.0f)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🎭 ZombieCharacter: Successfully started hit reaction montage (length: %.2fs)"), MontageLength);
+        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: ✅ FORCEFULLY started hit reaction montage (length: %.2fs)"), MontageLength);
+        
+        // Set blend out delegate to restore AI behavior
+        FOnMontageBlendingOutStarted BlendOutDelegate = FOnMontageBlendingOutStarted::CreateUObject(this, &AZombieCharacter::OnHitReactMontageBlendOut);
+        AnimInstance->Montage_SetBlendingOutDelegate(BlendOutDelegate);
+        
+        // Temporarily disable attacking during hit reaction
+        bool bWasAttacking = bIsAttacking;
+        bIsAttacking = true; // Prevent new attacks during hit reaction
+        
+        // DEBUG: Verify montage is actually playing after force start
+        FTimerHandle DebugTimer;
+        GetWorld()->GetTimerManager().SetTimer(
+            DebugTimer,
+            [this, bWasAttacking]()
+            {
+                if (IsValid(this) && GetMesh() && GetMesh()->GetAnimInstance())
+                {
+                    UAnimInstance* AI = GetMesh()->GetAnimInstance();
+                    bool bIsPlaying = AI->Montage_IsPlaying(HitReactMontage);
+                    float CurrentPos = AI->Montage_GetPosition(HitReactMontage);
+                    float PlayRate = AI->Montage_GetPlayRate(HitReactMontage);
+                    bool bIsActive = AI->Montage_IsActive(HitReactMontage);
+                    
+                    UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE DEBUG CHECK (0.2s later): IsPlaying=%s, IsActive=%s, Position=%.2f, PlayRate=%.2f"), 
+                           bIsPlaying ? TEXT("YES") : TEXT("NO"),
+                           bIsActive ? TEXT("YES") : TEXT("NO"),
+                           CurrentPos,
+                           PlayRate);
+                    
+                    if (!bIsPlaying && !bIsActive)
+                    {
+                        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: ❌ CRITICAL - Montage was stopped! Animation Blueprint overriding!"));
+                        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: FORCING FALLBACK - Manual animation control"));
+                        
+                        // ULTIMATE FALLBACK: Manually control the mesh animation
+                        if (GetMesh())
+                        {
+                            // Stop all movement
+                            GetCharacterMovement()->StopMovementImmediately();
+                            GetCharacterMovement()->DisableMovement();
+                            
+                            // Pause AI
+                            if (AAIController* AIController = Cast<AAIController>(GetController()))
+                            {
+                                AIController->GetBrainComponent()->PauseLogic(TEXT("Force Hit Reaction"));
+                            }
+                            
+                            // Re-enable after a delay
+                            FTimerHandle RestoreTimer;
+                            GetWorld()->GetTimerManager().SetTimer(
+                                RestoreTimer,
+                                [this, bWasAttacking]()
+                                {
+                                    if (IsValid(this))
+                                    {
+                                        GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+                                        bIsAttacking = bWasAttacking;
+                                        
+                                        if (AAIController* AIController = Cast<AAIController>(GetController()))
+                                        {
+                                            AIController->GetBrainComponent()->ResumeLogic(TEXT("Force Hit Reaction Complete"));
+                                        }
+                                        
+                                        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: Manual hit reaction complete - systems restored"));
+                                    }
+                                },
+                                1.0f,
+                                false
+                            );
+                        }
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: ✅ SUCCESS - Hit reaction montage is playing correctly!"));
+                    }
+                }
+            },
+            0.2f, // Check 0.2 seconds later
+            false
+        );
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("🎭 ZombieCharacter: Failed to play hit reaction montage!"));
+        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: ❌ Failed to play hit reaction montage - using simple fallback"));
+        
+        // SIMPLIFIED fallback - NO physics effects that could cause launching
+        // Just briefly pause movement and AI
+        GetCharacterMovement()->StopMovementImmediately();
+        GetCharacterMovement()->DisableMovement();
+        
+        // Pause the AI behavior tree briefly
+        if (AAIController* AIController = Cast<AAIController>(GetController()))
+        {
+            AIController->GetBrainComponent()->PauseLogic(TEXT("Hit Reaction Fallback"));
+            if (UBlackboardComponent* BlackboardComp = AIController->GetBlackboardComponent())
+            {
+                BlackboardComp->SetValueAsBool(FName("IsHitReacting"), true);
+            }
+        }
+        
+        // REMOVED: All knockback and mesh shake effects that could cause flying
+        // Just a simple pause and restore
+        
+        // Restore movement and AI after brief pause
+        FTimerHandle MovementRestoreTimer;
+        GetWorld()->GetTimerManager().SetTimer(
+            MovementRestoreTimer,
+            [this]()
+            {
+                if (IsValid(this))
+                {
+                    GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+                    UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: Simple fallback hit reaction complete"));
+                    
+                    // Re-enable AI
+                    if (AAIController* AIController = Cast<AAIController>(GetController()))
+                    {
+                        AIController->GetBrainComponent()->ResumeLogic(TEXT("Hit Reaction Fallback Complete"));
+                        if (UBlackboardComponent* BlackboardComp = AIController->GetBlackboardComponent())
+                        {
+                            BlackboardComp->SetValueAsBool(FName("IsHitReacting"), false);
+                        }
+                    }
+                }
+            },
+            0.5f, // Much shorter pause
+            false
+        );
     }
 }
 
@@ -524,11 +740,23 @@ float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damag
     {
         // Store current location to reset if needed
         FVector CurrentLocation = GetActorLocation();
+        FRotator CurrentRotation = GetActorRotation();
         
         // Ensure physics are completely disabled
         GetCapsuleComponent()->SetSimulatePhysics(false);
         GetCapsuleComponent()->SetEnableGravity(false);
         GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+        
+        // CRITICAL: Lock all movement axes to prevent any displacement
+        if (GetCapsuleComponent()->GetBodyInstance())
+        {
+            GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = true;
+            GetCapsuleComponent()->GetBodyInstance()->bLockYTranslation = true;
+            GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock ALL translation
+            GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true;
+            GetCapsuleComponent()->GetBodyInstance()->bLockYRotation = true;
+            GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = true; // Lock ALL rotation during damage
+        }
         
         // FORCE: Reset velocity and stop any movement
         if (GetCharacterMovement())
@@ -536,10 +764,13 @@ float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damag
             GetCharacterMovement()->StopMovementImmediately();
             GetCharacterMovement()->Velocity = FVector::ZeroVector;
             GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+            
+            // CRITICAL: Clear any pending impulses or forces
+            GetCharacterMovement()->ClearAccumulatedForces();
         }
         
-        // SAFETY: Reset location if it changed unexpectedly
-        SetActorLocation(CurrentLocation, false, nullptr, ETeleportType::ResetPhysics);
+        // SAFETY: Force reset to exact location if anything changed
+        SetActorLocationAndRotation(CurrentLocation, CurrentRotation, false, nullptr, ETeleportType::ResetPhysics);
         
         UE_LOG(LogTemp, Warning, TEXT("🔒 ZombieCharacter: Physics completely locked down at location: %s"), 
                *CurrentLocation.ToString());
@@ -558,7 +789,7 @@ float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damag
     UE_LOG(LogTemp, Warning, TEXT("✅ ZombieCharacter: Processing damage: %f"), ActualDamage);
     
     // Get hit location for damage numbers
-    FVector DamageLocation = GetActorLocation() + FVector(0, 0, 120); // Above zombie's head
+    FVector DamageLocation = GetActorLocation() + FVector(0, 0, 40); // FIXED: Match player offset for consistency
     
     if (DamageEvent.GetTypeID() == FPointDamageEvent::ClassID)
     {
@@ -566,13 +797,30 @@ float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damag
         if (!PointDamageEvent->HitInfo.ImpactPoint.IsZero())
         {
             DamageLocation = PointDamageEvent->HitInfo.ImpactPoint;
-            DamageLocation.Z = FMath::Max(DamageLocation.Z, GetActorLocation().Z + 80.0f);
+            DamageLocation.Z = FMath::Max(DamageLocation.Z, GetActorLocation().Z + 40.0f); // FIXED: Consistent offset
         }
     }
     
-    // ALWAYS spawn damage numbers for any damage > 0
+    // Play hit reaction animation - ALWAYS attempt this for any damage > 0
     if (ActualDamage > 0.0f)
     {
+        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE DAMAGE: Attempting hit reaction for %.1f damage"), ActualDamage);
+        
+        // Check components
+        bool bHasMesh = GetMesh() != nullptr;
+        bool bHasAnimInstance = bHasMesh ? (GetMesh()->GetAnimInstance() != nullptr) : false;
+        bool bHasMontage = HitReactMontage != nullptr;
+        
+        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE COMPONENTS: Mesh=%s, AnimInstance=%s, HitReactMontage=%s"), 
+               bHasMesh ? TEXT("✅") : TEXT("❌"),
+               bHasAnimInstance ? TEXT("✅") : TEXT("❌"),
+               bHasMontage ? TEXT("✅") : TEXT("❌"));
+        
+        // ALWAYS call PlayHitReactMontage - it has its own fallback systems
+        PlayHitReactMontage();
+        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: Hit reaction function called!"));
+        
+        // ALSO spawn damage numbers
         ADamageNumberSystem* DamageSystem = ADamageNumberSystem::GetInstance(GetWorld());
         if (!DamageSystem)
         {
@@ -597,6 +845,10 @@ float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damag
             UE_LOG(LogTemp, Error, TEXT("❌ ZombieCharacter: Could not find DamageNumberSystem!"));
         }
     }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🎭🧟 ZOMBIE: No hit reaction - damage was %.1f"), ActualDamage);
+    }
     
     // Apply damage to health - SIMPLIFIED
     float PreviousHealth = CurrentHealth;
@@ -605,11 +857,91 @@ float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damag
     UE_LOG(LogTemp, Warning, TEXT("💔 ZombieCharacter: Health reduced from %.1f to %.1f (damage: %.1f)"), 
            PreviousHealth, CurrentHealth, ActualDamage);
     
-    // Play hit reaction animation
-    if (HitReactMontage && GetMesh() && GetMesh()->GetAnimInstance())
+    // Update health bar display
+    UpdateHealthBar();
+    
+    // VISUAL FEEDBACK: Highlight mesh yellow briefly when taking damage
+    if (GetMesh() && ActualDamage > 0.0f)
     {
-        PlayHitReactMontage();
-        UE_LOG(LogTemp, Warning, TEXT("🎭 ZombieCharacter: Playing hit reaction montage"));
+        // Simple and reliable visibility flash - this WILL work regardless of material
+        UE_LOG(LogTemp, Warning, TEXT("💛 ZombieCharacter: Starting visibility flash damage feedback"));
+        
+        // Quick flash sequence: hide -> show -> hide -> show
+        GetMesh()->SetVisibility(false);
+        
+        // First flash restore
+        FTimerHandle Flash1Timer;
+        GetWorld()->GetTimerManager().SetTimer(Flash1Timer, [this]()
+        {
+            if (GetMesh())
+            {
+                GetMesh()->SetVisibility(true);
+                UE_LOG(LogTemp, Warning, TEXT("💛 Flash 1: Visible"));
+            }
+        }, 0.1f, false);
+        
+        // Second flash hide
+        FTimerHandle Flash2Timer;
+        GetWorld()->GetTimerManager().SetTimer(Flash2Timer, [this]()
+        {
+            if (GetMesh())
+            {
+                GetMesh()->SetVisibility(false);
+                UE_LOG(LogTemp, Warning, TEXT("💛 Flash 2: Hidden"));
+            }
+        }, 0.2f, false);
+        
+        // Third flash restore
+        FTimerHandle Flash3Timer;
+        GetWorld()->GetTimerManager().SetTimer(Flash3Timer, [this]()
+        {
+            if (GetMesh())
+            {
+                GetMesh()->SetVisibility(true);
+                UE_LOG(LogTemp, Warning, TEXT("💛 Flash 3: Visible"));
+            }
+        }, 0.3f, false);
+        
+        // Final hide
+        FTimerHandle Flash4Timer;
+        GetWorld()->GetTimerManager().SetTimer(Flash4Timer, [this]()
+        {
+            if (GetMesh())
+            {
+                GetMesh()->SetVisibility(false);
+                UE_LOG(LogTemp, Warning, TEXT("💛 Flash 4: Hidden"));
+            }
+        }, 0.4f, false);
+        
+        // Restore permanently
+        FTimerHandle RestoreTimer;
+        GetWorld()->GetTimerManager().SetTimer(RestoreTimer, [this]()
+        {
+            if (GetMesh())
+            {
+                GetMesh()->SetVisibility(true);
+                UE_LOG(LogTemp, Warning, TEXT("🔄 ZombieCharacter: Damage flash complete - restored visibility"));
+            }
+        }, 0.5f, false);
+    }
+    
+    // FINAL SAFETY: Ensure the zombie is still in the right place after processing damage
+    if (GetCharacterMovement())
+    {
+        GetCharacterMovement()->Velocity = FVector::ZeroVector;
+    }
+    
+    // CRITICAL: Unlock movement axes after damage processing for normal movement
+    if (GetCapsuleComponent() && GetCapsuleComponent()->GetBodyInstance())
+    {
+        GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow normal movement
+        GetCapsuleComponent()->GetBodyInstance()->bLockYTranslation = false;
+        GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true;  // Keep Z locked to prevent flying
+        GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true;     // Keep pitch/roll locked
+        GetCapsuleComponent()->GetBodyInstance()->bLockYRotation = true;
+        GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = false;    // Allow yaw rotation
+        
+        UE_LOG(LogTemp, Warning, TEXT("🔓 ZombieCharacter: Movement unlocked for normal gameplay"));
     }
     
     // Check if zombie has died
@@ -617,12 +949,6 @@ float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damag
     {
         UE_LOG(LogTemp, Warning, TEXT("💀 ZombieCharacter: Health reached zero, calling HandleDeath"));
         HandleDeath();
-    }
-    
-    // FINAL SAFETY: Ensure the zombie is still in the right place after processing damage
-    if (GetCharacterMovement())
-    {
-        GetCharacterMovement()->Velocity = FVector::ZeroVector;
     }
     
     return ActualDamage;
@@ -636,6 +962,40 @@ void AZombieCharacter::ShowDamageNumber(float DamageAmount, FVector Location, bo
     }
 }
 
+void AZombieCharacter::UpdateHealthBar()
+{
+    if (HealthBarWidget && HealthBarWidget->GetWidget())
+    {
+        // Try to find and update health bar percentage
+        UUserWidget* HealthWidget = HealthBarWidget->GetWidget();
+        if (HealthWidget)
+        {
+            // Calculate health percentage
+            float HealthPercentage = MaxHealth > 0 ? CurrentHealth / MaxHealth : 0.0f;
+            HealthPercentage = FMath::Clamp(HealthPercentage, 0.0f, 1.0f);
+            
+            // Try to call UpdateHealth function if it exists in the widget
+            if (UFunction* UpdateHealthFunction = HealthWidget->FindFunction(FName("UpdateHealth")))
+            {
+                struct
+                {
+                    float CurrentHealth;
+                    float MaxHealth;
+                    float Percentage;
+                } Params;
+                
+                Params.CurrentHealth = CurrentHealth;
+                Params.MaxHealth = MaxHealth;
+                Params.Percentage = HealthPercentage;
+                
+                HealthWidget->ProcessEvent(UpdateHealthFunction, &Params);
+                UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Updated health bar - %.1f/%.1f (%.1f%%)"), 
+                       CurrentHealth, MaxHealth, HealthPercentage * 100.0f);
+            }
+        }
+    }
+}
+
 void AZombieCharacter::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
@@ -644,4 +1004,28 @@ void AZombieCharacter::Tick(float DeltaTime)
 void AZombieCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+}
+
+void AZombieCharacter::OnHitReactMontageBlendOut(UAnimMontage* Montage, bool bInterrupted)
+{
+    UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: Hit reaction montage finished blending out. Interrupted: %s"), 
+           bInterrupted ? TEXT("YES") : TEXT("NO"));
+    
+    // Restore AI behavior and movement
+    if (AAIController* AIController = Cast<AAIController>(GetController()))
+    {
+        AIController->GetBrainComponent()->ResumeLogic(TEXT("Hit Reaction Complete"));
+        if (UBlackboardComponent* BlackboardComp = AIController->GetBlackboardComponent())
+        {
+            BlackboardComp->SetValueAsBool(FName("IsHitReacting"), false);
+        }
+    }
+    
+    // Restore movement if it was disabled
+    if (GetCharacterMovement()->MovementMode == MOVE_None)
+    {
+        GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+    }
+    
+    UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: All systems restored after hit reaction montage"));
 }

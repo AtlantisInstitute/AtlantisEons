@@ -5,8 +5,11 @@
 #include "Perception/AIPerceptionTypes.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardData.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "AIController.h"
 #include "GenericTeamAgentInterface.h"
 #include "DamageNumberSystem.h"
+#include "Components/WidgetComponent.h"
 #include "ZombieCharacter.generated.h"
 
 // Forward declarations
@@ -68,6 +71,10 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "AI")
     class UBlackboardData* BlackboardData;
 
+    // Health bar widget component
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI", meta = (AllowPrivateAccess = "true"))
+    class UWidgetComponent* HealthBarWidget;
+
 protected:
     virtual void BeginPlay() override;
 
@@ -123,8 +130,16 @@ protected:
     UFUNCTION(BlueprintCallable, Category = "Zombie|Combat")
     void PlayHitReactMontage();
 
+    /** Called when hit reaction montage finishes blending out */
+    UFUNCTION()
+    void OnHitReactMontageBlendOut(UAnimMontage* Montage, bool bInterrupted);
+
     UFUNCTION(BlueprintCallable, Category = "Damage")
     void ShowDamageNumber(float DamageAmount, FVector Location, bool bIsCritical = false);
+
+    /** Update the health bar widget display */
+    UFUNCTION(BlueprintCallable, Category = "Zombie|Health")
+    void UpdateHealthBar();
 
 private:
     FGenericTeamId TeamId;

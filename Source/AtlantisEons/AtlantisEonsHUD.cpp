@@ -1,4 +1,5 @@
 #include "AtlantisEonsHUD.h"
+#include "AtlantisEonsCharacter.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/GameModeBase.h"

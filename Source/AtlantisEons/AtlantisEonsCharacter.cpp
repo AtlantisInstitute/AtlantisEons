@@ -76,6 +76,39 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
 
     // Set size for collision capsule
     GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
+    
+    // Set up the skeletal mesh component transforms (mesh asset should be set in Blueprint)
+    if (GetMesh())
+    {
+        // Set the mesh location and rotation - this is appropriate to do in C++
+        GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
+        GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+        
+        // Note: Skeletal Mesh Asset should be assigned in BP_Character Blueprint
+        UE_LOG(LogTemp, Warning, TEXT("Character Constructor: Mesh transforms configured. Mesh asset should be set in Blueprint."));
+    }
+    
+    // ENHANCED: Configure collision to prevent physics impulse issues (similar to zombie)
+    GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+    GetCapsuleComponent()->SetCollisionObjectType(ECC_Pawn);
+    GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block); // Block by default
+    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap); // But overlap with other pawns
+    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
+    
+    // ENHANCED: Disable physics simulation to prevent flying when hit
+    GetCapsuleComponent()->SetSimulatePhysics(false);
+    GetCapsuleComponent()->SetEnableGravity(false); // Let character movement handle gravity
+    
+    // ENHANCED: Configure mesh to not simulate physics
+    if (GetMesh())
+    {
+        GetMesh()->SetSimulatePhysics(false);
+        GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        GetMesh()->SetCollisionResponseToAllChannels(ECR_Ignore);
+        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+        
+        // NOTE: Keep mesh settings minimal to avoid rendering interference
+    }
 
     // Create a camera boom (pulls in towards the player if there is a collision)
     CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
@@ -114,7 +147,7 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     bUseControllerRotationYaw = false;
     bUseControllerRotationRoll = false;
 
-    // Configure character movement
+    // ENHANCED: Configure character movement to resist external forces
     UCharacterMovementComponent* CharMov = GetCharacterMovement();
     if (CharMov)
     {
@@ -125,6 +158,17 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
         CharMov->MaxWalkSpeed = 500.f;
         CharMov->MinAnalogWalkSpeed = 20.f;
         CharMov->BrakingDecelerationWalking = 2000.f;
+        
+        // ENHANCED: Add physics resistance settings
+        CharMov->bIgnoreBaseRotation = true;
+        CharMov->Mass = 100.0f; // Reasonable mass to resist physics impulses
+        CharMov->GroundFriction = 8.0f; // Good friction to resist sliding
+        CharMov->MaxAcceleration = 2048.0f;
+        CharMov->BrakingDecelerationWalking = 2048.0f;
+        CharMov->bApplyGravityWhileJumping = true; // Keep normal jumping
+        CharMov->bCanWalkOffLedges = true; // Allow normal movement
+        
+        UE_LOG(LogTemp, Warning, TEXT("Player: Enhanced movement physics - Mass: 100kg, Good friction"));
     }
 
     // Initialize character stats
@@ -248,6 +292,47 @@ void AAtlantisEonsCharacter::BeginPlay()
 
     // Initialize team ID for AI perception
     TeamId = FGenericTeamId(1); // Player team
+    
+    // ENHANCED: Ensure physics settings are properly configured at runtime to prevent flying
+    if (GetCapsuleComponent())
+    {
+        GetCapsuleComponent()->SetSimulatePhysics(false);
+        GetCapsuleComponent()->SetEnableGravity(false);
+        GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+        
+        // ENHANCED: Simplified physics prevention - removed aggressive mass override that could interfere with rendering
+        GetCapsuleComponent()->SetLinearDamping(5.0f); // Moderate damping to resist movement
+        GetCapsuleComponent()->SetAngularDamping(5.0f); // Moderate rotational damping
+        GetCapsuleComponent()->SetUseCCD(false); // Disable continuous collision detection
+        
+        UE_LOG(LogTemp, Warning, TEXT("Player: Enhanced capsule physics - SimulatePhysics: false, EnableGravity: false"));
+    }
+    
+    if (GetMesh())
+    {
+        GetMesh()->SetSimulatePhysics(false);
+        GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        
+        // Ensure mesh visibility
+        GetMesh()->SetVisibility(true);
+        GetMesh()->SetHiddenInGame(false);
+        
+        UE_LOG(LogTemp, Warning, TEXT("Player: Mesh physics configured - SimulatePhysics: false, Visible: true"));
+    }
+    
+    // ENHANCED: Configure character movement to resist external forces
+    if (GetCharacterMovement())
+    {
+        GetCharacterMovement()->bIgnoreBaseRotation = true;
+        GetCharacterMovement()->Mass = 100.0f; // Reasonable mass to resist physics impulses
+        GetCharacterMovement()->GroundFriction = 8.0f; // Good friction to resist sliding
+        GetCharacterMovement()->MaxAcceleration = 2048.0f;
+        GetCharacterMovement()->BrakingDecelerationWalking = 2048.0f;
+        GetCharacterMovement()->bApplyGravityWhileJumping = true; // Keep normal jumping
+        GetCharacterMovement()->bCanWalkOffLedges = true; // Allow normal movement
+        
+        UE_LOG(LogTemp, Warning, TEXT("Player: Enhanced movement physics - Mass: 100kg, Good friction"));
+    }
 
     // Store original materials for invulnerability effects
     StoreOriginalMaterials();
@@ -266,6 +351,8 @@ void AAtlantisEonsCharacter::BeginPlay()
            bIsInvulnerable ? TEXT("Yes") : TEXT("No"),
            bIsDead ? TEXT("Yes") : TEXT("No"),
            CurrentHealth);
+    
+    UE_LOG(LogTemp, Warning, TEXT("Player BeginPlay: Character setup complete"));
 }
 
 // BeginPlay is now BlueprintImplementableEvent
@@ -503,11 +590,6 @@ void AAtlantisEonsCharacter::ApplyDamage(float InDamageAmount)
         return;
     }
 
-    if (InDamageAmount > 0.0f && !bIsDead)
-    {
-        PlayHitReactMontage();
-    }
-
     if (CurrentHealth > 0.0f)
     {
         CurrentHealth = FMath::Max(CurrentHealth - InDamageAmount, 0.0f);
@@ -517,8 +599,29 @@ void AAtlantisEonsCharacter::ApplyDamage(float InDamageAmount)
         // IMPROVED: Spawn damage number with better positioning and error handling
         if (IsValid(this) && GetWorld() && InDamageAmount > 0.0f)
         {
-            // Get damage number location above player's head
-            FVector DamageLocation = GetActorLocation() + FVector(0, 0, 120);
+            // Get damage number location above player's head with more robust positioning
+            FVector CharacterLocation = GetActorLocation();
+            
+            // Verify location is valid (not at origin)
+            if (CharacterLocation.SizeSquared() < 1.0f)
+            {
+                // Fallback: try to get location from root component
+                if (RootComponent)
+                {
+                    CharacterLocation = RootComponent->GetComponentLocation();
+                }
+                // Second fallback: try mesh location
+                if (CharacterLocation.SizeSquared() < 1.0f && GetMesh())
+                {
+                    CharacterLocation = GetMesh()->GetComponentLocation();
+                }
+            }
+            
+            FVector DamageLocation = CharacterLocation + FVector(0, 0, 40); // FIXED: Reduced from 80 to 40 for closer positioning
+            
+            UE_LOG(LogTemp, Warning, TEXT("💥 Player: Character at %.1f,%.1f,%.1f, damage number at %.1f,%.1f,%.1f"), 
+                   CharacterLocation.X, CharacterLocation.Y, CharacterLocation.Z,
+                   DamageLocation.X, DamageLocation.Y, DamageLocation.Z);
             
             // Try to find damage number system
             ADamageNumberSystem* DamageSystem = nullptr;
@@ -568,6 +671,11 @@ void AAtlantisEonsCharacter::ApplyDamage(float InDamageAmount)
             CurrentHealth, bIsDead ? 1 : 0);
         HandleDeath();
         UE_LOG(LogTemp, Warning, TEXT("HandleDeath call completed"));
+    }
+    else if (InDamageAmount > 0.0f && !bIsDead)
+    {
+        // FIXED: Only play hit reaction if character survives the damage
+        PlayHitReactMontage();
     }
     
     UE_LOG(LogTemp, Log, TEXT("Player ApplyDamage completed: DamageAmount=%f, NewHealth=%f"), InDamageAmount, CurrentHealth);
@@ -3073,12 +3181,32 @@ void AAtlantisEonsCharacter::HandleDeath()
     // Play death animation if available
     if (DeathMontage && GetMesh())
     {
-        PlayAnimMontage(DeathMontage);
-        UE_LOG(LogTemp, Warning, TEXT("HandleDeath: Playing death animation"));
+        UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+        if (AnimInstance)
+        {
+            // Stop any current montages first
+            AnimInstance->StopAllMontages(0.1f);
+            
+            // Play the death montage
+            float MontageLength = AnimInstance->Montage_Play(DeathMontage, 1.0f);
+            if (MontageLength > 0.0f)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Successfully started death montage (length: %.2fs)"), MontageLength);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("💀 HandleDeath: Failed to play death montage! MontageLength: %.2f"), MontageLength);
+                UE_LOG(LogTemp, Error, TEXT("💀 HandleDeath: Check if DeathMontage is compatible with character skeleton"));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("💀 HandleDeath: No AnimInstance found for death animation!"));
+        }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("HandleDeath: No death montage assigned or no mesh!"));
+        UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: No death montage assigned in Blueprint or no mesh! Please assign a death montage in BP_Character."));
     }
 
     // Log death
@@ -3257,17 +3385,98 @@ void AAtlantisEonsCharacter::FaceNearestEnemy()
 
 void AAtlantisEonsCharacter::PlayHitReactMontage()
 {
-    if (HitReactMontage && GetMesh())
+    // FIXED: Don't play hit reactions if the character is dead
+    if (bIsDead)
     {
-        UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-        if (AnimInstance)
-        {
-            AnimInstance->Montage_Play(HitReactMontage);
-            UE_LOG(LogTemp, Warning, TEXT("Playing hit react montage"));
-        }
+        UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Skipping hit reaction - character is dead"));
+        return;
+    }
+    
+    // Enhanced hit reaction system with better error handling and fallbacks
+    if (!GetMesh())
+    {
+        UE_LOG(LogTemp, Error, TEXT("🎭 Player: No mesh component found for hit reaction!"));
+        return;
+    }
+    
+    UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+    if (!AnimInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🎭 Player: No AnimInstance found for hit reaction!"));
+        return;
+    }
+    
+    if (!HitReactMontage)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🎭 Player: HitReactMontage is not assigned in Blueprint!"));
+        UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Please assign a hit reaction montage in the Character Blueprint"));
+        return; // FIXED: No fallback system - just exit if no montage
+    }
+    
+    // Stop any currently playing montage first for clean transitions
+    if (AnimInstance->IsAnyMontagePlaying())
+    {
+        AnimInstance->StopAllMontages(0.1f);
+        UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Stopped existing montages for hit reaction"));
+    }
+    
+    // Disable movement and input during hit reaction
+    if (GetCharacterMovement())
+    {
+        GetCharacterMovement()->DisableMovement();
+        UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Movement disabled during hit reaction"));
+    }
+    
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        DisableInput(PC);
+        UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Input disabled during hit reaction"));
+    }
+    
+    // Play the hit reaction montage
+    float MontageLength = AnimInstance->Montage_Play(HitReactMontage, 1.0f);
+    
+    if (MontageLength > 0.0f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Successfully started hit reaction montage (length: %.2fs)"), MontageLength);
+        
+        // Re-enable movement and input after montage completes
+        FTimerHandle HitReactionTimer;
+        GetWorld()->GetTimerManager().SetTimer(
+            HitReactionTimer,
+            [this]() {
+                if (GetCharacterMovement() && !bIsDead)
+                {
+                    GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+                    UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Restored movement after hit reaction"));
+                }
+                
+                if (APlayerController* PC = Cast<APlayerController>(GetController()))
+                {
+                    EnableInput(PC);
+                    UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Restored input after hit reaction"));
+                }
+            },
+            MontageLength + 0.1f, // Slight delay to ensure montage finishes
+            false
+        );
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("HitReactMontage is null or no mesh found"));
+        // If montage fails, restore movement and input immediately
+        if (GetCharacterMovement() && !bIsDead)
+        {
+            GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+            UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Restored movement after failed montage"));
+        }
+        
+        if (APlayerController* PC = Cast<APlayerController>(GetController()))
+        {
+            EnableInput(PC);
+            UE_LOG(LogTemp, Warning, TEXT("🎭 Player: Restored input after failed montage"));
+        }
+        
+        UE_LOG(LogTemp, Error, TEXT("🎭 Player: Failed to play hit reaction montage! MontageLength: %.2f"), MontageLength);
+        UE_LOG(LogTemp, Error, TEXT("🎭 Player: Check if the montage is compatible with the character's skeleton"));
     }
 }

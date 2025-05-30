@@ -17,43 +17,56 @@ UBP_ItemInfo::UBP_ItemInfo()
     RecoveryHP = 0;
     RecoveryMP = 0;
 
-    // Load the default item data table
-    static ConstructorHelpers::FObjectFinder<UDataTable> ItemDataTableObj(TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList"));
-    if (ItemDataTableObj.Succeeded())
+    // Don't load data table in constructor - this can cause initialization order issues
+    ItemDataTable = nullptr;
+}
+
+void UBP_ItemInfo::PostInitProperties()
+{
+    Super::PostInitProperties();
+    
+    // Load the item data table after object initialization is complete
+    if (!ItemDataTable)
     {
-        ItemDataTable = ItemDataTableObj.Object;
-        if (ItemDataTable)
+        LoadItemDataTable();
+    }
+}
+
+void UBP_ItemInfo::LoadItemDataTable()
+{
+    // Try to load the data table synchronously
+    UDataTable* LoadedTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, 
+        TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList.Table_ItemList")));
+        
+    if (LoadedTable)
+    {
+        ItemDataTable = LoadedTable;
+        
+        // Verify the table structure - accept either structure name to be more resilient
+        if (ItemDataTable->GetRowStruct())
         {
-            // Verify the table structure - accept either structure name to be more resilient
-            if (ItemDataTable->GetRowStruct())
+            FString StructureName = ItemDataTable->GetRowStruct()->GetName();
+            if (ItemDataTable->GetRowStruct()->IsChildOf(Structure_ItemInfo::StaticStruct()) || 
+                StructureName.Contains(TEXT("Structure_ItemInfo")))
             {
-                FString StructureName = ItemDataTable->GetRowStruct()->GetName();
-                if (ItemDataTable->GetRowStruct()->IsChildOf(Structure_ItemInfo::StaticStruct()) || 
-                    StructureName.Contains(TEXT("Structure_ItemInfo")))
-                {
-                    UE_LOG(LogTemp, Log, TEXT("Successfully loaded item data table with structure: %s"), *StructureName);
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("Data table structure mismatch. Expected Structure_ItemInfo, got: %s"), 
-                        *StructureName);
-                    // Don't set ItemDataTable to nullptr - try to use it anyway
-                }
+                UE_LOG(LogTemp, Log, TEXT("Successfully loaded item data table with structure: %s"), *StructureName);
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("ItemDataTable has no row structure!"));
-                // Still keep the table reference
+                UE_LOG(LogTemp, Warning, TEXT("Data table structure mismatch. Expected Structure_ItemInfo, got: %s"), 
+                    *StructureName);
+                // Don't set ItemDataTable to nullptr - try to use it anyway
             }
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("ItemDataTable is null after loading"));
+            UE_LOG(LogTemp, Error, TEXT("ItemDataTable has no row structure!"));
+            // Still keep the table reference
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load item data table at path: /Game/AtlantisEons/Blueprints/InventoryandEquipment/Table_ItemList"));
+        UE_LOG(LogTemp, Error, TEXT("Failed to load ItemDataTable"));
     }
 }
 

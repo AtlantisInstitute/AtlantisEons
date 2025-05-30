@@ -42,6 +42,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Item")
     static UTexture2D* GetDefaultTexture();
 
+    // Override PostInitProperties to safely load assets after initialization
+    virtual void PostInitProperties() override;
+
+    // Load the item data table safely
+    void LoadItemDataTable();
+
 protected:
     // Components
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")

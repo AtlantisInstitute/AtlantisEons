@@ -8,7 +8,7 @@
 #include "BlueprintItemTypes.h"
 #include "BP_ItemInfo.generated.h"
 
-UCLASS(Blueprintable, BlueprintType, Abstract, CustomConstructor, meta=(DisplayName="Item Info Object", ShortTooltip="Base class for item information"))
+UCLASS(Blueprintable, BlueprintType, Abstract, meta=(DisplayName="Item Info Object", ShortTooltip="Base class for item information"))
 class ATLANTISEONS_API UBP_ItemInfo : public UObject
 {
     GENERATED_BODY()
@@ -156,6 +156,12 @@ public:
     FSlateBrush ThumbnailBrush;
 
     UBP_ItemInfo();
+
+    // Override PostInitProperties to safely load assets after initialization
+    virtual void PostInitProperties() override;
+
+    // Load the item data table safely
+    void LoadItemDataTable();
 
 public:
 

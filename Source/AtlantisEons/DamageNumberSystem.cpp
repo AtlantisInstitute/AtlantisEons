@@ -37,65 +37,30 @@ ADamageNumberSystem::ADamageNumberSystem()
     WidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("DamageNumberWidgetComponent"));
     RootComponent = WidgetComponent;
     
-    // Try to find the widget class at construction time
-    static ConstructorHelpers::FClassFinder<UUserWidget> WidgetClassFinder(TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber"));
-    if (WidgetClassFinder.Succeeded())
-    {
-        DamageNumberWidgetClass = WidgetClassFinder.Class;
-        if (DamageNumberWidgetClass && WidgetComponent)
-        {
-            WidgetComponent->SetWidgetClass(DamageNumberWidgetClass);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: DamageNumberWidgetClass or WidgetComponent is null! Widget will not be set."));
-        }
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Found widget class in constructor"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Could not find widget class in constructor"));
-    }
-    
-    // CRITICAL: Configure the widget component for proper 3D world rendering
+    // Configure the widget component for proper 3D world rendering
     if (WidgetComponent)
     {
-        WidgetComponent->SetWidgetSpace(EWidgetSpace::World);  // Use World space instead of Screen
-        WidgetComponent->SetDrawSize(FVector2D(400.0f, 200.0f)); // Much bigger for better visibility while debugging
+        // Set the widget space - Screen means it faces the camera, World means it's in 3D space
+        WidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
+        
+        // Set the draw size (how big the widget appears in the world)
+        WidgetComponent->SetDrawSize(FVector2D(200.0f, 50.0f));
+        
+        // Set the pivot point to center
+        WidgetComponent->SetPivot(FVector2D(0.5f, 0.5f));
+        
+        // Make sure it's visible
         WidgetComponent->SetVisibility(true);
-        WidgetComponent->SetTwoSided(true);
-        WidgetComponent->SetTranslucentSortPriority(1000); // Very high sort priority
-        WidgetComponent->SetRelativeRotation(FRotator(0, 180, 0)); // Face the player
-        WidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision); // No collision
-        WidgetComponent->SetWorldScale3D(FVector(2.0f, 2.0f, 2.0f)); // Double size for visibility
-        // Don't set a fixed relative location in the constructor
-        // This allows us to retain the world location set during actor spawn
-        // Just set a small Z offset to prevent clipping
-        WidgetComponent->SetRelativeLocation(FVector(0, 0, 20.0f));
-        WidgetComponent->SetWindowFocusable(false);
-        // DON'T set window visibility here - it's causing crashes
-        // WidgetComponent->SetWindowVisibility(EWindowVisibility::Visible);
-        WidgetComponent->SetCullDistance(0.0f); // Disable culling
+        
+        // Set collision to none since this is just a UI element
+        WidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     }
     
-    // Enhanced visibility settings
-    if (WidgetComponent)
-    {
-        WidgetComponent->SetTwoSided(true);
-        WidgetComponent->SetWindowFocusable(false);
-        // DON'T set window visibility here either - it's causing crashes
-        // WidgetComponent->SetWindowVisibility(EWindowVisibility::Visible);
-        WidgetComponent->SetCullDistance(0.0f); // Disable culling
-    }
-    
-    // Set default values
-    DamageAmount = 0.0f;
-    DamageNumberOffset = FVector(0.0f, 0.0f, 100.0f); // Higher offset to be more visible
-    RandomOffsetRange = 20.0f;  // Small random offset for multiple numbers
-    DamageNumberLifetime = 2.0f;
-    
-    PlayerDamageColor = FLinearColor(1.0f, 0.0f, 0.0f);  // Red for damage the player receives
+    // Set default colors
+    PlayerDamageColor = FLinearColor(1.0f, 0.0f, 0.0f);  // Red for damage taken by player
     EnemyDamageColor = FLinearColor(1.0f, 1.0f, 1.0f);  // White for damage dealt to enemies
+    
+    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Constructor completed"));
 }
 
 // Called when the game starts or when spawned
@@ -103,46 +68,55 @@ void ADamageNumberSystem::BeginPlay()
 {
     Super::BeginPlay();
     
-    // Make sure the widget component is set up
-    if (WidgetComponent && DamageNumberWidgetClass)
+    // Try to load the widget class now that initialization is complete
+    if (!DamageNumberWidgetClass)
     {
-        // Set the widget class
-        WidgetComponent->SetWidgetClass(DamageNumberWidgetClass);
+        // FIXED: Use StaticLoadClass for more reliable loading
+        DamageNumberWidgetClass = StaticLoadClass(UUserWidget::StaticClass(), nullptr, 
+            TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C"));
         
-        // Set the draw size
-        WidgetComponent->SetDrawSize(FVector2D(500.0f, 200.0f));
-        
-        // Make sure it's visible
-        WidgetComponent->SetVisibility(true);
-        
-        // Set the widget space to screen
-        WidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
-        
-        // Make sure it's two-sided
-        WidgetComponent->SetTwoSided(true);
-        
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Widget component initialized in BeginPlay"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: DamageNumberWidgetClass or WidgetComponent is null! Widget will not be set."));
+        if (DamageNumberWidgetClass)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Successfully loaded widget class via StaticLoadClass"));
+        }
+        else
+        {
+            // Fallback: Try direct Blueprint loading
+            UBlueprint* WidgetBlueprint = LoadObject<UBlueprint>(nullptr, TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber"));
+            if (WidgetBlueprint && WidgetBlueprint->GeneratedClass)
+            {
+                DamageNumberWidgetClass = WidgetBlueprint->GeneratedClass;
+                UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Found widget class via blueprint loading"));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: FAILED to load widget class from any method!"));
+            }
+        }
     }
     
-    // IMPORTANT: Only initialize the widget if this is a dynamically spawned damage number
-    // This prevents showing "0" before the actual damage amount
+    // Set up the singleton instance properly
     if (GetLifeSpan() <= 0.0f)
     {
         // This is the main damage number system actor, not a dynamically spawned one
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: This is the main system actor, not initializing widget in BeginPlay"));
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: This is the main system actor, setting as singleton"));
         
-        // CRITICAL: Only the main system actor should set itself as the singleton
+        // Only set as singleton if no valid instance exists
         if (!Instance || !IsValid(Instance))
         {
             Instance = this;
             UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Main system actor set as singleton instance"));
         }
         
-        // Don't set a lifespan for the main system actor
+        // Make sure the widget component is configured but don't initialize a widget on the main actor
+        if (WidgetComponent && DamageNumberWidgetClass)
+        {
+            WidgetComponent->SetWidgetClass(DamageNumberWidgetClass);
+            WidgetComponent->SetDrawSize(FVector2D(500.0f, 200.0f));
+            WidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
+            WidgetComponent->SetTwoSided(true);
+            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Main actor widget component configured"));
+        }
     }
     else
     {
@@ -150,52 +124,6 @@ void ADamageNumberSystem::BeginPlay()
         UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: This is a temporary damage number actor, initializing widget"));
         InitWidget();
     }
-    
-    // Try to load the widget class if it wasn't found in the constructor
-    if (!DamageNumberWidgetClass)
-    {
-        // Try various paths to find the widget blueprint
-        TArray<FString> PossiblePaths = {
-            TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C"),
-            TEXT("/Game/UI/WBP_DamageNumber.WBP_DamageNumber_C"),
-            TEXT("/Game/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C"),
-            TEXT("/Game/Widgets/WBP_DamageNumber.WBP_DamageNumber_C"),
-            TEXT("/Game/UI/Widgets/WBP_DamageNumber.WBP_DamageNumber_C")
-        };
-        
-        for (const FString& Path : PossiblePaths)
-        {
-            UClass* FoundClass = LoadClass<UDamageNumberWidget>(nullptr, *Path);
-            if (FoundClass)
-            {
-                DamageNumberWidgetClass = FoundClass;
-                UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Found widget class at runtime: %s"), *Path);
-                break;
-            }
-        }
-    }
-    
-    if (DamageNumberWidgetClass)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Initialized"));
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Has widget class %s"), *DamageNumberWidgetClass->GetName());
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: No widget class set! Damage numbers will not appear."));
-        
-        // As a last resort, create a hardcoded reference to the widget class
-        // This is a hack, but it should work for now
-        FSoftClassPath WidgetClassPath(TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C"));
-        UClass* WidgetClass = WidgetClassPath.TryLoadClass<UDamageNumberWidget>();
-        if (WidgetClass)
-        {
-            DamageNumberWidgetClass = WidgetClass;
-            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Found widget class using FSoftClassPath"));
-        }
-    }
-    
-    UDamageNumberScreenManager::Get(GetWorld())->SetDamageNumberWidgetClass(DamageNumberWidgetClass);
 }
 
 // Called every frame
@@ -287,15 +215,15 @@ void ADamageNumberSystem::SpawnDamageNumber(AActor* DamagedActor, float DamageAm
     FVector SpawnLocation;
     if (bIsZombie)
     {
-        // For zombies, use a simpler approach with a fixed higher offset to ensure visibility
-        SpawnLocation = DamagedActor->GetActorLocation() + FVector(0.0f, 0.0f, 150.0f);
+        // For zombies, use a simpler approach with consistent offset to match other characters
+        SpawnLocation = DamagedActor->GetActorLocation() + FVector(0.0f, 0.0f, 40.0f); // FIXED: Consistent offset
         
         // Add a slight random offset for better visibility when multiple numbers appear
         float RandomX = FMath::RandRange(-20.0f, 20.0f);
         float RandomY = FMath::RandRange(-20.0f, 20.0f);
         SpawnLocation += FVector(RandomX, RandomY, 0.0f);
         
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Using special zombie location: X=%.1f, Y=%.1f, Z=%.1f"), 
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Using consistent zombie location: X=%.1f, Y=%.1f, Z=%.1f"), 
                SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
     }
     else
@@ -485,11 +413,15 @@ void ADamageNumberSystem::SpawnDamageNumberAtLocation(AActor* DamagedActor, FVec
     FVector2D ScreenLocation;
     if (UGameplayStatics::ProjectWorldToScreen(PC, Location, ScreenLocation))
     {
-        // Offset screen position slightly for better visibility
-        ScreenLocation.X -= 25.0f; // Center horizontally
-        ScreenLocation.Y -= 10.0f; // Slightly above
+        // FIXED: Don't apply fixed offsets that cause all damage numbers to appear at same location
+        // Instead, add small random offsets for better visibility when multiple numbers appear
+        float RandomOffsetX = FMath::RandRange(-15.0f, 15.0f);
+        float RandomOffsetY = FMath::RandRange(-10.0f, 10.0f);
+        ScreenLocation.X += RandomOffsetX;
+        ScreenLocation.Y += RandomOffsetY;
         
-        DamageWidget->SetPositionInViewport(ScreenLocation, false);
+        // FIXED: Use proper screen coordinates (true parameter)
+        DamageWidget->SetPositionInViewport(ScreenLocation, true);
         UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Positioned widget at screen location: %.1f, %.1f"), 
                ScreenLocation.X, ScreenLocation.Y);
     }
@@ -561,7 +493,7 @@ FVector ADamageNumberSystem::CalculateDamageNumberLocation(AActor* DamagedActor)
     }
     
     // Add a small fixed Z offset to ensure it's above the head
-    ActorLocation.Z += 30.0f;
+    ActorLocation.Z += 10.0f; // FIXED: Reduced for consistency with other offsets
     
     // Log the final location
     UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Final location for actor %s: X=%f, Y=%f, Z=%f"), 

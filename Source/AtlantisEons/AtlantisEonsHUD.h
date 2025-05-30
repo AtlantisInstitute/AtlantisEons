@@ -3,11 +3,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "Blueprint/UserWidget.h"
-#include "AtlantisEonsCharacter.h"
 #include "Engine/LocalPlayer.h"
 #include "EnhancedInputSubsystems.h"
 #include "AtlantisEonsHUD.generated.h"
 
+// Forward declarations to avoid circular dependencies
+class AAtlantisEonsCharacter;
 class UWBP_Main;
 
 UCLASS()

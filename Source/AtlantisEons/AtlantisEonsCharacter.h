@@ -231,6 +231,18 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* JumpAction;
 
+    /** Inventory Input Action */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+    class UInputAction* InventoryAction;
+
+    /** Resume/ESC Input Action */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+    class UInputAction* ResumeAction;
+
+    /** Debug Damage Input Action */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+    class UInputAction* DebugDamageAction;
+
     /** Animation montage for the melee attack action */
     // Combat state
     bool bIsInvulnerable = false;
@@ -285,19 +297,6 @@ protected:
     /** Respawn delay in seconds */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Death", meta = (AllowPrivateAccess = "true"))
     float RespawnDelay = 3.0f;
-
-    /** Debug Input Action */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-    UInputAction* DebugDamageAction;
-
-    /** Inventory Input Action */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-    UInputAction* InventoryAction;
-    
-    /** Resume/ESC Input Action - Used to close inventory and UI elements */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-    UInputAction* ResumeAction;
-    
 
     /** Whether the inventory is currently open */
     UPROPERTY(BlueprintReadOnly, Category = "UI|Inventory")
