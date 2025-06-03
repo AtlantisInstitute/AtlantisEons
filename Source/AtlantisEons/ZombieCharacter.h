@@ -141,6 +141,10 @@ protected:
     UFUNCTION(BlueprintCallable, Category = "Zombie|Health")
     void UpdateHealthBar();
 
+    /** Debug function to manually trigger damage for testing */
+    UFUNCTION(BlueprintCallable, Category = "Debug")
+    void DebugTakeDamage(float DamageAmount);
+
 private:
     FGenericTeamId TeamId;
     bool bIsAttacking;

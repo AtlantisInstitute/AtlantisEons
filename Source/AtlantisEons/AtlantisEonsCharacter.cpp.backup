@@ -143,6 +143,8 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     Shield->SetupAttachment(GetMesh(), FName(TEXT("hand_l")));
     Shield->SetVisibility(false);
 
+    // Initialize bloom window state
+    bBloomWindowActive = false;
 
     // Don't rotate when the controller rotates
     bUseControllerRotationPitch = false;
@@ -208,9 +210,6 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     AttackRange = 200.0f;
     DefaultCameraLag = 15.0f;
     DefaultCameraRotationLag = 10.0f;
-    
-    // Initialize combo system
-    CurrentAttackIndex = 0;
 }
 
 void AAtlantisEonsCharacter::PostInitProperties()
@@ -285,6 +284,26 @@ void AAtlantisEonsCharacter::BeginPlay()
 {
     Super::BeginPlay();
     
+    // Final validation of SwordBloomWidget component
+    if (!SwordBloomWidget)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BeginPlay: SwordBloomWidget component is NULL! Making final attempt to recreate..."));
+        RecreateSwordBloomWidget();
+        
+        if (!SwordBloomWidget)
+        {
+            UE_LOG(LogTemp, Error, TEXT("BeginPlay: Final attempt failed - SwordBloomWidget will not be available"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("BeginPlay: Successfully recreated SwordBloomWidget component"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BeginPlay: SwordBloomWidget component is ready for use"));
+    }
+    
     // Initialize UI components
     InitializeUI();
     SetupCircularBars();
@@ -297,9 +316,6 @@ void AAtlantisEonsCharacter::BeginPlay()
             Subsystem->AddMappingContext(DefaultMappingContext, 0);
         }
     }
-
-    // Initialize SwordBloom widget
-    CreateSwordBloomWidget();
 
     // Initialize team ID for AI perception
     TeamId = FGenericTeamId(1); // Player team
@@ -586,6 +602,24 @@ void AAtlantisEonsCharacter::PostInitializeComponents()
     Super::PostInitializeComponents();
     
     UE_LOG(LogTemp, Warning, TEXT("PostInitializeComponents: Called"));
+    
+    // Validate SwordBloomWidget component after Blueprint initialization
+    if (!SwordBloomWidget)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PostInitializeComponents: SwordBloomWidget component is NULL! Blueprint may have overridden it. Recreating..."));
+        RecreateSwordBloomWidget();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PostInitializeComponents: SwordBloomWidget component is valid"));
+        
+        // Ensure it's properly configured
+        if (SwordBloomWidget->GetWidgetClass() == nullptr)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PostInitializeComponents: Widget class not set, applying fallback"));
+            SwordBloomWidget->SetWidgetClass(UWBP_SwordBloom::StaticClass());
+        }
+    }
 }
 
 void AAtlantisEonsCharacter::RecoverHealth(int32 Amount)
@@ -1484,6 +1518,7 @@ void AAtlantisEonsCharacter::EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const
         // Update SwordBloom attachment if this is a weapon
         if (ItemEquipSlot == EItemEquipSlot::Weapon)
         {
+            UpdateSwordBloomAttachment();
         }
     }
 }
@@ -1524,6 +1559,7 @@ void AAtlantisEonsCharacter::HandleDisarmItem(EItemEquipSlot ItemEquipSlot, cons
         // Update SwordBloom attachment if this is a weapon
         if (ItemEquipSlot == EItemEquipSlot::Weapon)
         {
+            UpdateSwordBloomAttachment();
         }
     }
 }
@@ -1749,128 +1785,87 @@ void AAtlantisEonsCharacter::ResetCharacterInput()
     );
 }
 
-void AAtlantisEonsCharacter::MeleeAttack()
+void AAtlantisEonsCharacter::MeleeAttack(const FInputActionValue& Value)
 {
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttack called. Can attack: %s, Current Attack Index: %d"), 
-           bCanAttack ? TEXT("Yes") : TEXT("No"), CurrentAttackIndex);
-
-    // First check if there's an active bloom window - prioritize spark triggering for combo progression
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
-    {
-        bool bSparkTriggered = Widget->TryTriggerSpark();
-        if (bSparkTriggered)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ SPARK TRIGGERED! Perfect timing! Advancing combo from index %d to %d"), 
-                   CurrentAttackIndex, CurrentAttackIndex + 1);
-            
-            // Advance to next attack in combo (max at index 4 for MeleeAttackMontage5)
-            if (CurrentAttackIndex < 4)
-            {
-                CurrentAttackIndex++;
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Combo advanced to attack index %d"), CurrentAttackIndex);
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Already at maximum combo (MeleeAttackMontage5)! Resetting to MeleeAttackMontage1"));
-                CurrentAttackIndex = 0; // Reset to first attack after completing full combo
-            }
-            
-            // Clear any existing combo reset timer since we're continuing the combo
-            GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ CRITICAL TIMING MISSED! Spark window missed or not active. Resetting combo to MeleeAttackMontage1"));
-            CurrentAttackIndex = 0; // Reset to first attack on missed spark - ALWAYS RESET ON MISS
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ No SwordBloom widget found. Defaulting to MeleeAttackMontage1"));
-        CurrentAttackIndex = 0; // Default to first attack if no widget - ALWAYS START FROM ATTACK 1
-    }
-
-    // Check attack conditions
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttack called. Can attack: %s"), bCanAttack ? TEXT("Yes") : TEXT("No"));
+    
+    // Check if we can trigger the conditional spark effect
+    TryTriggerSparkEffect();
+    
     if (!bCanAttack)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ Cannot attack right now (on cooldown). Maintaining current combo index: %d"), CurrentAttackIndex);
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Cannot attack - on cooldown"));
         return;
     }
-
-    if (bIsAttacking)
+    
+    if (bIsDead)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ Already attacking. Maintaining current combo index: %d"), CurrentAttackIndex);
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Cannot attack - character is dead"));
         return;
     }
-
-    // Face nearest enemy before attacking
-    FaceNearestEnemy();
-
-    // Get the current attack montage based on combo index
-    UAnimMontage* CurrentMontage = GetCurrentAttackMontage();
-    if (CurrentMontage)
+    
+    // Check if we have a valid mesh and animation instance
+    if (!GetMesh())
     {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Playing attack montage: %s (Index: %d)"), 
-               *CurrentMontage->GetName(), CurrentAttackIndex);
+        UE_LOG(LogTemp, Error, TEXT("🗡️ Character mesh is null!"));
+        return;
+    }
+    
+    UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+    if (!AnimInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🗡️ Animation instance is null!"));
+        return;
+    }
+    
+    bCanAttack = false;
+    bIsAttacking = true;
+    
+    FaceNearestEnemy(); // Snap to face nearest enemy
+    
+    // Debug montage information
+    if (MeleeAttackMontage)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttackMontage asset found: %s"), *MeleeAttackMontage->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttackMontage duration: %f"), MeleeAttackMontage->GetPlayLength());
         
-        // Play the attack animation
-        float MontageDuration = GetMesh()->GetAnimInstance()->Montage_Play(CurrentMontage);
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ Montage duration: %f"), MontageDuration);
+        // Try to play the montage
+        float MontageLength = PlayAnimMontage(MeleeAttackMontage);
         
-        if (MontageDuration > 0.0f)
+        if (MontageLength > 0.0f)
         {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Successfully playing attack montage with duration: %f"), MontageDuration);
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Successfully playing attack montage with duration: %f"), MontageLength);
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Current animation state: IsPlaying=%d"), AnimInstance->IsAnyMontagePlaying());
             
-            // Set attack state
-            bCanAttack = false;
-            bIsAttacking = true; TriggerProgrammaticBloomEffect(MontageDuration);
-            
-            // Set cooldown timer
-            GetWorld()->GetTimerManager().SetTimer(AttackCooldownTimer, this, 
-                &AAtlantisEonsCharacter::ResetAttack, AttackCooldown, false);
-            
-            // Set combo reset timer (2 seconds to input next attack or combo resets to attack 1)
-            GetWorld()->GetTimerManager().SetTimer(ComboResetTimer, this, 
-                &AAtlantisEonsCharacter::ResetComboChain, 2.0f, false);
-                
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⏰ Attack cooldown and combo reset timers set (2s window for next input)"));
+            // CRITICAL FIX: Add a backup timer to call OnMeleeAttackNotify since animation notify may not be set up
+            // This ensures damage application happens even without animation notify setup
+            float NotifyTiming = MontageLength * 0.6f; // Call at 60% through the animation
+            FTimerHandle AttackNotifyTimer;
+            GetWorld()->GetTimerManager().SetTimer(
+                AttackNotifyTimer,
+                FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::OnMeleeAttackNotify),
+                NotifyTiming,
+                false
+            );
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Set backup timer to call OnMeleeAttackNotify in %.2f seconds"), NotifyTiming);
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ Failed to play attack montage. Resetting combo to MeleeAttackMontage1"));
-            CurrentAttackIndex = 0; // Reset to first attack on animation failure
+            UE_LOG(LogTemp, Error, TEXT("🗡️ Failed to play attack montage. Current anim mode: %d"), GetMesh()->GetAnimationMode());
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ No valid attack montage found for index: %d. Resetting to MeleeAttackMontage1"), CurrentAttackIndex);
-        // Fallback to first attack if current montage is invalid - ALWAYS RESET TO ATTACK 1
-        CurrentAttackIndex = 0;
-        if (MeleeAttackMontage1)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ 🔄 Falling back to MeleeAttackMontage1"));
-            float MontageDuration = GetMesh()->GetAnimInstance()->Montage_Play(MeleeAttackMontage1);
-            if (MontageDuration > 0.0f)
-            {
-                bCanAttack = false;
-                bIsAttacking = true; TriggerProgrammaticBloomEffect(MontageDuration);
-                GetWorld()->GetTimerManager().SetTimer(AttackCooldownTimer, this, 
-                    &AAtlantisEonsCharacter::ResetAttack, AttackCooldown, false);
-                GetWorld()->GetTimerManager().SetTimer(ComboResetTimer, this, 
-                    &AAtlantisEonsCharacter::ResetComboChain, 2.0f, false);
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Successfully fell back to MeleeAttackMontage1"));
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ CRITICAL ERROR: Even MeleeAttackMontage1 failed to play!"));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ CRITICAL ERROR: MeleeAttackMontage1 is null!"));
-        }
+        UE_LOG(LogTemp, Error, TEXT("🗡️ MeleeAttackMontage is null! Please assign in Blueprint."));
     }
+    
+    // Set timer for cooldown reset
+    GetWorld()->GetTimerManager().SetTimer(
+        AttackCooldownTimer,
+        FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::ResetAttack),
+        AttackCooldown,
+        false
+    );
 }
 
 void AAtlantisEonsCharacter::ResetAttack()
@@ -2936,60 +2931,83 @@ void AAtlantisEonsCharacter::UnequipInventoryItem(UBP_ItemInfo* ItemInfoRef)
 
 void AAtlantisEonsCharacter::OnMeleeAttackNotify()
 {
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ OnMeleeAttackNotify called - Player attacking"));
+    
     if (bIsDead) 
     {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Character is dead, skipping attack"));
         return;
     }
     
     // Prevent multiple calls in the same attack sequence
     if (bAttackNotifyInProgress)
     {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack notify already in progress, skipping duplicate call"));
         return;
     }
     
     bAttackNotifyInProgress = true;
     
+    // Reset the flag after a short delay to allow for the next attack
+    FTimerHandle ResetNotifyTimer;
+    GetWorld()->GetTimerManager().SetTimer(
+        ResetNotifyTimer,
+        [this]() { 
+            bAttackNotifyInProgress = false; // Reset the flag
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack notify flag reset - ready for next attack"));
+        },
+        0.5f, // Reset after 0.5 seconds
+        false
+    );
+    
     // Calculate damage based on character stats and equipped weapon
-    float BaseDamage = static_cast<float>(CurrentDamage);
+    float BaseDamage = static_cast<float>(CurrentDamage); // Use character's current damage stat
     float WeaponDamage = 0.0f;
     
     // Check if we have a weapon equipped and get its damage bonus
-    if (EquipmentSlots.Num() > 2 && EquipmentSlots[2])
+    if (EquipmentSlots.Num() > 2 && EquipmentSlots[2]) // Weapon slot is index 2
     {
         UBP_ItemInfo* WeaponItem = EquipmentSlots[2];
         if (WeaponItem)
         {
+            // Get weapon data from store system
             FStructure_ItemInfo WeaponData;
             if (UStoreSystemFix::GetItemData(WeaponItem->GetItemIndex(), WeaponData))
             {
                 WeaponDamage = static_cast<float>(WeaponData.Damage);
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Equipped weapon '%s' adds %f damage"), 
+                       *WeaponData.ItemName, WeaponDamage);
             }
         }
     }
     
     float TotalDamage = BaseDamage + WeaponDamage;
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ Total calculated damage: %f (Base: %f + Weapon: %f)"), 
+           TotalDamage, BaseDamage, WeaponDamage);
     
-    // Attack detection
+    // IMPROVED ATTACK DETECTION: Use multiple detection methods for maximum reliability
     FVector StartLocation = GetActorLocation();
     FVector ForwardVector = GetActorForwardVector();
-    float AttackRange = 300.0f;
-    float AttackRadius = 200.0f;
+    float AttackRange = 300.0f; // Reasonable attack range
+    float AttackRadius = 200.0f; // Larger radius for better detection
     
     // Track which actors we've already hit to prevent multiple hits
     TSet<AActor*> AlreadyHitActors;
     bool bSuccessfulHit = false;
     
-    // Sphere overlap detection
+    // METHOD 1: Direct sphere overlap at player location (most reliable)
     TArray<FOverlapResult> OverlapResults;
     FCollisionShape SphereShape = FCollisionShape::MakeSphere(AttackRadius);
     
     bool bHitDetected = GetWorld()->OverlapMultiByChannel(
         OverlapResults,
-        StartLocation,
+        StartLocation, // Use player location directly instead of calculated center
         FQuat::Identity,
         ECollisionChannel::ECC_Pawn,
         SphereShape
     );
+    
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ Sphere overlap found %d results"), OverlapResults.Num());
     
     if (bHitDetected)
     {
@@ -3002,37 +3020,58 @@ void AAtlantisEonsCharacter::OnMeleeAttackNotify()
             // Skip if we already hit this actor
             if (AlreadyHitActors.Contains(HitActor))
             {
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Skipping already hit actor: %s"), *HitActor->GetName());
                 continue;
             }
             
-            // Check if it's a zombie by class name
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Checking actor: %s (Class: %s)"), 
+                   *HitActor->GetName(), *HitActor->GetClass()->GetName());
+            
+            // Check if it's a zombie by class name (most reliable method)
             bool bIsZombie = HitActor->GetClass()->GetName().Contains(TEXT("ZombieCharacter"));
             
             if (bIsZombie)
             {
-                // Calculate distance and direction for validation
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ ✓ Found zombie by class name: %s"), 
+                       *HitActor->GetClass()->GetName());
+                
+                // Calculate distance and direction for additional validation
                 FVector ToTarget = HitActor->GetActorLocation() - GetActorLocation();
                 float DistanceToTarget = ToTarget.Size();
                 float DotProduct = FVector::DotProduct(ForwardVector, ToTarget.GetSafeNormal());
                 
-                // Check if target is within range and direction
-                if (DistanceToTarget <= AttackRange && DotProduct > -0.5f)
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Zombie %s - Distance: %.1f, Dot: %.2f"), 
+                       *HitActor->GetName(), DistanceToTarget, DotProduct);
+                
+                // More lenient distance and direction check for better hit detection
+                if (DistanceToTarget <= AttackRange && DotProduct > -0.5f) // Allow hits from wider angles
                 {
                     // Mark this actor as hit
                     AlreadyHitActors.Add(HitActor);
                     
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ ATTACKING zombie %s with %.1f damage!"), 
+                           *HitActor->GetName(), TotalDamage);
+                    
                     // Apply damage to the zombie
                     float ActualDamage = HitActor->TakeDamage(TotalDamage, FDamageEvent(), GetController(), this);
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ TakeDamage returned: %.1f"), ActualDamage);
                     
                     bSuccessfulHit = true;
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ Zombie %s out of range or wrong direction (Distance: %.1f, Dot: %.2f)"), 
+                           *HitActor->GetName(), DistanceToTarget, DotProduct);
                 }
             }
         }
     }
     
-    // Backup forward sweep if no hits found
+    // METHOD 2: If no hits found, try a forward sweep as backup
     if (!bSuccessfulHit)
     {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ No hits from sphere overlap, trying forward sweep backup"));
+        
         TArray<FHitResult> HitResults;
         FVector EndLocation = StartLocation + (ForwardVector * AttackRange);
         
@@ -3042,11 +3081,13 @@ void AAtlantisEonsCharacter::OnMeleeAttackNotify()
             EndLocation,
             FQuat::Identity,
             ECollisionChannel::ECC_Pawn,
-            FCollisionShape::MakeSphere(AttackRadius * 0.8f)
+            FCollisionShape::MakeSphere(AttackRadius * 0.8f) // Slightly smaller for sweep
         );
         
         if (bSweepHit)
         {
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Forward sweep found %d results"), HitResults.Num());
+            
             for (const FHitResult& Hit : HitResults)
             {
                 AActor* HitActor = Hit.GetActor();
@@ -3058,28 +3099,27 @@ void AAtlantisEonsCharacter::OnMeleeAttackNotify()
                 {
                     AlreadyHitActors.Add(HitActor);
                     
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ SWEEP ATTACKING zombie %s with %.1f damage!"), 
+                           *HitActor->GetName(), TotalDamage);
+                    
                     float ActualDamage = HitActor->TakeDamage(TotalDamage, FDamageEvent(), GetController(), this);
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Sweep TakeDamage returned: %.1f"), ActualDamage);
                     
                     bSuccessfulHit = true;
-                    break;
+                    break; // Only hit one enemy per attack
                 }
             }
         }
     }
     
-    // Reset attack cooldown after attack completes
-    ResetAttack();
-    
-    // Reset the flag after a short delay to allow for the next attack
-    FTimerHandle ResetNotifyTimer;
-    GetWorld()->GetTimerManager().SetTimer(
-        ResetNotifyTimer,
-        [this]() { 
-            bAttackNotifyInProgress = false;
-        },
-        0.5f,
-        false
-    );
+    if (bSuccessfulHit)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Successfully hit at least one enemy!"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ No valid enemies found in attack range"));
+    }
 }
 
 void AAtlantisEonsCharacter::StoreOriginalMaterials()
@@ -3509,203 +3549,466 @@ void AAtlantisEonsCharacter::PlayHitReactMontage()
 }
 
 // SwordBloom Widget Functions
-
-// Character Status Functions
-void AAtlantisEonsCharacter::AddingCharacterStatus_Implementation(int32 ItemIndex)
+void AAtlantisEonsCharacter::ShowSwordEffects()
 {
-    // TODO: Implement stat bonuses from equipped items
-    UE_LOG(LogTemp, Log, TEXT("AddingCharacterStatus called for item index: %d"), ItemIndex);
-}
-
-void AAtlantisEonsCharacter::SubtractingCharacterStatus(int32 ItemIndex)
-{
-    // TODO: Implement stat reductions when unequipping items
-    UE_LOG(LogTemp, Log, TEXT("SubtractingCharacterStatus called for item index: %d"), ItemIndex);
-}
-
-// SwordBloom Animation Notify Functions
-void AAtlantisEonsCharacter::BloomCircleNotify()
-{
-    UE_LOG(LogTemp, Warning, TEXT("🌸 BloomCircleNotify: Starting bloom circle timing window"));
-    
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
+    if (SwordBloomWidget)
     {
-        Widget->StartBloomCircle();
-        UE_LOG(LogTemp, Warning, TEXT("🌸 BloomCircleNotify: Successfully started bloom circle on widget"));
+        SwordBloomWidget->SetVisibility(true);
+        if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
+        {
+            SwordBloomWidget->ShowAllEffects();
+            UE_LOG(LogTemp, Log, TEXT("AtlantisEonsCharacter: Showing all sword effects"));
+        }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("🌸 BloomCircleNotify: SwordBloom widget not available"));
+        UE_LOG(LogTemp, Warning, TEXT("AtlantisEonsCharacter: SwordBloomWidget component is null"));
     }
+}
+
+void AAtlantisEonsCharacter::HideSwordEffects()
+{
+    if (SwordBloomWidget)
+    {
+        SwordBloomWidget->SetVisibility(false);
+        if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
+        {
+            SwordBloomWidget->HideAllEffects();
+            UE_LOG(LogTemp, Log, TEXT("AtlantisEonsCharacter: Hiding all sword effects"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AtlantisEonsCharacter: SwordBloomWidget component is null"));
+    }
+}
+
+void AAtlantisEonsCharacter::ShowSwordSpark()
+{
+    if (SwordBloomWidget)
+    {
+        SwordBloomWidget->SetVisibility(true);
+        if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
+        {
+            SwordBloomWidget->ShowSwordSpark();
+            UE_LOG(LogTemp, Log, TEXT("AtlantisEonsCharacter: Showing sword spark effect"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AtlantisEonsCharacter: SwordBloomWidget component is null"));
+    }
+}
+
+void AAtlantisEonsCharacter::HideSwordSpark()
+{
+    if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
+    {
+        SwordBloomWidget->HideSwordSpark();
+        UE_LOG(LogTemp, Log, TEXT("AtlantisEonsCharacter: Hiding sword spark effect"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AtlantisEonsCharacter: SwordBloomWidget user widget is null"));
+    }
+}
+
+void AAtlantisEonsCharacter::ShowSwordBloom()
+{
+    if (SwordBloomWidget)
+    {
+        SwordBloomWidget->SetVisibility(true);
+        if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
+        {
+            SwordBloomWidget->ShowSwordBloom();
+            UE_LOG(LogTemp, Log, TEXT("AtlantisEonsCharacter: Showing sword bloom effect"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AtlantisEonsCharacter: SwordBloomWidget component is null"));
+    }
+}
+
+void AAtlantisEonsCharacter::HideSwordBloom()
+{
+    if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
+    {
+        SwordBloomWidget->HideSwordBloom();
+        UE_LOG(LogTemp, Log, TEXT("AtlantisEonsCharacter: Hiding sword bloom effect"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AtlantisEonsCharacter: SwordBloomWidget user widget is null"));
+    }
+}
+
+UWBP_SwordBloom* AAtlantisEonsCharacter::GetSwordBloomUserWidget() const
+{
+    if (SwordBloomWidget)
+    {
+        UUserWidget* UserWidget = SwordBloomWidget->GetUserWidgetObject();
+        return Cast<UWBP_SwordBloom>(UserWidget);
+    }
+    return nullptr;
+}
+
+void AAtlantisEonsCharacter::UpdateSwordBloomAttachment()
+{
+    if (!SwordBloomWidget || !Weapon)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AtlantisEonsCharacter: Cannot update SwordBloom attachment - SwordBloomWidget or Weapon is null"));
+        return;
+    }
+
+    // Always attach the widget component to the weapon component as its parent
+    SwordBloomWidget->AttachToComponent(Weapon, FAttachmentTransformRules::KeepRelativeTransform);
+    
+    // Set default position at (0,0,0) relative to weapon component
+    SwordBloomWidget->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+    SwordBloomWidget->SetRelativeRotation(FRotator(0.0f, 0.0f, 0.0f));
+    SwordBloomWidget->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+    
+    UE_LOG(LogTemp, Log, TEXT("AtlantisEonsCharacter: Attached SwordBloomWidget to weapon at (0,0,0) relative position"));
+    
+    // Note: Effects visibility is controlled by animation notifies, not by weapon equipped state
+}
+
+void AAtlantisEonsCharacter::TestSwordBloomWidget()
+{
+    UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: Starting widget test"));
+    
+    if (!SwordBloomWidget)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🧪 TestSwordBloomWidget: SwordBloomWidget component is NULL!"));
+        return;
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: Component exists"));
+    UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: Component visibility: %s"), SwordBloomWidget->IsVisible() ? TEXT("Visible") : TEXT("Hidden"));
+    UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: Component hidden in game: %s"), SwordBloomWidget->bHiddenInGame ? TEXT("Yes") : TEXT("No"));
+    
+    if (SwordBloomWidget->GetWidgetClass())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: Widget class is set: %s"), *SwordBloomWidget->GetWidgetClass()->GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("🧪 TestSwordBloomWidget: Widget class is NOT set!"));
+    }
+    
+    UUserWidget* UserWidget = SwordBloomWidget->GetUserWidgetObject();
+    if (UserWidget)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: User widget exists: %s"), *UserWidget->GetClass()->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: User widget visibility: %s"), UserWidget->IsVisible() ? TEXT("Visible") : TEXT("Hidden"));
+        
+        // Test casting to our specific widget type
+        UWBP_SwordBloom* SpecificWidget = Cast<UWBP_SwordBloom>(UserWidget);
+        if (SpecificWidget)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: Successfully cast to UWBP_SwordBloom"));
+            
+            // Test showing both effects
+            SpecificWidget->ShowAllEffects();
+            UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: Called ShowAllEffects - check if visible in game"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("🧪 TestSwordBloomWidget: Failed to cast to UWBP_SwordBloom"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("🧪 TestSwordBloomWidget: No user widget object found"));
+    }
+    
+    // Log world location for debugging
+    FVector WorldLocation = SwordBloomWidget->GetComponentLocation();
+    UE_LOG(LogTemp, Warning, TEXT("🧪 TestSwordBloomWidget: World location: %s"), *WorldLocation.ToString());
+}
+
+// Animation Notify Functions
+void AAtlantisEonsCharacter::BloomCircleNotify()
+{
+    UE_LOG(LogTemp, Warning, TEXT("🌸 BloomCircleNotify: Called"));
+    
+    // Check if SwordBloomWidget component exists
+    if (!SwordBloomWidget)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🌸 BloomCircleNotify: SwordBloomWidget component is NULL! Attempting to recreate..."));
+        RecreateSwordBloomWidget();
+        
+        // Double-check after recreation
+        if (!SwordBloomWidget)
+        {
+            UE_LOG(LogTemp, Error, TEXT("🌸 BloomCircleNotify: Failed to recreate SwordBloomWidget component!"));
+            return;
+        }
+    }
+    
+    // Show the bloom circle effect
+    ShowSwordBloom();
+    
+    // Start the scaling animation
+    StartBloomScaling();
+    
+    // Set bloom window as active for 1 second
+    bBloomWindowActive = true;
+    UE_LOG(LogTemp, Warning, TEXT("🌸 BloomCircleNotify: Bloom window activated"));
+    
+    // Clear any existing timer
+    GetWorldTimerManager().ClearTimer(BloomWindowTimer);
+    
+    // Set timer to close bloom window after 1 second
+    GetWorldTimerManager().SetTimer(BloomWindowTimer, [this]()
+    {
+        bBloomWindowActive = false;
+        UE_LOG(LogTemp, Warning, TEXT("🔒 BloomCircleNotify: Bloom window closed automatically"));
+        HideSwordBloom();
+    }, 1.0f, false);
 }
 
 void AAtlantisEonsCharacter::BloomSparkNotify()
 {
-    UE_LOG(LogTemp, Warning, TEXT("⚡ BloomSparkNotify: Animation notify attempting automatic spark trigger"));
+    UE_LOG(LogTemp, Warning, TEXT("✨ BloomSparkNotify: DISABLED - Spark now only triggers during bloom window when player attacks"));
+    UE_LOG(LogTemp, Warning, TEXT("✨ BloomSparkNotify: Use TryTriggerSparkEffect() instead for conditional spark triggering"));
     
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
+    // NOTE: This function is now disabled because the spark effect is controlled by 
+    // the conditional system in TryTriggerSparkEffect(). The spark only shows when:
+    // 1. BloomCircleNotify opens the bloom window (1 second)
+    // 2. Player presses attack during that window
+    // 3. TryTriggerSparkEffect() is called and shows the spark
+    
+    // Original automatic spark code is commented out:
+    /*
+    if (!SwordBloomWidget)
     {
-        bool bSuccess = Widget->TryTriggerSpark();
-        if (bSuccess)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("⚡ BloomSparkNotify: ✅ AUTOMATIC SPARK TRIGGERED from animation notify"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("⚡ BloomSparkNotify: ❌ Automatic trigger failed (wrong timing or window closed)"));
-        }
+        UE_LOG(LogTemp, Error, TEXT("✨ BloomSparkNotify: SwordBloomWidget component is NULL!"));
+        return;
     }
-    else
+    
+    // Show spark automatically (OLD BEHAVIOR)
+    if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
     {
-        UE_LOG(LogTemp, Error, TEXT("⚡ BloomSparkNotify: SwordBloom widget not available"));
+        SwordBloomWidget->ShowSwordSpark();
+        // ... rest of automatic spark code
     }
+    */
 }
 
 void AAtlantisEonsCharacter::HideBloomEffectsNotify()
 {
-    UE_LOG(LogTemp, Warning, TEXT("🔒 HideBloomEffectsNotify: Hiding bloom effects"));
+    UE_LOG(LogTemp, Warning, TEXT("🔒 HideBloomEffectsNotify: Manually hiding all bloom effects and closing window"));
     
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
+    if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
     {
-        Widget->HideAllEffects();
-        UE_LOG(LogTemp, Warning, TEXT("🔒 HideBloomEffectsNotify: Successfully hid all bloom effects"));
+        SwordBloomWidget->HideAllEffects();
+        UE_LOG(LogTemp, Log, TEXT("🔒 HideBloomEffectsNotify: Called HideAllEffects on widget"));
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("🔒 HideBloomEffectsNotify: SwordBloom widget not available"));
-    }
-}
-
-bool AAtlantisEonsCharacter::TryTriggerSparkEffect()
-{
-    UE_LOG(LogTemp, Warning, TEXT("⚡ TryTriggerSparkEffect: Manual spark trigger attempt"));
-    
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
-    {
-        return Widget->TryTriggerSpark();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("⚡ TryTriggerSparkEffect: SwordBloom widget not available"));
-        return false;
-    }
-}
-
-void AAtlantisEonsCharacter::CreateSwordBloomWidget()
-{
-    // Don't create a new widget - user already has one set up
-    UE_LOG(LogTemp, Warning, TEXT("CreateSwordBloomWidget: Looking for existing SwordBloom widget component"));
-    
-    // Find existing widget component in the actor
-    TArray<UWidgetComponent*> WidgetComponents;
-    GetComponents<UWidgetComponent>(WidgetComponents);
-    
-    for (UWidgetComponent* WidgetComp : WidgetComponents)
-    {
-        if (WidgetComp && WidgetComp->GetUserWidgetObject())
-        {
-            UWBP_SwordBloom* FoundWidget = Cast<UWBP_SwordBloom>(WidgetComp->GetUserWidgetObject());
-            if (FoundWidget)
-            {
-                SwordBloomWidget = FoundWidget;
-                UE_LOG(LogTemp, Warning, TEXT("CreateSwordBloomWidget: ✅ Found existing SwordBloom widget component"));
-                return;
-            }
-        }
+        UE_LOG(LogTemp, Error, TEXT("🔒 HideBloomEffectsNotify: Failed to get SwordBloom user widget!"));
     }
     
-    UE_LOG(LogTemp, Error, TEXT("CreateSwordBloomWidget: ❌ Could not find existing SwordBloom widget component"));
-}
-
-UWBP_SwordBloom* AAtlantisEonsCharacter::GetSwordBloomWidget()
-{
-    if (!SwordBloomWidget)
-    {
-        CreateSwordBloomWidget();
-    }
+    // Clear all related timers and close the bloom window
+    GetWorld()->GetTimerManager().ClearTimer(SwordBloomHideTimer);
+    GetWorld()->GetTimerManager().ClearTimer(SwordSparkHideTimer);
+    GetWorld()->GetTimerManager().ClearTimer(BloomWindowTimer);
+    GetWorld()->GetTimerManager().ClearTimer(BloomScaleTimer); // Clear scaling timer
+    bBloomWindowActive = false;
     
-    return SwordBloomWidget;
+    UE_LOG(LogTemp, Warning, TEXT("🔒 HideBloomEffectsNotify: All bloom effects hidden, timers cleared, and bloom window closed"));
 }
 
-UAnimMontage* AAtlantisEonsCharacter::GetCurrentAttackMontage() const
+void AAtlantisEonsCharacter::TryTriggerSparkEffect()
 {
-    switch (CurrentAttackIndex)
+    UE_LOG(LogTemp, Warning, TEXT("⚡ TryTriggerSparkEffect: Checking if spark can be triggered"));
+    
+    if (!bBloomWindowActive)
     {
-        case 0: return MeleeAttackMontage1;
-        case 1: return MeleeAttackMontage2;
-        case 2: return MeleeAttackMontage3;
-        case 3: return MeleeAttackMontage4;
-        case 4: return MeleeAttackMontage5;
-        default: return MeleeAttackMontage1; // Fallback to first attack
-    }
-}
-
-void AAtlantisEonsCharacter::ResetComboChain()
-{
-    CurrentAttackIndex = 0;
-    GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ Combo chain reset to MeleeAttackMontage1"));
-}
-// Programmatic bloom effect trigger - fallback for animations without notifies
-void AAtlantisEonsCharacter::TriggerProgrammaticBloomEffect(float MontageLength)
-{
-    if (MontageLength <= 0.0f)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🌸 TriggerProgrammaticBloomEffect: Invalid montage length, skipping bloom effect"));
+        UE_LOG(LogTemp, Warning, TEXT("⚡ TryTriggerSparkEffect: ❌ Bloom window is not active - no spark triggered"));
         return;
     }
     
-    // Calculate when to trigger the bloom effect (30% through the animation)
-    float BloomStartTime = MontageLength * 0.3f;
-    // Calculate how long the bloom should last (from 30% until the end = 70% of total duration)
-    float BloomDuration = MontageLength * 0.7f;
+    // Check if we're in the final 0.4 seconds (BloomScaleProgress >= 0.6)
+    if (BloomScaleProgress < 0.6f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("⚡ TryTriggerSparkEffect: ❌ Too early! Attack must be in final 0.4 seconds (Progress: %.1f percent, need 60+ percent)"), 
+               BloomScaleProgress * 100.0f);
+        return;
+    }
     
-    // CRITICAL FIX: Add attack damage timing (60% through animation)
-    float AttackNotifyTime = MontageLength * 0.6f;
+    if (!SwordBloomWidget)
+    {
+        UE_LOG(LogTemp, Error, TEXT("⚡ TryTriggerSparkEffect: SwordBloomWidget component is NULL!"));
+        return;
+    }
     
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ 🌸 Set programmatic bloom effect timer for %.2f seconds start, %.2f seconds duration (until end of %.2f montage)"), 
-           BloomStartTime, BloomDuration, MontageLength);
+    if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
+    {
+        // SUCCESS! Show the spark effect
+        SwordBloomWidget->ShowSwordSpark();
+        UE_LOG(LogTemp, Warning, TEXT("⚡ TryTriggerSparkEffect: ✨ PERFECT TIMING! Spark effect triggered at %.1f percent progress (final 0.4s window)!"), 
+               BloomScaleProgress * 100.0f);
+        
+        // Clear any existing spark timer and set a new one for 0.5 seconds
+        GetWorld()->GetTimerManager().ClearTimer(SwordSparkHideTimer);
+        GetWorld()->GetTimerManager().SetTimer(
+            SwordSparkHideTimer,
+            [this]() {
+                if (UWBP_SwordBloom* Widget = GetSwordBloomUserWidget())
+                {
+                    Widget->HideSwordSpark();
+                    UE_LOG(LogTemp, Log, TEXT("⚡ TryTriggerSparkEffect: Auto-hidden SwordSpark effect after 0.5 seconds"));
+                }
+            },
+            0.5f, // 0.5 second duration
+            false
+        );
+        
+        // Close the bloom window since the spark was successfully triggered
+        bBloomWindowActive = false;
+        GetWorld()->GetTimerManager().ClearTimer(BloomWindowTimer);
+        GetWorld()->GetTimerManager().ClearTimer(BloomScaleTimer); // Stop scaling animation
+        UE_LOG(LogTemp, Warning, TEXT("⚡ TryTriggerSparkEffect: ⏰ Bloom window CLOSED after successful spark trigger"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("⚡ TryTriggerSparkEffect: Failed to get SwordBloom user widget!"));
+    }
+}
+
+void AAtlantisEonsCharacter::StartBloomScaling()
+{
+    UE_LOG(LogTemp, Warning, TEXT("📏 StartBloomScaling: Starting bloom circle shrink animation from 1.0 to 0.2 over 1 second"));
+    UE_LOG(LogTemp, Warning, TEXT("📏 StartBloomScaling: ⏰ Spark will only trigger in FINAL 0.4 seconds (60-100 percent progress)"));
     
-    // Set a timer to trigger the bloom effect
-    FTimerHandle BloomEffectTimer;
+    // Initialize scaling values
+    CurrentBloomScale = 1.0f;
+    BloomScaleProgress = 0.0f;
+    
+    // Clear any existing scaling timer
+    GetWorld()->GetTimerManager().ClearTimer(BloomScaleTimer);
+    
+    // Start scaling animation with smooth updates (60 FPS = ~0.0167s intervals)
     GetWorld()->GetTimerManager().SetTimer(
-        BloomEffectTimer,
-        [this, BloomDuration]()
+        BloomScaleTimer,
+        this,
+        &AAtlantisEonsCharacter::UpdateBloomScaling,
+        0.0167f, // ~60 FPS updates
+        true // Repeat
+    );
+    
+    UE_LOG(LogTemp, Warning, TEXT("📏 StartBloomScaling: Scaling timer started with 60 FPS updates"));
+}
+
+void AAtlantisEonsCharacter::UpdateBloomScaling()
+{
+    if (!bBloomWindowActive)
+    {
+        // Window closed, stop scaling
+        GetWorld()->GetTimerManager().ClearTimer(BloomScaleTimer);
+        UE_LOG(LogTemp, Log, TEXT("📏 UpdateBloomScaling: Stopped - bloom window closed"));
+        return;
+    }
+    
+    // Store previous progress to detect when we enter the critical window
+    float PreviousProgress = BloomScaleProgress;
+    
+    // Update progress (0.0 to 1.0 over 1 second)
+    BloomScaleProgress += 0.0167f; // Add ~1/60th of a second
+    
+    // Check if we just entered the critical timing window (60% progress)
+    if (PreviousProgress < 0.6f && BloomScaleProgress >= 0.6f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("📏 UpdateBloomScaling: 🎯 ENTERED CRITICAL WINDOW! Spark can now be triggered!"));
+    }
+    
+    if (BloomScaleProgress >= 1.0f)
+    {
+        // Animation complete
+        BloomScaleProgress = 1.0f;
+        CurrentBloomScale = 0.2f;
+        GetWorld()->GetTimerManager().ClearTimer(BloomScaleTimer);
+        UE_LOG(LogTemp, Warning, TEXT("📏 UpdateBloomScaling: ❌ Animation complete - timing window missed (scale reached minimum 0.2)"));
+    }
+    else
+    {
+        // Interpolate scale from 1.0 to 0.2
+        CurrentBloomScale = FMath::Lerp(1.0f, 0.2f, BloomScaleProgress);
+    }
+    
+    // Apply the scale to the widget
+    if (UWBP_SwordBloom* SwordBloomWidget = GetSwordBloomUserWidget())
+    {
+        SwordBloomWidget->SetSwordBloomScale(CurrentBloomScale);
+        
+        // Log progress periodically (every 10 frames to avoid spam)
+        static int32 LogCounter = 0;
+        if (++LogCounter >= 10)
         {
-            UE_LOG(LogTemp, Warning, TEXT("🌸 Programmatic BloomCircleNotify: Starting bloom circle timing window for attack index %d, duration: %.2f seconds"), 
-                   CurrentAttackIndex, BloomDuration);
-            
-            UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-            if (Widget)
+            // Show different messages based on timing window
+            if (BloomScaleProgress < 0.6f)
             {
-                Widget->StartBloomCircleWithDuration(BloomDuration);
-                UE_LOG(LogTemp, Warning, TEXT("🌸 Programmatic BloomCircleNotify: Successfully started bloom circle with extended duration"));
+                UE_LOG(LogTemp, Log, TEXT("📏 UpdateBloomScaling: Progress: %.1f percent, Scale: %.3f [TOO EARLY - wait for 60+ percent]"), 
+                       BloomScaleProgress * 100.0f, CurrentBloomScale);
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("🌸 Programmatic BloomCircleNotify: No SwordBloom widget found"));
+                UE_LOG(LogTemp, Log, TEXT("📏 UpdateBloomScaling: Progress: %.1f percent, Scale: %.3f [🎯 CRITICAL WINDOW ACTIVE!]"), 
+                       BloomScaleProgress * 100.0f, CurrentBloomScale);
             }
-        },
-        BloomStartTime,
-        false
-    );
+            LogCounter = 0;
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("📏 UpdateBloomScaling: Failed to get SwordBloom widget"));
+        GetWorld()->GetTimerManager().ClearTimer(BloomScaleTimer);
+    }
+}
+
+void AAtlantisEonsCharacter::RecreateSwordBloomWidget()
+{
+    UE_LOG(LogTemp, Warning, TEXT("RecreateSwordBloomWidget: Attempting to recreate missing SwordBloomWidget component"));
     
-    // CRITICAL: Set a timer to trigger the actual attack damage
-    FTimerHandle AttackDamageTimer;
-    GetWorld()->GetTimerManager().SetTimer(
-        AttackDamageTimer,
-        [this]()
+    if (SwordBloomWidget)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RecreateSwordBloomWidget: Component already exists, no need to recreate"));
+        return;
+    }
+    
+    // Create new widget component
+    SwordBloomWidget = NewObject<UWidgetComponent>(this, UWidgetComponent::StaticClass(), TEXT("SwordBloomWidget_Runtime"));
+    
+    if (SwordBloomWidget)
+    {
+        // Add to component hierarchy
+        SwordBloomWidget->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepWorldTransform);
+        
+        // Configure the component
+        SwordBloomWidget->SetWidgetSpace(EWidgetSpace::Screen);
+        SwordBloomWidget->SetDrawSize(FVector2D(100.0f, 100.0f));
+        SwordBloomWidget->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+        
+        // Set widget class
+        SwordBloomWidget->SetWidgetClass(UWBP_SwordBloom::StaticClass());
+        
+        // Attach to weapon if available
+        if (Weapon)
         {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ Programmatic attack notify triggered - calling OnMeleeAttackNotify"));
-            OnMeleeAttackNotify();
-        },
-        AttackNotifyTime,
-        false
-    );
-    
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ Set programmatic attack damage timer for %.2f seconds (60%% through animation)"), AttackNotifyTime);
-} 
+            SwordBloomWidget->AttachToComponent(Weapon, FAttachmentTransformRules::KeepWorldTransform);
+            UE_LOG(LogTemp, Warning, TEXT("RecreateSwordBloomWidget: Successfully recreated and attached to weapon"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("RecreateSwordBloomWidget: Recreated but weapon component not found"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("RecreateSwordBloomWidget: Failed to create new widget component"));
+    }
+}
+

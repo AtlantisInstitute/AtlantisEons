@@ -778,231 +778,74 @@ static TMap<uint32, float> ProcessedDamageEvents;
 
 float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-    UE_LOG(LogTemp, Warning, TEXT("🎯 ZombieCharacter: TakeDamage called with damage amount: %f from %s"), 
-           DamageAmount, 
-           DamageCauser ? *DamageCauser->GetName() : TEXT("Unknown"));
-    
     // Early out if damage is not applicable
     if (DamageAmount <= 0.0f || bIsDead)
     {
-        UE_LOG(LogTemp, Warning, TEXT("❌ ZombieCharacter: Ignoring damage - Amount: %f, bIsDead: %s"), 
-               DamageAmount, bIsDead ? TEXT("true") : TEXT("false"));
         return 0.0f;
     }
     
     // CRITICAL: Completely lock down physics to prevent flying
     if (GetCapsuleComponent())
     {
-        // Store current location to reset if needed
-        FVector CurrentLocation = GetActorLocation();
-        FRotator CurrentRotation = GetActorRotation();
-        
-        // Ensure physics are completely disabled
         GetCapsuleComponent()->SetSimulatePhysics(false);
-        GetCapsuleComponent()->SetEnableGravity(false);
-        GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-        
-        // CRITICAL: Lock all movement axes to prevent any displacement
-        if (GetCapsuleComponent()->GetBodyInstance())
+        if (UPrimitiveComponent* PrimComp = GetCapsuleComponent())
         {
-            GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = true;
-            GetCapsuleComponent()->GetBodyInstance()->bLockYTranslation = true;
-            GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock ALL translation
-            GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true;
-            GetCapsuleComponent()->GetBodyInstance()->bLockYRotation = true;
-            GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = true; // Lock ALL rotation during damage
+            if (FBodyInstance* BodyInst = PrimComp->GetBodyInstance())
+            {
+                BodyInst->SetLinearVelocity(FVector::ZeroVector, false);
+                BodyInst->SetAngularVelocityInRadians(FVector::ZeroVector, false);
+            }
         }
-        
-        // FORCE: Reset velocity and stop any movement
-        if (GetCharacterMovement())
-        {
-            GetCharacterMovement()->StopMovementImmediately();
-            GetCharacterMovement()->Velocity = FVector::ZeroVector;
-            GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-            
-            // CRITICAL: Clear any pending impulses or forces
-            GetCharacterMovement()->ClearAccumulatedForces();
-        }
-        
-        // SAFETY: Force reset to exact location if anything changed
-        SetActorLocationAndRotation(CurrentLocation, CurrentRotation, false, nullptr, ETeleportType::ResetPhysics);
-        
-        UE_LOG(LogTemp, Warning, TEXT("🔒 ZombieCharacter: Physics completely locked down at location: %s"), 
-               *CurrentLocation.ToString());
     }
     
     if (GetMesh())
     {
-        // Ensure mesh physics are also disabled
         GetMesh()->SetSimulatePhysics(false);
-        GetMesh()->SetEnableGravity(false);
-    }
-    
-    // SIMPLIFIED: Process damage immediately without calling Super::TakeDamage
-    float ActualDamage = DamageAmount;
-    
-    UE_LOG(LogTemp, Warning, TEXT("✅ ZombieCharacter: Processing damage: %f"), ActualDamage);
-    
-    // Get hit location for damage numbers
-    FVector DamageLocation = GetActorLocation() + FVector(0, 0, 40); // FIXED: Match player offset for consistency
-    
-    if (DamageEvent.GetTypeID() == FPointDamageEvent::ClassID)
-    {
-        const FPointDamageEvent* PointDamageEvent = static_cast<const FPointDamageEvent*>(&DamageEvent);
-        if (!PointDamageEvent->HitInfo.ImpactPoint.IsZero())
+        if (FBodyInstance* MeshBodyInst = GetMesh()->GetBodyInstance())
         {
-            DamageLocation = PointDamageEvent->HitInfo.ImpactPoint;
-            DamageLocation.Z = FMath::Max(DamageLocation.Z, GetActorLocation().Z + 40.0f); // FIXED: Consistent offset
+            MeshBodyInst->SetLinearVelocity(FVector::ZeroVector, false);
+            MeshBodyInst->SetAngularVelocityInRadians(FVector::ZeroVector, false);
         }
     }
     
-    // Play hit reaction animation - ALWAYS attempt this for any damage > 0
-    if (ActualDamage > 0.0f)
-    {
-        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE DAMAGE: Attempting hit reaction for %.1f damage"), ActualDamage);
-        
-        // Check components
-        bool bHasMesh = GetMesh() != nullptr;
-        bool bHasAnimInstance = bHasMesh ? (GetMesh()->GetAnimInstance() != nullptr) : false;
-        bool bHasMontage = HitReactMontage != nullptr;
-        
-        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE COMPONENTS: Mesh=%s, AnimInstance=%s, HitReactMontage=%s"), 
-               bHasMesh ? TEXT("✅") : TEXT("❌"),
-               bHasAnimInstance ? TEXT("✅") : TEXT("❌"),
-               bHasMontage ? TEXT("✅") : TEXT("❌"));
-        
-        // ALWAYS call PlayHitReactMontage - it has its own fallback systems
-        PlayHitReactMontage();
-        UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: Hit reaction function called!"));
-        
-        // ALSO spawn damage numbers
-        ADamageNumberSystem* DamageSystem = ADamageNumberSystem::GetInstance(GetWorld());
-        if (!DamageSystem)
-        {
-            TArray<AActor*> FoundActors;
-            UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADamageNumberSystem::StaticClass(), FoundActors);
-            if (FoundActors.Num() > 0)
-            {
-                DamageSystem = Cast<ADamageNumberSystem>(FoundActors[0]);
-            }
-        }
-        
-        if (DamageSystem && IsValid(DamageSystem))
-        {
-            DamageSystem->SpawnDamageNumberAtLocation(this, DamageLocation, ActualDamage, false);
-            UE_LOG(LogTemp, Warning, TEXT("💥 ZombieCharacter: Spawned damage number for %.1f damage"), ActualDamage);
-            
-            // Visual debug
-            // DrawDebugSphere(GetWorld(), DamageLocation, 15.0f, 8, FColor::Orange, false, 3.0f, 0, 2.0f);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("❌ ZombieCharacter: Could not find DamageNumberSystem!"));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🎭🧟 ZOMBIE: No hit reaction - damage was %.1f"), ActualDamage);
-    }
-    
-    // Apply damage to health - SIMPLIFIED
+    // Apply damage to health
     float PreviousHealth = CurrentHealth;
-    CurrentHealth = FMath::Max(CurrentHealth - ActualDamage, 0.0f);
+    CurrentHealth = FMath::Max(CurrentHealth - DamageAmount, 0.0f);
+    float ActualDamage = PreviousHealth - CurrentHealth;
     
-    UE_LOG(LogTemp, Warning, TEXT("💔 ZombieCharacter: Health reduced from %.1f to %.1f (damage: %.1f)"), 
-           PreviousHealth, CurrentHealth, ActualDamage);
-    
-    // Update health bar display
+    // Update health bar
     UpdateHealthBar();
     
-    // VISUAL FEEDBACK: Highlight mesh yellow briefly when taking damage
-    if (GetMesh() && ActualDamage > 0.0f)
+    // Get damage number location
+    FVector DamageLocation = GetActorLocation() + FVector(0, 0, 120);
+    
+    // Try to find damage number system with multiple fallbacks
+    ADamageNumberSystem* DamageSystem = ADamageNumberSystem::GetInstance(GetWorld());
+    
+    if (!DamageSystem)
     {
-        // Simple and reliable visibility flash - this WILL work regardless of material
-        UE_LOG(LogTemp, Warning, TEXT("💛 ZombieCharacter: Starting visibility flash damage feedback"));
-        
-        // Quick flash sequence: hide -> show -> hide -> show
-        GetMesh()->SetVisibility(false);
-        
-        // First flash restore
-        FTimerHandle Flash1Timer;
-        GetWorld()->GetTimerManager().SetTimer(Flash1Timer, [this]()
+        TArray<AActor*> FoundActors;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADamageNumberSystem::StaticClass(), FoundActors);
+        if (FoundActors.Num() > 0)
         {
-            if (GetMesh())
-            {
-                GetMesh()->SetVisibility(true);
-                UE_LOG(LogTemp, Warning, TEXT("💛 Flash 1: Visible"));
-            }
-        }, 0.1f, false);
-        
-        // Second flash hide
-        FTimerHandle Flash2Timer;
-        GetWorld()->GetTimerManager().SetTimer(Flash2Timer, [this]()
-        {
-            if (GetMesh())
-            {
-                GetMesh()->SetVisibility(false);
-                UE_LOG(LogTemp, Warning, TEXT("💛 Flash 2: Hidden"));
-            }
-        }, 0.2f, false);
-        
-        // Third flash restore
-        FTimerHandle Flash3Timer;
-        GetWorld()->GetTimerManager().SetTimer(Flash3Timer, [this]()
-        {
-            if (GetMesh())
-            {
-                GetMesh()->SetVisibility(true);
-                UE_LOG(LogTemp, Warning, TEXT("💛 Flash 3: Visible"));
-            }
-        }, 0.3f, false);
-        
-        // Final hide
-        FTimerHandle Flash4Timer;
-        GetWorld()->GetTimerManager().SetTimer(Flash4Timer, [this]()
-        {
-            if (GetMesh())
-            {
-                GetMesh()->SetVisibility(false);
-                UE_LOG(LogTemp, Warning, TEXT("💛 Flash 4: Hidden"));
-            }
-        }, 0.4f, false);
-        
-        // Restore permanently
-        FTimerHandle RestoreTimer;
-        GetWorld()->GetTimerManager().SetTimer(RestoreTimer, [this]()
-        {
-            if (GetMesh())
-            {
-                GetMesh()->SetVisibility(true);
-                UE_LOG(LogTemp, Warning, TEXT("🔄 ZombieCharacter: Damage flash complete - restored visibility"));
-            }
-        }, 0.5f, false);
+            DamageSystem = Cast<ADamageNumberSystem>(FoundActors[0]);
+        }
     }
     
-    // FINAL SAFETY: Ensure the zombie is still in the right place after processing damage
-    if (GetCharacterMovement())
+    if (!DamageSystem)
     {
-        GetCharacterMovement()->Velocity = FVector::ZeroVector;
+        DamageSystem = GetWorld()->SpawnActor<ADamageNumberSystem>();
     }
     
-    // CRITICAL: Unlock movement axes after damage processing for normal movement
-    if (GetCapsuleComponent() && GetCapsuleComponent()->GetBodyInstance())
+    // Spawn damage number
+    if (DamageSystem && IsValid(DamageSystem))
     {
-        GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow normal movement
-        GetCapsuleComponent()->GetBodyInstance()->bLockYTranslation = false;
-        GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true;  // Keep Z locked to prevent flying
-        GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true;     // Keep pitch/roll locked
-        GetCapsuleComponent()->GetBodyInstance()->bLockYRotation = true;
-        GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = false;    // Allow yaw rotation
-        
-        UE_LOG(LogTemp, Warning, TEXT("🔓 ZombieCharacter: Movement unlocked for normal gameplay"));
+        DamageSystem->SpawnDamageNumberAtLocation(this, DamageLocation, ActualDamage, false);
     }
     
-    // Check if zombie has died
+    // Check for death
     if (CurrentHealth <= 0.0f && !bIsDead)
     {
-        UE_LOG(LogTemp, Warning, TEXT("💀 ZombieCharacter: Health reached zero, calling HandleDeath"));
         HandleDeath();
     }
     
@@ -1106,4 +949,17 @@ void AZombieCharacter::OnHitReactMontageBlendOut(UAnimMontage* Montage, bool bIn
     }
     
     UE_LOG(LogTemp, Error, TEXT("🎭🧟 ZOMBIE: All systems restored after hit reaction montage"));
+}
+
+void AZombieCharacter::DebugTakeDamage(float DamageAmount)
+{
+    UE_LOG(LogTemp, Warning, TEXT("🔧 DEBUG: DebugTakeDamage called with %.1f damage"), DamageAmount);
+    
+    // Create a simple damage event
+    FDamageEvent DamageEvent;
+    
+    // Call TakeDamage directly to test the damage system
+    float ActualDamage = TakeDamage(DamageAmount, DamageEvent, nullptr, nullptr);
+    
+    UE_LOG(LogTemp, Warning, TEXT("🔧 DEBUG: DebugTakeDamage completed, actual damage: %.1f"), ActualDamage);
 }

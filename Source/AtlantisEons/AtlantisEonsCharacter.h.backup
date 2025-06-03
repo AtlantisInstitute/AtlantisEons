@@ -17,11 +17,11 @@
 #include "BP_ItemInterface.h"
 #include "BP_ItemInfo.h"
 #include "WBP_Main.h"
+#include "WBP_SwordBloom.h"
 #include "Particles/ParticleSystemComponent.h"
 class UWBP_CharacterInfo;
 #include "WBP_GuideText.h"
 #include "WBP_InventorySlot.h"
-#include "WBP_SwordBloom.h"
 
 #include "AtlantisEonsCharacter.generated.h"
 
@@ -182,14 +182,60 @@ public:
     bool GetItemInfo(int32 ItemIndex, FStructure_ItemInfo& OutItemInfo) const;
 
     /** Add status effects to character based on equipped item */
-    UFUNCTION(BlueprintNativeEvent, Category = "Stats")
+    UFUNCTION(BlueprintImplementableEvent, Category = "Stats")
     void AddingCharacterStatus(int32 ItemIndex);
-    virtual void AddingCharacterStatus_Implementation(int32 ItemIndex);
 
     /** Subtracting Character Status when item is unequipped or removed */
     UFUNCTION(BlueprintCallable, Category = "Character|Stats")
     void SubtractingCharacterStatus(int32 ItemIndex);
 
+    /** Show sword bloom effect */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void ShowSwordBloom();
+
+    /** Hide sword bloom effect */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void HideSwordBloom();
+
+    /** Get SwordBloom user widget */
+    UFUNCTION(BlueprintPure, Category = "Combat|Effects")
+    UWBP_SwordBloom* GetSwordBloomUserWidget() const;
+
+    /** Update sword bloom attachment */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void UpdateSwordBloomAttachment();
+
+    /** Test sword bloom widget functionality */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void TestSwordBloomWidget();
+
+    /** Animation notify for bloom circle effect */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Animation")
+    void BloomCircleNotify();
+
+    /** Animation notify for bloom spark effect */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Animation")
+    void BloomSparkNotify();
+
+    /** Animation notify to hide bloom effects */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Animation")
+    void HideBloomEffectsNotify();
+
+    /** Try to trigger spark effect during bloom window */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Animation")
+    void TryTriggerSparkEffect();
+
+    /** Update bloom scaling animation */
+    UFUNCTION()
+    void UpdateBloomScaling();
+
+    /** Start bloom scaling animation */
+    UFUNCTION()
+    void StartBloomScaling();
+
+    /** Recreate sword bloom widget if missing */
+    UFUNCTION()
+    void RecreateSwordBloomWidget();
 
     /** Gets the maximum health attribute */
 
@@ -258,34 +304,16 @@ protected:
 
     // Timer handles
     FTimerHandle AttackCooldownTimer;
-    FTimerHandle AttackNotifyTimer;
     FTimerHandle DashCooldownTimer;
     FTimerHandle InvulnerabilityTimer;
     FTimerHandle DashTimer;
     FTimerHandle CameraLagTimer;
     FTimerHandle CameraRotationLagTimer;
     FTimerHandle RespawnTimerHandle;
-    FTimerHandle ComboResetTimer;
 
-    /** Additional melee attack animation montages for variety */
+    /** Melee attack animation montage */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    UAnimMontage* MeleeAttackMontage1;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    UAnimMontage* MeleeAttackMontage2;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    UAnimMontage* MeleeAttackMontage3;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    UAnimMontage* MeleeAttackMontage4;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    UAnimMontage* MeleeAttackMontage5;
-
-    /** Current attack combo index (0 = MeleeAttackMontage1, 1 = MeleeAttackMontage2, etc.) */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    int32 CurrentAttackIndex;
+    UAnimMontage* MeleeAttackMontage;
 
     /** Hit reaction animation montage */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
@@ -431,15 +459,10 @@ void PickupItem(int32 ItemIndex, int32 StackNumber);
     // Dodge function removed for manual implementation
 
     /** Called for melee attack input */
-    void MeleeAttack();
+    void MeleeAttack(const FInputActionValue& Value);
 
-    /** Get the current attack montage based on combo index */
-    UFUNCTION(BlueprintCallable, Category = "Combat")
-    UAnimMontage* GetCurrentAttackMontage() const;
-
-    /** Reset the combo chain back to the first attack */
-    UFUNCTION(BlueprintCallable, Category = "Combat")
-    void ResetComboChain();
+// ... (rest of the code remains the same)
+    // Dash and dodge reset functions removed for manual implementation in Unreal Engine
 
     /** Called when invulnerability period expires */
     UFUNCTION()
@@ -800,33 +823,4 @@ public:
     /** Animation progress for bloom scaling (0.0 to 1.0) */
     UPROPERTY(BlueprintReadOnly, Category = "Combat|Effects")
     float BloomScaleProgress = 0.0f;
-
-    // SwordBloom Animation Notify Functions
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
-    void BloomCircleNotify();
-
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
-    void BloomSparkNotify();
-
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
-    void HideBloomEffectsNotify();
-
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
-    bool TryTriggerSparkEffect();
-
-    // Programmatic bloom effect trigger (fallback for animations without notifies)
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
-    void TriggerProgrammaticBloomEffect(float MontageLength);
-
-    /** Reference to the SwordBloom widget for combat effects */
-    UPROPERTY(BlueprintReadWrite, Category = "UI|Combat")
-    class UWBP_SwordBloom* SwordBloomWidget;
-
-    /** Find and setup the existing SwordBloom widget component */
-    UFUNCTION(BlueprintCallable, Category = "UI|Combat")
-    void CreateSwordBloomWidget();
-
-    /** Get or find the existing SwordBloom widget */
-    UFUNCTION(BlueprintCallable, Category = "UI|Combat")
-    UWBP_SwordBloom* GetSwordBloomWidget();
 };
