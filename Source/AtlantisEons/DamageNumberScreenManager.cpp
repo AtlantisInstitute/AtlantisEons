@@ -21,17 +21,29 @@ void UDamageNumberScreenManager::Initialize(UWorld* World)
     // Load the widget class if not already set
     if (!DamageNumberWidgetClass)
     {
+        // FIXED: Use the correct path for the widget blueprint
+        const FString WidgetBlueprintPath = TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C");
+        
         // Try to load the widget blueprint class
-        FString WidgetPath = TEXT("/Game/UI/Widgets/WBP_DamageNumber");
-        UClass* LoadedClass = LoadClass<UUserWidget>(nullptr, *WidgetPath);
+        UClass* LoadedClass = LoadClass<UUserWidget>(nullptr, *WidgetBlueprintPath);
         if (LoadedClass)
         {
             DamageNumberWidgetClass = LoadedClass;
-            UE_LOG(LogTemp, Warning, TEXT("Initialize: Successfully loaded widget class from %s"), *WidgetPath);
+            UE_LOG(LogTemp, Warning, TEXT("ScreenManager: ✅ Successfully loaded widget class from %s"), *WidgetBlueprintPath);
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Initialize: Failed to load widget class from %s"), *WidgetPath);
+            // Fallback: Try loading via StaticLoadClass
+            DamageNumberWidgetClass = StaticLoadClass(UUserWidget::StaticClass(), nullptr, *WidgetBlueprintPath);
+            
+            if (DamageNumberWidgetClass)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("ScreenManager: ✅ Successfully loaded widget class via StaticLoadClass"));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("ScreenManager: ❌ Failed to load widget class from %s"), *WidgetBlueprintPath);
+            }
         }
     }
 

@@ -641,18 +641,32 @@ void UWBP_InventorySlot::RemoveItemDescription_Implementation()
     // Remove the old system widget
     if (WidgetItemDescriptionRef)
     {
-        WidgetItemDescriptionRef->RemoveFromParent();
+        if (WidgetItemDescriptionRef->IsInViewport())
+        {
+            WidgetItemDescriptionRef->RemoveFromParent();
+        }
         WidgetItemDescriptionRef = nullptr;
+        UE_LOG(LogTemp, Log, TEXT("Slot %d: Removed legacy item description widget"), SlotIndex);
     }
     
     // Remove the new system widget
-    if (ItemDescription && ItemDescription->IsInViewport())
+    if (ItemDescription)
     {
-        ItemDescription->RemoveFromParent();
-        UE_LOG(LogTemp, Log, TEXT("Slot %d: Removed item description from viewport"), SlotIndex);
+        if (ItemDescription->IsInViewport())
+        {
+            ItemDescription->RemoveFromParent();
+            UE_LOG(LogTemp, Log, TEXT("Slot %d: Removed item description from viewport"), SlotIndex);
+        }
+        
+        // Enhanced cleanup: also destroy the widget to prevent memory leaks
+        ItemDescription->ConditionalBeginDestroy();
+        ItemDescription = nullptr;
     }
     
+    // ENHANCED SAFETY: Set visibility to ensure it's truly hidden even if removal fails
     OnDescription = false;
+    
+    UE_LOG(LogTemp, Verbose, TEXT("Slot %d: Item description cleanup completed"), SlotIndex);
 }
 
 void UWBP_InventorySlot::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)

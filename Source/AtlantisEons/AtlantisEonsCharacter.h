@@ -22,6 +22,9 @@ class UWBP_CharacterInfo;
 #include "WBP_GuideText.h"
 #include "WBP_InventorySlot.h"
 #include "WBP_SwordBloom.h"
+#include "CharacterStatsComponent.h"
+#include "EquipmentComponent.h"
+#include "InventoryComponent.h"
 
 #include "AtlantisEonsCharacter.generated.h"
 
@@ -48,6 +51,32 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStatsUpdatedSignature);
 
+/**
+ * REFACTORING STRATEGY - PRESERVING BLUEPRINT COMPATIBILITY
+ * 
+ * This character class serves as the parent of BP_Character Blueprint.
+ * We're refactoring using component delegation while maintaining Blueprint compatibility:
+ * 
+ * KEPT IN CHARACTER (Blueprint needs direct access):
+ * - All UPROPERTY Blueprint-visible properties (EditAnywhere, BlueprintReadWrite, etc.)
+ * - All UFUNCTION Blueprint-callable methods
+ * - Core character components (Camera, Equipment meshes, AI perception)
+ * - Input actions and animation montages (set in Blueprint)
+ * - Base stats and current stats (Blueprint reads/writes these)
+ * - UI widget references (Blueprint sets these)
+ * 
+ * DELEGATED TO COMPONENTS (internal logic only):
+ * - Implementation details of inventory management → InventoryComponent
+ * - Implementation details of equipment logic → EquipmentComponent  
+ * - Implementation details of stats calculations → CharacterStatsComponent
+ * 
+ * TRANSITION APPROACH:
+ * - Keep all Blueprint-visible properties in character class
+ * - Delegate implementation to components via getter/setter methods
+ * - Components handle internal logic, character provides Blueprint interface
+ * - No breaking changes to BP_Character Blueprint functionality
+ */
+
 UCLASS(config=Game)
 class ATLANTISEONS_API AAtlantisEonsCharacter : public ACharacter, public IGenericTeamAgentInterface
 {
@@ -55,6 +84,8 @@ class ATLANTISEONS_API AAtlantisEonsCharacter : public ACharacter, public IGener
 
 public:
 
+    // ========== CORE CHARACTER COMPONENTS (MUST STAY - Blueprint sets these) ==========
+    
     /** Camera boom positioning the camera behind the character */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
     class USpringArmComponent* CameraBoom;
@@ -67,15 +98,37 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI", meta = (AllowPrivateAccess = "true"))
     class UAIPerceptionStimuliSourceComponent* AIPerceptionStimuliSourceComponent;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Health", meta = (AllowPrivateAccess = "true"))
-    float CurrentHealth;
+    /** SwordEffect Niagara component - found by name from Blueprint */
+    UPROPERTY()
+    class UNiagaraComponent* SwordEffectComponent;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Health", meta = (AllowPrivateAccess = "true"))
-    float MaxHealth;
+    /** Dragon skeletal mesh components - found by name from Blueprint */
+    UPROPERTY()
+    class USkeletalMeshComponent* Dragon1Component;
 
+    UPROPERTY()
+    class USkeletalMeshComponent* Dragon2Component;
+
+    // ========== COMPONENT REFERENCES (MUST STAY - Components visible to Blueprint) ==========
+    
+    /** Character stats component - handles health, mana, stats, and gold */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UCharacterStatsComponent* StatsComponent;
+
+    /** Equipment component - handles equipment management and visual updates */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UEquipmentComponent* EquipmentComponent;
+
+    /** Inventory component - handles inventory management and item operations */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UInventoryComponent* InventoryComp;
+
+    // ========== BLUEPRINT-VISIBLE STATS (MUST STAY - Blueprint reads/writes) ==========
+    
     UPROPERTY(BlueprintAssignable, Category = "Character|Stats")
     FOnStatsUpdatedSignature OnStatsUpdated;
 
+    /** Base stats - often set in Blueprint and need direct access */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
     float BaseMovementSpeed = 600.0f;
 
@@ -97,6 +150,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Stats", meta = (AllowPrivateAccess = "true"))
     int32 BaseDamage = 10;
 
+    /** Current stats - Blueprint needs to read these frequently */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Combat")
     int32 CurrentSTR;
 
@@ -112,7 +166,35 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Combat")
     int32 CurrentDamage;
 
-    // Inventory and Equipment
+    // ========== LEGACY COMPATIBILITY PROPERTIES (TRANSITIONAL - Blueprint compatibility) ==========
+    
+    /** Health properties - kept for Blueprint compatibility during transition */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Health", meta = (AllowPrivateAccess = "true"))
+    float CurrentHealth;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Health", meta = (AllowPrivateAccess = "true"))
+    float MaxHealth;
+
+    /** Gold properties - kept for Blueprint and store system compatibility */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    int32 YourGold;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    int32 Gold;
+
+    /** MP properties - kept for Blueprint compatibility */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Status")
+    int32 CurrentMP;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Status")
+    int32 BaseMP;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    int32 MaxMP;
+
+    // ========== INVENTORY PROPERTIES (MUST STAY - Blueprint direct access) ==========
+    
+    /** Inventory arrays - Blueprint needs direct access for drag/drop and UI */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
     TArray<UBP_ItemInfo*> InventoryItems;
 
@@ -122,6 +204,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
     TArray<UBP_ItemInfo*> EquipmentSlots;
 
+    /** Inventory state - Blueprint checks these */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
     bool InventoryToggleLock;
 
@@ -130,11 +213,11 @@ public:
 
     FTimerHandle InventoryToggleLockTimer;
 
-    /** UI Components */
+    // ========== UI WIDGET REFERENCES (MUST STAY - Blueprint sets these) ==========
+    
     UPROPERTY(BlueprintReadWrite, Category = "UI")
     class UWBP_Main* Main;
 
-    // UI Progress Bars
     UPROPERTY(BlueprintReadWrite, Category = "UI|Circular Bar")
     class UProgressBar* HPBar;
 
@@ -150,12 +233,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Circular Bar")
     UMaterialInstanceDynamic* CircularMP;
 
-    FORCEINLINE UInputMappingContext* GetDefaultMappingContext() { return DefaultMappingContext; }
-
-    UFUNCTION(BlueprintCallable, Category = "Character|Combat")
-    void PlayHitReactMontage();
-
-    /** Equipment Components */
+    // ========== EQUIPMENT MESH COMPONENTS (MUST STAY - Physical game objects) ==========
+    
+    /** Equipment mesh components - these are actual physical components attached to character */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
     UStaticMeshComponent* Helmet;
 
@@ -165,7 +245,14 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
     UStaticMeshComponent* Shield;
 
-    /** Equipment Functions */
+    // ========== BLUEPRINT INTERFACE FUNCTIONS (MUST STAY - Blueprint calls these) ==========
+    
+    FORCEINLINE UInputMappingContext* GetDefaultMappingContext() { return DefaultMappingContext; }
+
+    UFUNCTION(BlueprintCallable, Category = "Character|Combat")
+    void PlayHitReactMontage();
+
+    /** Equipment Functions - Blueprint Implementable Events must stay */
     UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
     void EquipItem(EItemEquipSlot Slot, const TSoftObjectPtr<UStaticMesh>& MeshToEquip, UTexture2D* Thumbnail, 
         int32 ItemIndex, UMaterialInterface* Material1 = nullptr, UMaterialInterface* Material2 = nullptr);
@@ -173,28 +260,24 @@ public:
     UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
     void DisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex);
 
-    /** Helper function to get the game instance */
+    /** Helper functions - Blueprint needs these */
     UFUNCTION(BlueprintImplementableEvent, Category = "Game Instance")
     UAtlantisEonsGameInstance* GetGameInstanceHelper() const;
 
-    /** Helper function to get item info */
     UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
     bool GetItemInfo(int32 ItemIndex, FStructure_ItemInfo& OutItemInfo) const;
 
-    /** Add status effects to character based on equipped item */
-    UFUNCTION(BlueprintNativeEvent, Category = "Stats")
+    /** Stat manipulation functions - delegated to components but Blueprint interface preserved */
+    UFUNCTION(BlueprintCallable, Category = "Stats")
     void AddingCharacterStatus(int32 ItemIndex);
-    virtual void AddingCharacterStatus_Implementation(int32 ItemIndex);
 
-    /** Subtracting Character Status when item is unequipped or removed */
     UFUNCTION(BlueprintCallable, Category = "Character|Stats")
     void SubtractingCharacterStatus(int32 ItemIndex);
 
-
-    /** Gets the maximum health attribute */
-
 protected:
-    /** Equipment Slot UI Components */
+    // ========== INPUT AND ANIMATION PROPERTIES (MUST STAY - Blueprint sets these) ==========
+
+    /** Equipment Slot UI Components - Blueprint needs direct access */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Equipment Slots")
     class UWBP_InventorySlot* HeadSlot;
 
@@ -213,50 +296,43 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Widgets")
     class UProgressBar* CircularBarMP;
 
-    /** MappingContext */
+    /** Input Actions - Blueprint sets these in Input section */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
     class UInputMappingContext* DefaultMappingContext;
 
-    /** Input Action for melee attack */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
     class UInputAction* MeleeAttackAction;
 
-    /** Movement Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* MoveAction;
 
-    /** Look Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* LookAction;
 
-    /** Pickup Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* PickupAction;
 
-    /** Jump Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* JumpAction;
 
-    /** Inventory Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* InventoryAction;
 
-    /** Resume/ESC Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* ResumeAction;
 
-    /** Debug Damage Input Action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* DebugDamageAction;
 
-    /** Animation montage for the melee attack action */
-    // Combat state
+    // ========== COMBAT STATE (MUST STAY - Blueprint reads these) ==========
+    
+    /** Combat state flags - Blueprint checks these for UI and logic */
     bool bIsInvulnerable = false;
     bool bCanAttack;
     bool bIsAttacking;
     bool bAttackNotifyInProgress = false;
 
-    // Timer handles
+    // Timer handles for combat and effects
     FTimerHandle AttackCooldownTimer;
     FTimerHandle AttackNotifyTimer;
     FTimerHandle DashCooldownTimer;
@@ -267,7 +343,9 @@ protected:
     FTimerHandle RespawnTimerHandle;
     FTimerHandle ComboResetTimer;
 
-    /** Additional melee attack animation montages for variety */
+    // ========== ANIMATION MONTAGES (MUST STAY - Blueprint sets these) ==========
+    
+    /** Animation montages - set in Blueprint Animation section */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     UAnimMontage* MeleeAttackMontage1;
 
@@ -287,10 +365,28 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     int32 CurrentAttackIndex;
 
+    /** Maximum number of combo attacks (corresponds to number of available montages) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
+    int32 MaxComboAttacks = 4;
+
+    /** Whether we're currently in a combo chain */
+    UPROPERTY(BlueprintReadOnly, Category = "Combat")
+    bool bIsInCombo = false;
+
+    /** Whether we hit the critical window in the current attack */
+    UPROPERTY(BlueprintReadOnly, Category = "Combat")
+    bool bHitCriticalWindow = false;
+
+    /** Combo window duration (time allowed between attacks) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+    float ComboWindowDuration = 2.0f;
+
     /** Hit reaction animation montage */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     UAnimMontage* HitReactMontage;
 
+    // ========== VFX AND MATERIALS (MUST STAY - Blueprint sets these) ==========
+    
     /** Invulnerability effect */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|VFX", meta = (AllowPrivateAccess = "true"))
     UParticleSystem* InvulnerabilityEffect;
@@ -299,8 +395,8 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|VFX", meta = (AllowPrivateAccess = "true"))
     UMaterialInterface* InvulnerabilityMaterial;
 
-    // Camera settings for dodge removed for manual implementation
-
+    // ========== CAMERA AND MOVEMENT SETTINGS (MUST STAY - Blueprint tweaks these) ==========
+    
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Camera", meta = (AllowPrivateAccess = "true"))
     float DefaultCameraLag = 0.0f;
 
@@ -322,6 +418,8 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Death", meta = (AllowPrivateAccess = "true"))
     float RespawnDelay = 3.0f;
 
+    // ========== INVENTORY UI STATE (MUST STAY - Blueprint checks these) ==========
+    
     /** Whether the inventory is currently open */
     UPROPERTY(BlueprintReadOnly, Category = "UI|Inventory")
     bool bIsInventoryOpen;
@@ -329,12 +427,6 @@ protected:
     /** Whether the inventory toggle is locked (to prevent conflicts) */
     UPROPERTY(BlueprintReadOnly, Category = "UI|Inventory")
     bool bInventoryToggleLocked;
-    
-    /** Timer handle for the inventory toggle lock */
-
-    
-    /** Unlocks the inventory toggle after a delay */
-    void UnlockInventoryToggle();
     
     /** The inventory widget class */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Inventory", meta = (AllowPrivateAccess = "true"))
@@ -344,11 +436,11 @@ protected:
     UPROPERTY(BlueprintReadOnly, Category = "UI|Inventory", meta = (AllowPrivateAccess = "true"))
     UUserWidget* InventoryWidget;
 
+    // ========== COMBAT CONFIGURATION (MUST STAY - Blueprint sets these) ==========
+    
     /** Amount of damage dealt by attacks */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
     float DamageAmount;
-
-    // Dodge movement properties removed for manual implementation
 
     /** Radius of the damage sphere */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
@@ -367,6 +459,9 @@ protected:
 
     virtual void PostInitProperties() override;
 
+    /** Unlocks the inventory toggle after a delay */
+    void UnlockInventoryToggle();
+
 private:
     bool bHealthDelegateBound = false;
 
@@ -377,40 +472,74 @@ private:
     UPROPERTY()
     UParticleSystemComponent* InvulnerabilityPSC;
 
-float AttackCooldown = 0.5f;
+    float AttackCooldown = 0.5f;
 
-/** Called when the game starts or when spawned */
-virtual void BeginPlay() override;
+    /** Called when the game starts or when spawned */
+    virtual void BeginPlay() override;
 
-UPROPERTY()
-class UWBP_Main* MainWidget;
+    UPROPERTY()
+    class UWBP_Main* MainWidget;
 
-UPROPERTY()
-class UWBP_GuideText* GuideTextWidget;
+    UPROPERTY()
+    class UWBP_GuideText* GuideTextWidget;
 
-UPROPERTY()
-class UMaterialInstanceDynamic* CircularHPMaterial;
+    UPROPERTY()
+    class UMaterialInstanceDynamic* CircularHPMaterial;
 
-UPROPERTY()
-class UMaterialInstanceDynamic* CircularMPMaterial;
+    UPROPERTY()
+    class UMaterialInstanceDynamic* CircularMPMaterial;
 
-// UI initialization functions
-void InitializeUI();
-void SetupCircularBars();
+    // UI initialization functions
+    void InitializeUI();
+    void SetupCircularBars();
+
+    UPROPERTY()
+    FGenericTeamId TeamId;
+
+    UPROPERTY()
+    FTimerHandle DelayedCaptureTimer;
+
+    UPROPERTY()
+    FTimerHandle InventoryUpdateTimer;
+
+    UPROPERTY(VisibleAnywhere, Category = "Stats")
+    bool bIsDead = false;
+
+    /** Helper function to sync legacy properties with component values */
+    void SyncLegacyStatsFromComponent();
+
+    // ========== ENHANCED DAMAGE SYSTEM EVENT HANDLERS ==========
+    
+    /** Event handler for damage taken from StatsComponent */
+    UFUNCTION()
+    void OnDamageTakenEvent(float IncomingDamage, bool bIsAlive);
+
+    /** Event handler for character death from StatsComponent */
+    UFUNCTION()
+    void OnCharacterDeathEvent();
+
+    /** Event handler for health changes from StatsComponent */
+    UFUNCTION()
+    void OnHealthChangedEvent(float NewHealthPercent);
+
+    /** Event handler for inventory changes from InventoryComponent */
+    UFUNCTION()
+    void OnInventoryChangedEvent();
+
 public:
     UFUNCTION(BlueprintCallable, Category = "Character|Input")
     UInputMappingContext* GetDefaultMappingContext() const { return DefaultMappingContext; }
 
-// Input handling
-virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+    // Input handling
+    virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-// Damage handling
-virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+    // Damage handling
+    virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
-// Item pickup functions
-void OnPickupPressed();
-AActor* FindClosestItem() const;
-void PickupItem(int32 ItemIndex, int32 StackNumber);
+    // Item pickup functions
+    void OnPickupPressed();
+    AActor* FindClosestItem() const;
+    void PickupItem(int32 ItemIndex, int32 StackNumber);
 
     /** Called for movement input */
     void Move(const FInputActionValue& Value);
@@ -427,11 +556,8 @@ void PickupItem(int32 ItemIndex, int32 StackNumber);
     /** Called for stopping jump */
     virtual void StopJumping() override;
 
-    /** Called for dodge input */
-    // Dodge function removed for manual implementation
-
     /** Called for melee attack input */
-    void MeleeAttack();
+    void MeleeAttack(const FInputActionValue& Value);
 
     /** Get the current attack montage based on combo index */
     UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -441,11 +567,26 @@ void PickupItem(int32 ItemIndex, int32 StackNumber);
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void ResetComboChain();
 
+    /** Advance to the next attack in the combo chain */
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void AdvanceComboChain();
+
+    /** Check if we can continue the combo (critical window was hit) */
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    bool CanContinueCombo() const;
+
+    /** Start the combo chain timing window */
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void StartComboWindow();
+
+    /** End the combo chain (called when window expires) */
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void EndComboChain();
+
     /** Called when invulnerability period expires */
     UFUNCTION()
     void ResetInvulnerability();
 
-public:
     /** Called when attack cooldown expires */
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void ResetAttack();
@@ -471,7 +612,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Character")
     void HandleDeath();
 
-public:
     UFUNCTION(BlueprintCallable, Category = "Character")
     void ResetCharacter();
 
@@ -519,224 +659,172 @@ public:
     UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
     void ShowDamageNumber(float InDamageAmount, FVector Location, bool bIsCritical = false);
 
+    /** Get current health from stats component */
     UFUNCTION(BlueprintPure, Category = "Health")
-    float GetCurrentHealth() const { return CurrentHealth; }
+    float GetCurrentHealth() const;
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    float GetBaseHealth() const { return BaseHealth; }
+    /** Get max health from stats component */
+    UFUNCTION(BlueprintPure, Category = "Health")
+    float GetMaxHealth() const;
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    float GetMaxHealth() const { return MaxHealth; }
+    /** Get current stats from stats component */
+    UFUNCTION(BlueprintPure, Category = "Stats")
+    int32 GetCurrentSTR() const;
 
-    UFUNCTION(BlueprintImplementableEvent, Category = "Stats")
-    void SetBaseHealth(float NewBaseHealth);
+    UFUNCTION(BlueprintPure, Category = "Stats")
+    int32 GetCurrentDEX() const;
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    float GetBaseMovementSpeed() const { return BaseMovementSpeed; }
+    UFUNCTION(BlueprintPure, Category = "Stats")
+    int32 GetCurrentINT() const;
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    int32 GetCurrentSTR() const { return CurrentSTR; }
+    UFUNCTION(BlueprintPure, Category = "Stats")
+    int32 GetCurrentDefence() const;
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    int32 GetCurrentDEX() const { return CurrentDEX; }
+    UFUNCTION(BlueprintPure, Category = "Stats")
+    int32 GetCurrentDamage() const;
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    int32 GetCurrentINT() const { return CurrentINT; }
+    /** Get gold from stats component */
+    UFUNCTION(BlueprintPure, Category = "Currency")
+    int32 GetYourGold() const;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    int32 YourGold;
-    
-    // Gold property that mirrors YourGold for compatibility with store system
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    int32 Gold;
+    /** Get current MP from stats component */
+    UFUNCTION(BlueprintPure, Category = "Stats")
+    int32 GetCurrentMP() const;
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    int32 GetYourGold() 
-    { 
-        // Keep Gold synchronized with YourGold
-        Gold = YourGold;
-        return YourGold; 
-    }
+    /** Get max MP from stats component */
+    UFUNCTION(BlueprintPure, Category = "Stats")
+    int32 GetMaxMP() const;
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    int32 GetCurrentMP() const { return CurrentMP; }
+    UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+    void UpdateAllStats();
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    int32 GetMaxMP() const { return MaxMP; }
+    UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+    void RefreshStatsDisplay();
 
-    UFUNCTION(BlueprintPure, Category = "Character|Stats")
-    int32 GetCurrentDefence() const { return CurrentDefence; }
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    void SettingStore();
 
-UFUNCTION(BlueprintPure, Category = "Character|Stats")
-int32 GetCurrentDamage() const { return CurrentDamage; }
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    void SetInventorySlot(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotWidgetRef);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Stats")
-void UpdateAllStats();
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    void ContextMenuUse(UWBP_InventorySlot* InventorySlot);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Stats")
-void RefreshStatsDisplay();
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    void ContextMenuThrow(UWBP_InventorySlot* InventorySlot);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-void SettingStore();
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    void ContextMenuUse_EquipItem(UBP_ItemInfo* ItemInfoRef);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-void SetInventorySlot(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotWidgetRef);
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    void ContextMenuUse_ConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
+        int32 RecoverHP, int32 RecoverMP, EItemType ItemType);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-bool PickingItem(int32 ItemIndex, int32 ItemStackNumber);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, const TSoftObjectPtr<UTexture2D>& Texture2D, int32 ItemIndex, UMaterialInterface* MaterialInterface, UMaterialInterface* MaterialInterface2);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-void ContextMenuUse(UWBP_InventorySlot* InventorySlot);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void HandleDisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-void ContextMenuThrow(UWBP_InventorySlot* InventorySlot);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void ProcessEquipItem(UBP_ItemInfo* ItemInfoRef);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-void ContextMenuUse_EquipItem(UBP_ItemInfo* ItemInfoRef);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void ProcessConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
+        int32 RecoverHP, int32 RecoverMP, EItemType ItemType);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-void ContextMenuUse_ConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
-    int32 RecoverHP, int32 RecoverMP, EItemType ItemType);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void UpdateEquipmentSlotUI(EItemEquipSlot EquipSlot, UBP_ItemInfo* ItemInfo);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-bool BuyingItem(int32 ItemIndex, int32 ItemStackNumber, int32 ItemPrice);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void ClearEquipmentSlotUI(EItemEquipSlot EquipSlot);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, const TSoftObjectPtr<UTexture2D>& Texture2D, int32 ItemIndex, UMaterialInterface* MaterialInterface, UMaterialInterface* MaterialInterface2);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void UpdateAllEquipmentSlotsUI();
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void HandleDisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void InitializeEquipmentSlotReferences();
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void ProcessEquipItem(UBP_ItemInfo* ItemInfoRef);
+    UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
+    void OnEquipmentSlotClicked(EItemEquipSlot EquipSlot);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void ProcessConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
-    int32 RecoverHP, int32 RecoverMP, EItemType ItemType);
+    UFUNCTION()
+    void OnHeadSlotClicked(int32 SlotIndex);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void UpdateEquipmentSlotUI(EItemEquipSlot EquipSlot, UBP_ItemInfo* ItemInfo);
+    UFUNCTION()
+    void OnWeaponSlotClicked(int32 SlotIndex);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void ClearEquipmentSlotUI(EItemEquipSlot EquipSlot);
+    UFUNCTION()
+    void OnSuitSlotClicked(int32 SlotIndex);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void UpdateAllEquipmentSlotsUI();
+    UFUNCTION()
+    void OnCollectableSlotClicked(int32 SlotIndex);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void InitializeEquipmentSlotReferences();
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    void DragAndDropExchangeItem(UBP_ItemInfo* FromInventoryItemRef, UWBP_InventorySlot* FromInventorySlotRef,
+        UBP_ItemInfo* ToInventoryItemRef, UWBP_InventorySlot* ToInventorySlotRef);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Equipment")
-void OnEquipmentSlotClicked(EItemEquipSlot EquipSlot);
+    UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+    void RecoverHealth(int32 Amount);
 
-UFUNCTION()
-void OnHeadSlotClicked(int32 SlotIndex);
+    UFUNCTION(BlueprintCallable, Category = "Character Status")
+    void RecoverHP(int32 RecoverHP);
 
-UFUNCTION()
-void OnWeaponSlotClicked(int32 SlotIndex);
+    UFUNCTION(BlueprintCallable, Category = "Character Status")
+    void RecoverMP(int32 Amount);
 
-UFUNCTION()
-void OnSuitSlotClicked(int32 SlotIndex);
+    UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+    void SettingCircularBar_MP();
 
-UFUNCTION()
-void OnCollectableSlotClicked(int32 SlotIndex);
+    UFUNCTION(BlueprintCallable, Category = "Character|Stats")
+    void SettingCircularBar_HP();
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-void DragAndDropExchangeItem(UBP_ItemInfo* FromInventoryItemRef, UWBP_InventorySlot* FromInventorySlotRef,
-    UBP_ItemInfo* ToInventoryItemRef, UWBP_InventorySlot* ToInventorySlotRef);
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    UBP_ItemInfo* GetInventoryItemRef() const;
 
-UFUNCTION(BlueprintCallable, Category = "Character|Stats")
-void RecoverHealth(int32 Amount);
+    UFUNCTION(BlueprintPure, Category = "Character|Inventory")
+    bool IsInventoryOpen() const { return bIsInventoryOpen; }
 
-UFUNCTION(BlueprintCallable, Category = "Character Status")
-void RecoverHP(int32 RecoverHP);
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Main")
+    class UWBP_CharacterInfo* WBP_CharacterInfo;
 
-UFUNCTION(BlueprintCallable, Category = "Character Status")
-void RecoverMP(int32 Amount);
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Store")
+    class UWBP_Store* WBP_Store;
 
-UFUNCTION(BlueprintCallable, Category = "Character|Stats")
-void SettingCircularBar_MP();
+    UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Character")
+    class ABP_Item* FindingClosestItem();
 
-UFUNCTION(BlueprintCallable, Category = "Character|Stats")
-void SettingCircularBar_HP();
+    /**
+     * Used to prevent inventory from being toggled when main menu is closing
+     */
+    UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
+    void SetInventoryToggleLock(bool bLock, float UnlockDelay = 0.0f);
 
-UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
-UBP_ItemInfo* GetInventoryItemRef() const;
+    /**
+     * Forcibly sets the inventory state without checking current state
+     * Used to ensure state consistency in edge cases
+     */
+    UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
+    void ForceSetInventoryState(bool bNewIsOpen);
 
-UFUNCTION(BlueprintPure, Category = "Character|Inventory")
-bool IsInventoryOpen() const { return bIsInventoryOpen; }
-
-UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
-UStaticMeshComponent* HeadMesh;
-
-UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
-UStaticMeshComponent* BodyMesh;
-
-UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
-UStaticMeshComponent* WeaponMesh;
-
-UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
-UStaticMeshComponent* AccessoryMesh;
-
-UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Status")
-int32 CurrentMP;
-
-UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Status")
-int32 BaseMP;
-
-UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-int32 MaxMP;
-
-UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Main")
-class UWBP_CharacterInfo* WBP_CharacterInfo;
-
-UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Store")
-class UWBP_Store* WBP_Store;
-
-UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Character")
-class ABP_Item* FindingClosestItem();
-
-/**
- * Used to prevent inventory from being toggled when main menu is closing
- */
-UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
-void SetInventoryToggleLock(bool bLock, float UnlockDelay = 0.0f);
-
-/**
- * Forcibly sets the inventory state without checking current state
- * Used to ensure state consistency in edge cases
- */
-UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
-void ForceSetInventoryState(bool bNewIsOpen);
-
-/**
- * Directly closes the inventory if it's currently open
- * Used for ESC key and other direct close actions without toggling
- */
-UFUNCTION(BlueprintImplementableEvent, Category = "UI|Inventory")
-void CloseInventoryIfOpen(const FInputActionValue& Value);
+    /**
+     * Directly closes the inventory if it's currently open
+     * Used for ESC key and other direct close actions without toggling
+     */
+    UFUNCTION(BlueprintImplementableEvent, Category = "UI|Inventory")
+    void CloseInventoryIfOpen(const FInputActionValue& Value);
 
     // IGenericTeamAgentInterface
     virtual FGenericTeamId GetGenericTeamId() const override;
     virtual void SetGenericTeamId(const FGenericTeamId& NewTeamId) override;
 
-private:
-    UPROPERTY()
-    FGenericTeamId TeamId;
-
-    UPROPERTY()
-    FTimerHandle DelayedCaptureTimer;
-
-    UPROPERTY()
-    FTimerHandle InventoryUpdateTimer;
-
-    UPROPERTY(VisibleAnywhere, Category = "Stats")
-    bool bIsDead = false;
-
-public:
     /** Implementation of inventory closing */
     UFUNCTION()
     void CloseInventoryImpl();
+
+    /** Clear all active item info popups when inventory is closed */
+    UFUNCTION(BlueprintCallable, Category = "UI|Inventory")
+    void ClearAllInventoryPopups();
 
     /** Returns CameraBoom subobject **/
     FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
@@ -801,32 +889,95 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Combat|Effects")
     float BloomScaleProgress = 0.0f;
 
-    // SwordBloom Animation Notify Functions
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
+    /** Current attack montage duration for bloom effect timing */
+    UPROPERTY(BlueprintReadOnly, Category = "Combat|Effects")
+    float CurrentMontageLength = 0.0f;
+
+    // Animation Notify Functions - restored to original C++ approach
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     void BloomCircleNotify();
-
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
+    
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     void BloomSparkNotify();
-
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
+    
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     void HideBloomEffectsNotify();
-
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
+    
+    // SwordBloom functions - restored to original C++ approach
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     bool TryTriggerSparkEffect();
-
-    // Programmatic bloom effect trigger (fallback for animations without notifies)
-    UFUNCTION(BlueprintCallable, Category = "Combat|SwordBloom")
+    
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void StartBloomScaling();
+    
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void UpdateBloomScaling();
+    
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     void TriggerProgrammaticBloomEffect(float MontageLength);
+    
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void CreateSwordBloomWidget();
+    
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+    UWBP_SwordBloom* GetSwordBloomWidget();
 
-    /** Reference to the SwordBloom widget for combat effects */
-    UPROPERTY(BlueprintReadWrite, Category = "UI|Combat")
+    // Inventory delegation functions for backward compatibility
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    bool PickingItem(int32 ItemIndex, int32 ItemStackNumber);
+
+    UFUNCTION(BlueprintCallable, Category = "Character|Inventory")
+    bool BuyingItem(int32 ItemIndex, int32 ItemStackNumber, int32 ItemPrice);
+
+    UFUNCTION(BlueprintPure, Category = "Character|Inventory")
+    UInventoryComponent* GetInventoryComponent() const { return InventoryComp; }
+
+    /** Helper function to connect inventory component to main widget */
+    void ConnectInventoryToMainWidget();
+
+    // SwordBloom Widget Component (restored to original approach)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
+    class UWidgetComponent* SwordBloomWidgetComponent;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "UI")
     class UWBP_SwordBloom* SwordBloomWidget;
 
-    /** Find and setup the existing SwordBloom widget component */
-    UFUNCTION(BlueprintCallable, Category = "UI|Combat")
-    void CreateSwordBloomWidget();
+    UFUNCTION(BlueprintPure, Category = "Character|Stats")
+    int32 GetGold() const;
 
-    /** Get or find the existing SwordBloom widget */
-    UFUNCTION(BlueprintCallable, Category = "UI|Combat")
-    UWBP_SwordBloom* GetSwordBloomWidget();
+    // ========== SWORD EFFECT NIAGARA SYSTEM MANAGEMENT ==========
+    
+    /** Find and cache the SwordEffect Niagara component from Blueprint */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void FindSwordEffectComponent();
+    
+    /** Activate SwordEffect Niagara system during combo chains */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void ActivateSwordEffect();
+    
+    /** Deactivate SwordEffect Niagara system when combo ends */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void DeactivateSwordEffect();
+    
+    /** Check if SwordEffect should be active based on current attack index */
+    UFUNCTION(BlueprintPure, Category = "Combat|Effects")
+    bool ShouldSwordEffectBeActive() const;
+
+    // ========== DRAGON SKELETAL MESH VISIBILITY MANAGEMENT ==========
+    
+    /** Find and cache the Dragon skeletal mesh components from Blueprint */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void FindDragonComponents();
+    
+    /** Show Dragon skeletal meshes during final attack */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void ShowDragons();
+    
+    /** Hide Dragon skeletal meshes when final attack ends */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Effects")
+    void HideDragons();
+    
+    /** Check if Dragons should be visible based on current attack index */
+    UFUNCTION(BlueprintPure, Category = "Combat|Effects")
+    bool ShouldDragonsBeVisible() const;
 };

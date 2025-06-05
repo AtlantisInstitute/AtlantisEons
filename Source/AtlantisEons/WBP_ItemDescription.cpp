@@ -3,15 +3,88 @@
 #include "Components/Image.h"
 #include "Components/PanelWidget.h"
 #include "UniversalItemLoader.h"
+#include "AtlantisEonsCharacter.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
 
 UWBP_ItemDescription::UWBP_ItemDescription(const FObjectInitializer& ObjectInitializer)
-    : Super(ObjectInitializer)
+    : Super(ObjectInitializer), bIsMonitoring(false)
 {
 }
 
 void UWBP_ItemDescription::NativeConstruct()
 {
     Super::NativeConstruct();
+    
+    // Start monitoring inventory state when the tooltip is created
+    if (!bIsMonitoring)
+    {
+        bIsMonitoring = true;
+        
+        // Check inventory state every 0.1 seconds
+        GetWorld()->GetTimerManager().SetTimer(
+            InventoryStateCheckTimer,
+            this,
+            &UWBP_ItemDescription::CheckInventoryState,
+            0.1f,
+            true // Loop
+        );
+        
+        UE_LOG(LogTemp, Log, TEXT("ItemDescription: Started inventory state monitoring"));
+    }
+}
+
+void UWBP_ItemDescription::NativeDestruct()
+{
+    // Clean up timer when widget is destroyed
+    if (bIsMonitoring && GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(InventoryStateCheckTimer);
+        bIsMonitoring = false;
+        UE_LOG(LogTemp, Log, TEXT("ItemDescription: Stopped inventory state monitoring"));
+    }
+    
+    Super::NativeDestruct();
+}
+
+void UWBP_ItemDescription::CheckInventoryState()
+{
+    // Get the player character
+    if (AAtlantisEonsCharacter* PlayerCharacter = Cast<AAtlantisEonsCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0)))
+    {
+        // Check if the inventory is closed
+        if (!PlayerCharacter->IsInventoryOpen())
+        {
+            // Inventory is closed, remove this tooltip widget
+            UE_LOG(LogTemp, Warning, TEXT("ItemDescription: Inventory closed, auto-removing tooltip"));
+            
+            // Stop monitoring
+            bIsMonitoring = false;
+            GetWorld()->GetTimerManager().ClearTimer(InventoryStateCheckTimer);
+            
+            // Remove from viewport
+            if (IsInViewport())
+            {
+                RemoveFromParent();
+            }
+            return;
+        }
+    }
+    else
+    {
+        // If we can't get the player character, something is wrong, remove the tooltip
+        UE_LOG(LogTemp, Warning, TEXT("ItemDescription: Could not get player character, removing tooltip"));
+        
+        // Stop monitoring
+        bIsMonitoring = false;
+        GetWorld()->GetTimerManager().ClearTimer(InventoryStateCheckTimer);
+        
+        // Remove from viewport
+        if (IsInViewport())
+        {
+            RemoveFromParent();
+        }
+    }
 }
 
 void UWBP_ItemDescription::UpdateDescription(const FStructure_ItemInfo& ItemInfo)

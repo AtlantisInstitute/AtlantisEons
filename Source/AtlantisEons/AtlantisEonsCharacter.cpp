@@ -61,6 +61,10 @@
 #include "UniversalItemLoader.h"
 #include "Engine/OverlapResult.h"
 #include "WBP_SwordBloom.h"
+#include "AtlantisEonsGameMode.h"
+#include "InventoryComponent.h"
+#include "CharacterStatsComponent.h"
+#include "EquipmentComponent.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -89,12 +93,24 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
         UE_LOG(LogTemp, Warning, TEXT("Character Constructor: Mesh transforms configured. Mesh asset should be set in Blueprint."));
     }
     
-    // ENHANCED: Configure collision to prevent physics impulse issues and BLOCK other pawns
+    // ENHANCED: Configure collision to prevent physics impulse issues and BLOCK other pawns STRONGLY
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     GetCapsuleComponent()->SetCollisionObjectType(ECC_Pawn);
     GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block); // Block by default
-    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // COMBAT: Block other pawns (including zombies)
+    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // COMBAT FIX: Block pawns but prevent bouncing with physics constraints
     GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
+    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Block visibility traces for proper line of sight
+    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block); // Block world geometry
+    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block); // Block dynamic objects
+    
+    // ENHANCED: Stronger physics prevention with higher mass
+    GetCapsuleComponent()->SetSimulatePhysics(false);
+    GetCapsuleComponent()->SetEnableGravity(false); // Let character movement handle gravity
+    GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 500.0f, true); // INCREASED: Much heavier to resist pushing
+    GetCapsuleComponent()->SetLinearDamping(20.0f); // INCREASED: Much higher damping
+    GetCapsuleComponent()->SetAngularDamping(20.0f); // INCREASED: Much higher rotational damping
+    GetCapsuleComponent()->SetUseCCD(false); // Disable continuous collision detection
+    GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // Disable collision events to reduce overhead
     
     // ENHANCED: Disable physics simulation to prevent flying when hit
     GetCapsuleComponent()->SetSimulatePhysics(false);
@@ -115,20 +131,28 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
     CameraBoom->SetupAttachment(RootComponent);
     CameraBoom->TargetArmLength = 900.0f; // 1.5x increased distance for a balanced battlefield view
-    CameraBoom->bUsePawnControlRotation = true;
-    CameraBoom->bDoCollisionTest = true;
-    CameraBoom->ProbeSize = 12.0f;
-    CameraBoom->bEnableCameraLag = true;
-    CameraBoom->bEnableCameraRotationLag = true;
-    CameraBoom->CameraLagSpeed = 15.0f;
-    CameraBoom->CameraRotationLagSpeed = 10.0f;
-    CameraBoom->CameraLagMaxDistance = 100.0f;
-    CameraBoom->SetRelativeRotation(FRotator(-75.0f, 0.0f, 0.0f));
+    CameraBoom->bUsePawnControlRotation = true; // ENABLE: Player can control camera
+    
+    // CAMERA COLLISION FIX: Improved collision settings to prevent camera going inside character
+    CameraBoom->bDoCollisionTest = false; // DISABLE: Don't pull camera closer when objects are in the way
+    CameraBoom->ProbeSize = 8.0f; // Smaller probe size for better collision detection
+    CameraBoom->ProbeChannel = ECC_Camera; // Use proper camera collision channel
+    CameraBoom->TargetOffset = FVector(0.0f, 0.0f, 60.0f); // Offset target above character center
+    CameraBoom->SocketOffset = FVector(0.0f, 0.0f, 0.0f); // No socket offset
+    
+    // CAMERA RESPONSIVENESS: Restore original fast and responsive camera settings
+    CameraBoom->bEnableCameraLag = true; // ENABLE: Keep lag for smoothness
+    CameraBoom->bEnableCameraRotationLag = true; // ENABLE: Keep rotation lag for smoothness
+    CameraBoom->CameraLagSpeed = 30.0f; // FAST: Original responsive speed restored
+    CameraBoom->CameraRotationLagSpeed = 25.0f; // FAST: Original responsive rotation speed restored
+    CameraBoom->CameraLagMaxDistance = 100.0f; // Reasonable max distance
+    CameraBoom->bUseCameraLagSubstepping = false; 
+    CameraBoom->bDrawDebugLagMarkers = false; // Clean visuals
 
     // Create a follow camera
     FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-    FollowCamera->bUsePawnControlRotation = false;
+    FollowCamera->bUsePawnControlRotation = false; // Correct: Spring arm handles rotation
 
     // Create equipment components with proper socket attachments
     Helmet = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Helmet"));
@@ -143,13 +167,15 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     Shield->SetupAttachment(GetMesh(), FName(TEXT("hand_l")));
     Shield->SetVisibility(false);
 
+    // Initialize bloom window state
+    bBloomWindowActive = false;
 
     // Don't rotate when the controller rotates
     bUseControllerRotationPitch = false;
     bUseControllerRotationYaw = false;
     bUseControllerRotationRoll = false;
 
-    // ENHANCED: Configure character movement to resist external forces
+    // ENHANCED: Configure character movement to resist external forces MORE STRONGLY
     UCharacterMovementComponent* CharMov = GetCharacterMovement();
     if (CharMov)
     {
@@ -161,16 +187,18 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
         CharMov->MinAnalogWalkSpeed = 20.f;
         CharMov->BrakingDecelerationWalking = 2000.f;
         
-        // ENHANCED: Add physics resistance settings
+        // ENHANCED: Much stronger physics resistance settings
         CharMov->bIgnoreBaseRotation = true;
-        CharMov->Mass = 100.0f; // Reasonable mass to resist physics impulses
-        CharMov->GroundFriction = 8.0f; // Good friction to resist sliding
-        CharMov->MaxAcceleration = 2048.0f;
-        CharMov->BrakingDecelerationWalking = 2048.0f;
+        CharMov->Mass = 500.0f; // INCREASED: Much heavier mass to resist physics impulses and maintain position
+        CharMov->GroundFriction = 15.0f; // INCREASED: Much higher friction to resist sliding and movement
+        CharMov->MaxAcceleration = 3000.0f; // INCREASED: Higher acceleration for responsive movement
+        CharMov->BrakingDecelerationWalking = 3000.0f; // INCREASED: Higher braking for stability
         CharMov->bApplyGravityWhileJumping = true; // Keep normal jumping
         CharMov->bCanWalkOffLedges = true; // Allow normal movement
+        CharMov->bRequestedMoveUseAcceleration = true; // Use acceleration-based movement
+        CharMov->bForceMaxAccel = false; // Controlled acceleration
         
-        UE_LOG(LogTemp, Warning, TEXT("Player: Enhanced movement physics - Mass: 100kg, Good friction"));
+        UE_LOG(LogTemp, Warning, TEXT("Player: ENHANCED STRONG movement physics - Mass: 500kg, High friction: 15.0"));
     }
 
     // Initialize character stats
@@ -208,9 +236,32 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     AttackRange = 200.0f;
     DefaultCameraLag = 15.0f;
     DefaultCameraRotationLag = 10.0f;
-    
+
     // Initialize combo system
     CurrentAttackIndex = 0;
+    MaxComboAttacks = 4;
+    bIsInCombo = false;
+    bHitCriticalWindow = false;
+    ComboWindowDuration = 2.0f;
+
+    // Create components
+    StatsComponent = CreateDefaultSubobject<UCharacterStatsComponent>(TEXT("CharacterStatsComponent"));
+    InventoryComp = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
+    EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
+    
+    // Create SwordBloom widget component (restored to original approach)
+    SwordBloomWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("SwordBloomWidgetComponent"));
+    SwordBloomWidgetComponent->SetupAttachment(RootComponent);
+    SwordBloomWidgetComponent->SetRelativeLocation(FVector(100.0f, 0.0f, 0.0f)); // Position in front of character
+    SwordBloomWidgetComponent->SetVisibility(true);
+    SwordBloomWidgetComponent->SetHiddenInGame(false);
+
+    // Initialize SwordEffect component reference (will be found by name from Blueprint)
+    SwordEffectComponent = nullptr;
+
+    // Initialize Dragon component references (will be found by name from Blueprint)
+    Dragon1Component = nullptr;
+    Dragon2Component = nullptr;
 }
 
 void AAtlantisEonsCharacter::PostInitProperties()
@@ -241,7 +292,11 @@ void AAtlantisEonsCharacter::SetInventoryToggleLock(bool bLock, float UnlockDela
         GetWorld()->GetTimerManager().ClearTimer(InventoryToggleLockTimer);
         GetWorld()->GetTimerManager().SetTimer(
             InventoryToggleLockTimer,
-            FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::SetInventoryToggleLock, false, 0.0f),
+            FTimerDelegate::CreateWeakLambda(this, [this]() {
+                if (IsValid(this) && !IsActorBeingDestroyed()) {
+                    SetInventoryToggleLock(false, 0.0f);
+                }
+            }),
             UnlockDelay,
             false
         );
@@ -285,6 +340,15 @@ void AAtlantisEonsCharacter::BeginPlay()
 {
     Super::BeginPlay();
     
+    // Create and set up SwordBloom widget (restored to original approach)
+    CreateSwordBloomWidget();
+    
+    // Find the SwordEffect Niagara component from Blueprint (backup call)
+    FindSwordEffectComponent();
+    
+    // Find the Dragon skeletal mesh components from Blueprint (backup call)
+    FindDragonComponents();
+    
     // Initialize UI components
     InitializeUI();
     SetupCircularBars();
@@ -298,9 +362,6 @@ void AAtlantisEonsCharacter::BeginPlay()
         }
     }
 
-    // Initialize SwordBloom widget
-    CreateSwordBloomWidget();
-
     // Initialize team ID for AI perception
     TeamId = FGenericTeamId(1); // Player team
     
@@ -311,23 +372,50 @@ void AAtlantisEonsCharacter::BeginPlay()
         GetCapsuleComponent()->SetEnableGravity(false);
         GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
         
-        // COMBAT: Ensure player blocks other pawns (zombies) for proper collision
+        // CRITICAL: MUCH STRONGER collision blocking to prevent overlapping
         GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block);
-        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // Block pawns including zombies
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // COMBAT FIX: Block pawns but prevent bouncing with physics constraints
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Block visibility traces
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block); // Block world geometry
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block); // Block dynamic objects
         
-        // ENHANCED: Simplified physics prevention - removed aggressive mass override that could interfere with rendering
-        GetCapsuleComponent()->SetLinearDamping(5.0f); // Moderate damping to resist movement
-        GetCapsuleComponent()->SetAngularDamping(5.0f); // Moderate rotational damping
+        // ENHANCED: Much stronger physics prevention settings
+        GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 500.0f, true); // INCREASED: Much heavier to resist pushing
+        GetCapsuleComponent()->SetLinearDamping(20.0f); // INCREASED: Much higher damping to prevent movement
+        GetCapsuleComponent()->SetAngularDamping(20.0f); // INCREASED: Much higher rotational damping
         GetCapsuleComponent()->SetUseCCD(false); // Disable continuous collision detection
+        GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // Disable collision events to reduce overhead
         
-        UE_LOG(LogTemp, Warning, TEXT("Player: COMBAT COLLISION - Player will block zombies and other pawns"));
+
+        GetCapsuleComponent()->GetBodyInstance()->bOverrideMass = true; // Ensure mass override is applied
+        GetCapsuleComponent()->GetBodyInstance()->SetMassOverride(500.0f); // Reinforce mass setting
+        GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock Z-axis to prevent upward bouncing
+        GetCapsuleComponent()->GetBodyInstance()->SetLinearVelocity(FVector::ZeroVector, false); // Clear any velocity
+        GetCapsuleComponent()->GetBodyInstance()->SetAngularVelocityInRadians(FVector::ZeroVector, false); // Clear angular velocity
+        
+        // ENHANCED: Configure body instance for maximum collision blocking
+        if (GetCapsuleComponent()->GetBodyInstance())
+        {
+            GetCapsuleComponent()->GetBodyInstance()->SetResponseToAllChannels(ECR_Block);
+            GetCapsuleComponent()->GetBodyInstance()->SetResponseToChannel(ECC_Pawn, ECR_Block); // COMBAT FIX: Block pawns but prevent bouncing with physics constraints
+            GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow controlled movement
+            GetCapsuleComponent()->GetBodyInstance()->bLockYTranslation = false; // Allow controlled movement
+            GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock Z to prevent flying
+            GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true; // Lock rotations for stability
+            GetCapsuleComponent()->GetBodyInstance()->bLockYRotation = true;
+            GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = false; // Allow yaw rotation only
+        }
+        
+        UE_LOG(LogTemp, Warning, TEXT("Player: COMBAT COLLISION FIX - Player overlaps pawns to prevent bouncing with 500kg mass"));
     }
     
     if (GetMesh())
     {
         GetMesh()->SetSimulatePhysics(false);
         GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        GetMesh()->SetCollisionResponseToAllChannels(ECR_Ignore);
+        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // Support pawn collision queries
         
         // Ensure mesh visibility
         GetMesh()->SetVisibility(true);
@@ -336,18 +424,67 @@ void AAtlantisEonsCharacter::BeginPlay()
         UE_LOG(LogTemp, Warning, TEXT("Player: Mesh physics configured - SimulatePhysics: false, Visible: true"));
     }
     
-    // ENHANCED: Configure character movement to resist external forces
+    // ENHANCED: Much stronger character movement configuration
     if (GetCharacterMovement())
     {
         GetCharacterMovement()->bIgnoreBaseRotation = true;
-        GetCharacterMovement()->Mass = 100.0f; // Reasonable mass to resist physics impulses
-        GetCharacterMovement()->GroundFriction = 8.0f; // Good friction to resist sliding
-        GetCharacterMovement()->MaxAcceleration = 2048.0f;
-        GetCharacterMovement()->BrakingDecelerationWalking = 2048.0f;
+        GetCharacterMovement()->Mass = 500.0f; // INCREASED: Much heavier mass to resist physics impulses and maintain position
+        GetCharacterMovement()->GroundFriction = 15.0f; // INCREASED: Much higher friction to resist sliding and movement
+        GetCharacterMovement()->MaxAcceleration = 3000.0f; // INCREASED: Higher acceleration for responsive movement
+        GetCharacterMovement()->BrakingDecelerationWalking = 3000.0f; // INCREASED: Higher braking for stability
         GetCharacterMovement()->bApplyGravityWhileJumping = true; // Keep normal jumping
         GetCharacterMovement()->bCanWalkOffLedges = true; // Allow normal movement
+        GetCharacterMovement()->bRequestedMoveUseAcceleration = true; // Use acceleration-based movement
+        GetCharacterMovement()->bForceMaxAccel = false; // Controlled acceleration
         
-        UE_LOG(LogTemp, Warning, TEXT("Player: Enhanced movement physics - Mass: 100kg, Good friction"));
+        UE_LOG(LogTemp, Warning, TEXT("Player: ENHANCED STRONG movement physics - Mass: 500kg, High friction: 15.0"));
+    }
+    
+    // ENHANCED: Apply improved camera settings at runtime
+    if (CameraBoom)
+    {
+        // CAMERA RESPONSIVENESS: Restore original fast and responsive camera settings
+        CameraBoom->bEnableCameraLag = true; // ENABLE: Keep lag for smoothness
+        CameraBoom->bEnableCameraRotationLag = true; // ENABLE: Keep rotation lag for smoothness
+        CameraBoom->CameraLagSpeed = 30.0f; // FAST: Original responsive speed restored
+        CameraBoom->CameraRotationLagSpeed = 25.0f; // FAST: Original responsive rotation speed restored
+        CameraBoom->CameraLagMaxDistance = 100.0f; // Reasonable max distance
+        CameraBoom->bUseCameraLagSubstepping = false; 
+        
+        // CAMERA COLLISION FIX: Prevent camera from going inside character
+        CameraBoom->bDoCollisionTest = false; // DISABLE: Don't pull camera closer when objects are in the way
+        CameraBoom->ProbeChannel = ECC_Camera; // Use camera collision channel
+        CameraBoom->ProbeSize = 8.0f; // Smaller probe size for better collision detection
+        CameraBoom->TargetOffset = FVector(0.0f, 0.0f, 60.0f); // Offset camera target above character center
+        
+        // CRITICAL: Set minimum distance to prevent camera from going inside character
+        CameraBoom->SocketOffset = FVector(0.0f, 0.0f, 0.0f); // No socket offset
+
+        // CAMERA FIX: Explicitly set up third-person camera
+        CameraBoom->bUsePawnControlRotation = true; // Enable player camera control
+        CameraBoom->TargetArmLength = 900.0f; // Good distance for third-person
+        
+        // CRITICAL: Reset any fixed rotation and allow free camera movement
+        CameraBoom->SetRelativeRotation(FRotator::ZeroRotator); // Clear any fixed rotation
+        CameraBoom->bInheritPitch = true; // Allow pitch control
+        CameraBoom->bInheritYaw = true; // Allow yaw control
+        CameraBoom->bInheritRoll = false; // Don't inherit roll to prevent camera rolling
+        
+        UE_LOG(LogTemp, Warning, TEXT("Player: THIRD-PERSON CAMERA SETUP - Free camera movement enabled"));
+        UE_LOG(LogTemp, Warning, TEXT("Player: Camera Boom Rotation: %s"), *CameraBoom->GetRelativeRotation().ToString());
+        UE_LOG(LogTemp, Warning, TEXT("Player: Camera collision fixed - ProbeSize: 8.0, TargetOffset: (0,0,60)"));
+
+        UE_LOG(LogTemp, Warning, TEXT("Player: Camera responsiveness restored - Fast responsive controls enabled, character rotation during attacks disabled"));
+    }
+    
+    // CAMERA FIX: Ensure controller rotation is properly set up for third-person view
+    if (APlayerController* PC = Cast<APlayerController>(Controller))
+    {
+        // Set initial camera rotation to a reasonable third-person angle
+        FRotator InitialCameraRotation = FRotator(-15.0f, 0.0f, 0.0f); // Slight downward angle
+        PC->SetControlRotation(InitialCameraRotation);
+        
+        UE_LOG(LogTemp, Warning, TEXT("Player: Set initial camera rotation: %s"), *InitialCameraRotation.ToString());
     }
     
     // Store original materials for invulnerability effects
@@ -512,6 +649,9 @@ void AAtlantisEonsCharacter::InitializeUI()
     // DISABLED: Don't create any UI widgets at startup to ensure gameplay works first
     UE_LOG(LogTemplateCharacter, Warning, TEXT("%s: InitializeUI disabled to focus on gameplay first"), *GetName());
     
+    // Connect inventory component to HUD when MainWidget is available
+    ConnectInventoryToMainWidget();
+    
     // Don't create the WBP_Main widget as it's causing cursor issues and blocking input
     /*
     // First check if an instance of WBP_Main already exists in the viewport
@@ -566,6 +706,27 @@ void AAtlantisEonsCharacter::InitializeUI()
     */
 }
 
+void AAtlantisEonsCharacter::ConnectInventoryToMainWidget()
+{
+    // Try to get the HUD and its MainWidget
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        if (AAtlantisEonsHUD* HUD = Cast<AAtlantisEonsHUD>(PC->GetHUD()))
+        {
+            UWBP_Main* MainWidget = HUD->GetMainWidget();
+            if (MainWidget && InventoryComp)
+            {
+                InventoryComp->SetMainWidget(MainWidget);
+                UE_LOG(LogTemp, Warning, TEXT("✅ Connected InventoryComponent to MainWidget"));
+            }
+            else if (!MainWidget)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("⏳ MainWidget not yet available, will connect later"));
+            }
+        }
+    }
+}
+
 void AAtlantisEonsCharacter::SetupCircularBars()
 {
     if (Main)
@@ -586,6 +747,14 @@ void AAtlantisEonsCharacter::PostInitializeComponents()
     Super::PostInitializeComponents();
     
     UE_LOG(LogTemp, Warning, TEXT("PostInitializeComponents: Called"));
+    
+    // Find the SwordEffect Niagara component from Blueprint
+    FindSwordEffectComponent();
+    
+    // Find the Dragon skeletal mesh components from Blueprint
+    FindDragonComponents();
+    
+    // SwordBloom widget is now handled entirely in Blueprint
 }
 
 void AAtlantisEonsCharacter::RecoverHealth(int32 Amount)
@@ -996,579 +1165,69 @@ void AAtlantisEonsCharacter::OnPickupPressed()
 
 bool AAtlantisEonsCharacter::PickingItem(int32 ItemIndex, int32 ItemStackNumber)
 {
-    // Ensure we have at least 1 item to add
-    int32 ActualStackNumber = FMath::Max(1, ItemStackNumber);
-    
-    // Get item info from data table or hardcoded data
-    FStructure_ItemInfo ItemInfo;
-    
-    // Try to get from store system first (most reliable)
-    bool bFoundItemData = UStoreSystemFix::GetItemData(ItemIndex, ItemInfo);
-    
-    if (!bFoundItemData)
+    if (InventoryComp)
     {
-        // Try to get from game instance as fallback
-        UAtlantisEonsGameInstance* GameInstance = Cast<UAtlantisEonsGameInstance>(GetGameInstance());
-        if (GameInstance && GameInstance->GetItemInfo(ItemIndex, ItemInfo))
-        {
-            bFoundItemData = true;
-        }
+        return InventoryComp->AddItem(ItemIndex, ItemStackNumber);
     }
-    
-    if (!bFoundItemData)
-    {
-        ItemInfo = CreateHardcodedItemData(ItemIndex);
-    }
-    
-    // Create a new item info object directly from C++ class
-    UBP_ConcreteItemInfo* NewItemInfo = NewObject<UBP_ConcreteItemInfo>(this);
-    if (!NewItemInfo)
-    {
-        return false;
-    }
-    
-    // Copy data to the new object using CopyFromStructure since ItemInfo is a FStructure_ItemInfo
-    NewItemInfo->CopyFromStructure(ItemInfo);
-    
-    // IMPORTANT: Set the stack number AFTER copying to ensure it doesn't get overridden
-    NewItemInfo->StackNumber = ActualStackNumber;
-    
-    // Load thumbnail using Universal Item Loader for consistency with store system
-    if (NewItemInfo->ThumbnailBrush.GetResourceObject() == nullptr)
-    {
-        UTexture2D* LoadedTexture = UUniversalItemLoader::LoadItemTexture(ItemInfo);
-        if (LoadedTexture)
-        {
-            NewItemInfo->Thumbnail = LoadedTexture;
-            
-            FSlateBrush NewBrush;
-            NewBrush.SetResourceObject(LoadedTexture);
-            NewBrush.ImageSize = FVector2D(64.0f, 64.0f);
-            NewBrush.DrawAs = ESlateBrushDrawType::Image;
-            NewBrush.Tiling = ESlateBrushTileType::NoTile;
-            NewBrush.Mirroring = ESlateBrushMirrorType::NoMirror;
-            NewItemInfo->ThumbnailBrush = NewBrush;
-        }
-    }
-    
-    // Add to inventory and force update the UI
-    bool bAdded = AddItemToInventory(NewItemInfo);
-    if (bAdded)
-    {
-        UE_LOG(LogTemp, Log, TEXT("✅ Added %s to inventory"), *ItemInfo.ItemName);
-        // Force update inventory slots
-        UpdateInventorySlots();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("❌ Failed to add item to inventory"));
-    }
-    
-    return bAdded;
+    UE_LOG(LogTemp, Warning, TEXT("PickingItem: InventoryComponent is null, functionality disabled"));
+    return false;
 }
 
 void AAtlantisEonsCharacter::ContextMenuUse(UWBP_InventorySlot* InventorySlot)
 {
-    if (!InventorySlot) return;
-    
-    UBP_ItemInfo* ItemInfo = InventorySlot->GetInventoryItemInfoRef();
-    if (!ItemInfo) return;
-    
-    // Handle item use based on type
-    switch (ItemInfo->ItemType)
+    if (InventoryComp)
     {
-        case EItemType::Equip:
-            ContextMenuUse_EquipItem(ItemInfo);
-            break;
-        case EItemType::Consume_HP:
-        case EItemType::Consume_MP:
-            ContextMenuUse_ConsumeItem(ItemInfo, InventorySlot, ItemInfo->RecoveryHP, ItemInfo->RecoveryMP, ItemInfo->ItemType);
-            break;
-        default:
-            break;
+        InventoryComp->ContextMenuUse(InventorySlot);
     }
 }
 
 void AAtlantisEonsCharacter::ContextMenuThrow(UWBP_InventorySlot* InventorySlot)
 {
-    if (!InventorySlot) return;
-    
-    UBP_ItemInfo* ItemInfo = InventorySlot->GetInventoryItemInfoRef();
-    if (!ItemInfo)
+    if (InventoryComp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ContextMenuThrow: No item info found"));
-        return;
+        InventoryComp->ContextMenuThrow(InventorySlot);
     }
-    
-    // Get the item index and stack information
-    int32 ItemIndex = ItemInfo->ItemIndex;
-    int32 StackNumber = ItemInfo->StackNumber;
-    int32 SlotIndex = InventorySlot->SlotIndex;
-    
-    // Remove item from inventory array
-    if (SlotIndex >= 0 && SlotIndex < InventoryItems.Num())
-    {
-        InventoryItems[SlotIndex] = nullptr;
-        InventorySlot->ClearSlot();
-        
-        // Update inventory display
-        UpdateInventorySlots();
-    }
-    
-    // Spawn the item in the world in front of the player
-    FVector PlayerLocation = GetActorLocation();
-    FVector PlayerForward = GetActorForwardVector();
-    FVector SpawnLocation = PlayerLocation + (PlayerForward * 200.0f); // 2 meters in front
-    SpawnLocation.Z = PlayerLocation.Z; // Keep same height
-    
-    FRotator SpawnRotation = GetActorRotation();
-    
-    // Try to spawn the item actor
-    UWorld* World = GetWorld();
-    if (World)
-    {
-        // Load the BP_Item class using the correct path
-        UClass* ItemClass = LoadClass<ABP_Item>(nullptr, TEXT("/Game/AtlantisEons/Blueprints/InventoryandEquipment/BP_Item.BP_Item_C"));
-        if (ItemClass)
-        {
-            FActorSpawnParameters SpawnParams;
-            SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-            
-            ABP_Item* SpawnedItem = World->SpawnActor<ABP_Item>(ItemClass, SpawnLocation, SpawnRotation, SpawnParams);
-            if (SpawnedItem)
-            {
-                // Initialize the spawned item with the correct data
-                SpawnedItem->InitializeItem(ItemIndex, StackNumber);
-                UE_LOG(LogTemp, Display, TEXT("ContextMenuThrow: Successfully spawned item %s"), *ItemInfo->ItemName);
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("ContextMenuThrow: Failed to spawn item actor"));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("ContextMenuThrow: Failed to load BP_Item class"));
-        }
-    }
-}
-
-// Context Menu Event Handlers - called by inventory slots via events
-void AAtlantisEonsCharacter::OnContextMenuUse(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot)
-{
-    // Delegate to the existing context menu use function
-    ContextMenuUse(InventorySlot);
-}
-
-void AAtlantisEonsCharacter::OnContextMenuThrow(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot)
-{
-    // Delegate to the existing context menu throw function
-    ContextMenuThrow(InventorySlot);
 }
 
 void AAtlantisEonsCharacter::ContextMenuUse_EquipItem(UBP_ItemInfo* ItemInfoRef)
 {
-    if (!ItemInfoRef) return;
-    
-    // Get item information from the data table
-    bool bFound = false;
-    FStructure_ItemInfo ItemData;
-    ItemInfoRef->GetItemTableRow(bFound, ItemData);
-    
-    if (!bFound)
+    if (InventoryComp)
     {
-        UE_LOG(LogTemp, Error, TEXT("ContextMenuUse_EquipItem: Failed to get item data for item index %d"), ItemInfoRef->ItemIndex);
-        return;
-    }
-    
-    // Verify this is an equipable item
-    if (ItemData.ItemType != EItemType::Equip)
-    {
-        return;
-    }
-    
-    // Debug: Log the equipment slot value from data table
-    UE_LOG(LogTemp, Warning, TEXT("ContextMenuUse_EquipItem: Item '%s' has ItemEquipSlot = %d"), 
-           *ItemData.ItemName, static_cast<int32>(ItemData.ItemEquipSlot));
-    
-    // HOTFIX: Correct equipment slots for specific items that have wrong data table values
-    // Comprehensive weapon detection based on item names and known indices
-    bool bIsWeapon = false;
-    bool bIsShield = false;
-    bool bIsHelmet = false;
-    bool bIsBodyArmor = false;
-    
-    // Check by item index (known weapon items)
-    if (ItemInfoRef->ItemIndex == 7 || ItemInfoRef->ItemIndex == 11 || ItemInfoRef->ItemIndex == 12 || 
-        ItemInfoRef->ItemIndex == 13 || ItemInfoRef->ItemIndex == 14 || ItemInfoRef->ItemIndex == 15 || 
-        ItemInfoRef->ItemIndex == 16)
-    {
-        bIsWeapon = true;
-    }
-    // Check by item name patterns for weapons
-    else if (ItemData.ItemName.Contains(TEXT("Sword")) || ItemData.ItemName.Contains(TEXT("Axe")) || 
-             ItemData.ItemName.Contains(TEXT("Pistol")) || ItemData.ItemName.Contains(TEXT("Rifle")) || 
-             ItemData.ItemName.Contains(TEXT("Spike")) || ItemData.ItemName.Contains(TEXT("Laser")) ||
-             ItemData.ItemName.Contains(TEXT("Blade")) || ItemData.ItemName.Contains(TEXT("Gun")) ||
-             ItemData.ItemName.Contains(TEXT("Weapon")) || ItemData.ItemName.Contains(TEXT("Bow")) ||
-             ItemData.ItemName.Contains(TEXT("Staff")) || ItemData.ItemName.Contains(TEXT("Wand")) ||
-             ItemData.ItemName.Contains(TEXT("Hammer")) || ItemData.ItemName.Contains(TEXT("Mace")) ||
-             ItemData.ItemName.Contains(TEXT("Spear")) || ItemData.ItemName.Contains(TEXT("Dagger")) ||
-             ItemData.ItemName.Contains(TEXT("Katana")) || ItemData.ItemName.Contains(TEXT("Scythe")))
-    {
-        bIsWeapon = true;
-    }
-    // Check for shields/accessories
-    else if (ItemInfoRef->ItemIndex == 17 || ItemInfoRef->ItemIndex == 18 ||
-             ItemData.ItemName.Contains(TEXT("Shield")) || ItemData.ItemName.Contains(TEXT("Buckler")))
-    {
-        bIsShield = true;
-    }
-    // Check for helmets/head gear
-    else if (ItemInfoRef->ItemIndex == 19 || ItemInfoRef->ItemIndex == 20 || ItemInfoRef->ItemIndex == 21 || ItemInfoRef->ItemIndex == 22 ||
-             ItemData.ItemName.Contains(TEXT("Helmet")) || ItemData.ItemName.Contains(TEXT("Hat")) || 
-             ItemData.ItemName.Contains(TEXT("Cap")) || ItemData.ItemName.Contains(TEXT("Crown")) ||
-             ItemData.ItemName.Contains(TEXT("Mask")) || ItemData.ItemName.Contains(TEXT("Hood")))
-    {
-        bIsHelmet = true;
-    }
-    // Check for body armor
-    else if (ItemInfoRef->ItemIndex == 23 || ItemInfoRef->ItemIndex == 24 || ItemInfoRef->ItemIndex == 25 || ItemInfoRef->ItemIndex == 26 ||
-             ItemData.ItemName.Contains(TEXT("Suit")) || ItemData.ItemName.Contains(TEXT("Armor")) || 
-             ItemData.ItemName.Contains(TEXT("Chestplate")) || ItemData.ItemName.Contains(TEXT("Vest")) ||
-             ItemData.ItemName.Contains(TEXT("Robe")) || ItemData.ItemName.Contains(TEXT("Tunic")))
-    {
-        bIsBodyArmor = true;
-    }
-    
-    // Apply the corrections
-    if (bIsWeapon)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Weapon;
-        UE_LOG(LogTemp, Warning, TEXT("HOTFIX: Corrected '%s' (Index: %d) to Weapon slot"), *ItemData.ItemName, ItemInfoRef->ItemIndex);
-    }
-    else if (bIsShield)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Accessory;
-        UE_LOG(LogTemp, Warning, TEXT("HOTFIX: Corrected '%s' (Index: %d) to Accessory slot"), *ItemData.ItemName, ItemInfoRef->ItemIndex);
-    }
-    else if (bIsHelmet)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Head;
-        UE_LOG(LogTemp, Warning, TEXT("HOTFIX: Corrected '%s' (Index: %d) to Head slot"), *ItemData.ItemName, ItemInfoRef->ItemIndex);
-    }
-    else if (bIsBodyArmor)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Body;
-        UE_LOG(LogTemp, Warning, TEXT("HOTFIX: Corrected '%s' (Index: %d) to Body slot"), *ItemData.ItemName, ItemInfoRef->ItemIndex);
-    }
-    
-    // Check if the item has a valid equipment slot
-    if (ItemData.ItemEquipSlot == EItemEquipSlot::None)
-    {
-        return;
-    }
-    
-    // FIXED: Correct equipment slot index calculation
-    // Equipment slots array: [0]=Head, [1]=Body, [2]=Weapon, [3]=Accessory
-    // Enum values: None=0, Head=1, Body=2, Weapon=3, Accessory=4
-    int32 EquipSlotIndex = -1;
-    switch (ItemData.ItemEquipSlot)
-    {
-        case EItemEquipSlot::Head:
-            EquipSlotIndex = 0;
-            break;
-        case EItemEquipSlot::Body:
-            EquipSlotIndex = 1;
-            break;
-        case EItemEquipSlot::Weapon:
-            EquipSlotIndex = 2;
-            break;
-        case EItemEquipSlot::Accessory:
-            EquipSlotIndex = 3;
-            break;
-        default:
-            return;
-    }
-    
-    // Check if there's already an item equipped in this slot
-    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num() && EquipmentSlots[EquipSlotIndex])
-    {
-        // Unequip the current item first - move it back to inventory
-        UBP_ItemInfo* CurrentEquippedItem = EquipmentSlots[EquipSlotIndex];
-        if (CurrentEquippedItem)
-        {
-            // Find an empty inventory slot for the unequipped item
-            bool bFoundEmptySlot = false;
-            for (int32 i = 0; i < InventoryItems.Num(); ++i)
-            {
-                if (!InventoryItems[i])
-                {
-                    InventoryItems[i] = CurrentEquippedItem;
-                    bFoundEmptySlot = true;
-                    break;
-                }
-            }
-            
-            if (!bFoundEmptySlot)
-            {
-                return; // No space to unequip current item
-            }
-            
-            // Handle visual unequipping
-            HandleDisarmItem(ItemData.ItemEquipSlot, CurrentEquippedItem->MeshID, CurrentEquippedItem->ItemIndex);
-            
-            // Clear equipment slot UI
-            ClearEquipmentSlotUI(ItemData.ItemEquipSlot);
-            
-            // Remove stat bonuses from the unequipped item
-            SubtractingCharacterStatus(CurrentEquippedItem->ItemIndex);
-        }
-    }
-    
-    // Find the item in the inventory and remove it
-    bool bRemovedFromInventory = false;
-    for (int32 i = 0; i < InventoryItems.Num(); ++i)
-    {
-        if (InventoryItems[i] == ItemInfoRef)
-        {
-            InventoryItems[i] = nullptr;
-            bRemovedFromInventory = true;
-            break;
-        }
-    }
-    
-    if (!bRemovedFromInventory)
-    {
-        return;
-    }
-    
-    // Equip the new item
-    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num())
-    {
-        EquipmentSlots[EquipSlotIndex] = ItemInfoRef;
-        
-        // Handle visual equipping
-        EquipItemInSlot(ItemData.ItemEquipSlot, ItemData.StaticMeshID, ItemData.ItemThumbnail, 
-                       ItemInfoRef->ItemIndex, nullptr, nullptr);
-        
-        // Apply stat bonuses from the equipped item
-        AddingCharacterStatus(ItemInfoRef->ItemIndex);
-        
-        // Update inventory display
-        UpdateInventorySlots();
-        
-        // Update equipment slot UI
-        UpdateEquipmentSlotUI(ItemData.ItemEquipSlot, ItemInfoRef);
-        
-        // Update character stats
-        UpdateAllStats();
-        
-        // Force refresh the stats display
-        RefreshStatsDisplay();
-        
-        UE_LOG(LogTemp, Log, TEXT("✅ Successfully equipped '%s' in %s slot"), 
-               *ItemData.ItemName, 
-               ItemData.ItemEquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
-               ItemData.ItemEquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
-               ItemData.ItemEquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
+        InventoryComp->ContextMenuUse_EquipItem(ItemInfoRef);
     }
 }
 
-void AAtlantisEonsCharacter::ContextMenuUse_ConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef,
-    int32 RecoverHP, int32 RecoverMP, EItemType ItemType)
+void AAtlantisEonsCharacter::ContextMenuUse_ConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef, int32 RecoverHP, int32 RecoverMP, EItemType ItemType)
 {
-    if (!ItemInfoRef || !InventorySlotRef) return;
-    
-    // Apply recovery effects
-    if (RecoverHP > 0)
+    if (InventoryComp)
     {
-        RecoverHealth(RecoverHP);
-    }
-    
-    if (RecoverMP > 0)
-    {
-        this->RecoverMP(RecoverMP);
-    }
-    
-    // Remove item from inventory array
-    int32 SlotIndex = InventorySlotRef->SlotIndex;
-    if (SlotIndex >= 0 && SlotIndex < InventoryItems.Num())
-    {
-        // Check if stackable and has multiple items
-        if (ItemInfoRef->bIsStackable && ItemInfoRef->StackNumber > 1)
-        {
-            // Reduce stack by 1
-            ItemInfoRef->StackNumber -= 1;
-            InventorySlotRef->UpdateSlot(ItemInfoRef);
-        }
-        else
-        {
-            // Remove the item completely
-            InventoryItems[SlotIndex] = nullptr;
-            InventorySlotRef->ClearSlot();
-        }
-        
-        // Update inventory display
-        UpdateInventorySlots();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("ContextMenuUse_ConsumeItem: Invalid slot index %d"), SlotIndex);
+        InventoryComp->ContextMenuUse_ConsumeItem(ItemInfoRef, InventorySlotRef, RecoverHP, RecoverMP, ItemType);
     }
 }
 
 bool AAtlantisEonsCharacter::BuyingItem(int32 ItemIndex, int32 ItemStackNumber, int32 ItemPrice)
 {
-    // Check if player has enough gold
-    int32 TotalCost = ItemPrice * ItemStackNumber;
-    if (YourGold < TotalCost) return false;
-    
-    // Try to add item to inventory
-    if (PickingItem(ItemIndex, ItemStackNumber))
+    if (InventoryComp)
     {
-        // Deduct gold on successful purchase - keep both Gold properties synchronized
-        YourGold -= TotalCost;
-        Gold = YourGold; // Keep Gold synchronized with YourGold
-        return true;
+        return InventoryComp->BuyItem(ItemIndex, ItemStackNumber, ItemPrice);
     }
-    
     return false;
 }
 
 void AAtlantisEonsCharacter::EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, const TSoftObjectPtr<UTexture2D>& Texture2D, int32 ItemIndex, UMaterialInterface* MaterialInterface, UMaterialInterface* MaterialInterface2)
 {
-    // Find the appropriate mesh component based on slot
-    UStaticMeshComponent* TargetComponent = nullptr;
-    FString SlotName;
-    
-    switch (ItemEquipSlot)
+    if (EquipmentComponent)
     {
-        case EItemEquipSlot::Head:
-            TargetComponent = Helmet;
-            SlotName = TEXT("Head");
-            break;
-        case EItemEquipSlot::Body:
-            TargetComponent = BodyMesh;
-            SlotName = TEXT("Body");
-            break;
-        case EItemEquipSlot::Weapon:
-            TargetComponent = Weapon;
-            SlotName = TEXT("Weapon");
-            break;
-        case EItemEquipSlot::Accessory:
-            TargetComponent = Shield;
-            SlotName = TEXT("Shield/Accessory");
-            break;
-        default:
-            UE_LOG(LogTemp, Warning, TEXT("EquipItemInSlot: Unknown equipment slot %d"), static_cast<int32>(ItemEquipSlot));
-            return;
-    }
-
-    if (TargetComponent)
-    {
-        // Load and set the mesh
-        UStaticMesh* LoadedMesh = StaticMeshID.LoadSynchronous();
-        if (LoadedMesh)
-        {
-            TargetComponent->SetStaticMesh(LoadedMesh);
-            TargetComponent->SetVisibility(true);
-        }
-        
-        // Apply materials if provided
-        if (MaterialInterface)
-            TargetComponent->SetMaterial(0, MaterialInterface);
-        if (MaterialInterface2)
-            TargetComponent->SetMaterial(1, MaterialInterface2);
-            
-        // Update SwordBloom attachment if this is a weapon
-        if (ItemEquipSlot == EItemEquipSlot::Weapon)
-        {
-        }
-    }
-}
-
-void AAtlantisEonsCharacter::HandleDisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex)
-{
-    // Find and clear the appropriate mesh component
-    UStaticMeshComponent* TargetComponent = nullptr;
-    FString SlotName;
-    
-    switch (ItemEquipSlot)
-    {
-        case EItemEquipSlot::Head:
-            TargetComponent = Helmet;
-            SlotName = TEXT("Head");
-            break;
-        case EItemEquipSlot::Body:
-            TargetComponent = BodyMesh;
-            SlotName = TEXT("Body");
-            break;
-        case EItemEquipSlot::Weapon:
-            TargetComponent = Weapon;
-            SlotName = TEXT("Weapon");
-            break;
-        case EItemEquipSlot::Accessory:
-            TargetComponent = Shield;
-            SlotName = TEXT("Shield/Accessory");
-            break;
-        default:
-            return;
-    }
-
-    if (TargetComponent)
-    {
-        TargetComponent->SetStaticMesh(nullptr);
-        TargetComponent->SetVisibility(false);
-        
-        // Update SwordBloom attachment if this is a weapon
-        if (ItemEquipSlot == EItemEquipSlot::Weapon)
-        {
-        }
+        EquipmentComponent->EquipItemInSlot(ItemEquipSlot, StaticMeshID, Texture2D, ItemIndex, MaterialInterface, MaterialInterface2);
     }
 }
 
 void AAtlantisEonsCharacter::ProcessEquipItem(UBP_ItemInfo* ItemInfoRef)
 {
-    if (!ItemInfoRef) return;
-
-    // Get item information from the data table
-    bool bFound = false;
-    FStructure_ItemInfo ItemData;
-    ItemInfoRef->GetItemTableRow(bFound, ItemData);
-    
-    if (!bFound)
+    if (EquipmentComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("ProcessEquipItem: Failed to get item data for item index %d"), ItemInfoRef->ItemIndex);
-        return;
+        EquipmentComponent->ProcessEquipItem(ItemInfoRef);
     }
-
-    // Verify this is an equipable item
-    if (ItemData.ItemType != EItemType::Equip)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ProcessEquipItem: Item '%s' is not equipable"), *ItemData.ItemName);
-        return;
-    }
-
-    // Get the item's equipment slot and mesh from the data table
-    EItemEquipSlot EquipSlot = ItemData.ItemEquipSlot;
-    TSoftObjectPtr<UStaticMesh> MeshID = ItemData.StaticMeshID;
-    TSoftObjectPtr<UTexture2D> Thumbnail = ItemData.ItemThumbnail;
-    int32 ItemIndex = ItemInfoRef->ItemIndex;
-    UMaterialInterface* Material1 = nullptr; // Materials not available in data structure
-    UMaterialInterface* Material2 = nullptr; // Materials not available in data structure
-
-    // Equip the item visually
-    EquipItemInSlot(EquipSlot, MeshID, Thumbnail, ItemIndex, Material1, Material2);
-
-    // Update character stats
-    AddingCharacterStatus(ItemIndex);
-    UpdateAllStats();
-    
-    // Force refresh the stats display
-    RefreshStatsDisplay();
-    
-    UE_LOG(LogTemp, Log, TEXT("ProcessEquipItem: Successfully processed equipment for '%s'"), *ItemData.ItemName);
 }
 
 void AAtlantisEonsCharacter::ProcessConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef, int32 RecoverHP, int32 RecoverMP, EItemType ItemType)
@@ -1592,64 +1251,9 @@ void AAtlantisEonsCharacter::ProcessConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_
 void AAtlantisEonsCharacter::DragAndDropExchangeItem(UBP_ItemInfo* FromInventoryItemRef, UWBP_InventorySlot* FromInventorySlotRef,
     UBP_ItemInfo* ToInventoryItemRef, UWBP_InventorySlot* ToInventorySlotRef)
 {
-    if (!FromInventorySlotRef || !ToInventorySlotRef)
+    if (InventoryComp)
     {
-        return;
-    }
-
-    int32 FromIndex = FromInventorySlotRef->SlotIndex;
-    int32 ToIndex = ToInventorySlotRef->SlotIndex;
-
-    // Validate indices
-    if (FromIndex < 0 || ToIndex < 0 || FromIndex >= InventoryItems.Num() || ToIndex >= InventoryItems.Num())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid slot indices for drag and drop: From=%d, To=%d"), FromIndex, ToIndex);
-        return;
-    }
-
-    // Handle stacking if items are the same type
-    if (FromInventoryItemRef && ToInventoryItemRef &&
-        FromInventoryItemRef->ItemIndex == ToInventoryItemRef->ItemIndex &&
-        FromInventoryItemRef->bIsStackable)
-    {
-        // Add stacks together
-        int32 TotalStack = FromInventoryItemRef->StackNumber + ToInventoryItemRef->StackNumber;
-        
-        // Cap at 99
-        if (TotalStack > 99)
-        {
-            ToInventoryItemRef->StackNumber = 99;
-            FromInventoryItemRef->StackNumber = TotalStack - 99;
-            
-            // Update both slots
-            FromInventorySlotRef->UpdateSlot(FromInventoryItemRef);
-            ToInventorySlotRef->UpdateSlot(ToInventoryItemRef);
-        }
-        else
-        {
-            // Combine into destination slot
-            ToInventoryItemRef->StackNumber = TotalStack;
-            ToInventorySlotRef->UpdateSlot(ToInventoryItemRef);
-            
-            // Clear source slot
-            InventoryItems[FromIndex] = nullptr;
-            FromInventorySlotRef->ClearSlot();
-        }
-    }
-    else
-    {
-        // Simple swap
-        InventoryItems[FromIndex] = ToInventoryItemRef;
-        InventoryItems[ToIndex] = FromInventoryItemRef;
-
-        FromInventorySlotRef->UpdateSlot(ToInventoryItemRef);
-        ToInventorySlotRef->UpdateSlot(FromInventoryItemRef);
-    }
-
-    // Play sound effect
-    if (UGameplayStatics::GetCurrentLevelName(this) != TEXT(""))
-    {
-        UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")));
+        InventoryComp->HandleDragAndDrop(FromInventoryItemRef, FromInventorySlotRef, ToInventoryItemRef, ToInventorySlotRef);
     }
 }
 
@@ -1749,134 +1353,149 @@ void AAtlantisEonsCharacter::ResetCharacterInput()
     );
 }
 
-void AAtlantisEonsCharacter::MeleeAttack()
+void AAtlantisEonsCharacter::MeleeAttack(const FInputActionValue& Value)
 {
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttack called. Can attack: %s, Current Attack Index: %d"), 
-           bCanAttack ? TEXT("Yes") : TEXT("No"), CurrentAttackIndex);
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttack called. Can attack: %s, CurrentAttackIndex: %d, BloomWindowActive: %s"), 
+           bCanAttack ? TEXT("Yes") : TEXT("No"), CurrentAttackIndex, bBloomWindowActive ? TEXT("Yes") : TEXT("No"));
 
-    // First check if there's an active bloom window - prioritize spark triggering for combo progression
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
+    // CRITICAL FIX: Safety check for stuck bloom window state
+    if (bBloomWindowActive)
     {
-        bool bSparkTriggered = Widget->TryTriggerSpark();
-        if (bSparkTriggered)
+        // Check if the widget's bloom window is actually active
+        if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget())
         {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ SPARK TRIGGERED! Perfect timing! Advancing combo from index %d to %d"), 
-                   CurrentAttackIndex, CurrentAttackIndex + 1);
-            
-            // Advance to next attack in combo (max at index 4 for MeleeAttackMontage5)
-            if (CurrentAttackIndex < 4)
+            // If character says bloom is active but widget says it's not, reset the character flag
+            if (!SwordBloom->IsBloomWindowActive())
             {
-                CurrentAttackIndex++;
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Combo advanced to attack index %d"), CurrentAttackIndex);
+                UE_LOG(LogTemp, Warning, TEXT("🔧 SAFETY FIX: Character bloom flag stuck, widget says inactive - resetting"));
+                bBloomWindowActive = false;
             }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Already at maximum combo (MeleeAttackMontage5)! Resetting to MeleeAttackMontage1"));
-                CurrentAttackIndex = 0; // Reset to first attack after completing full combo
-            }
-            
-            // Clear any existing combo reset timer since we're continuing the combo
-            GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ CRITICAL TIMING MISSED! Spark window missed or not active. Resetting combo to MeleeAttackMontage1"));
-            CurrentAttackIndex = 0; // Reset to first attack on missed spark - ALWAYS RESET ON MISS
         }
     }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ No SwordBloom widget found. Defaulting to MeleeAttackMontage1"));
-        CurrentAttackIndex = 0; // Default to first attack if no widget - ALWAYS START FROM ATTACK 1
-    }
 
-    // Check attack conditions
+    // Check if we can trigger the conditional spark effect during critical window
+    bool bTriggeredSpark = TryTriggerSparkEffect();
+    if (bTriggeredSpark)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ ✨ Critical window hit! Setting flag for combo continuation"));
+        bHitCriticalWindow = true;
+        return; // Don't start a new attack, the critical window hit will handle chaining
+    }
+    else if (bBloomWindowActive)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚠️ Attack input during bloom window but outside critical timing"));
+        return; // Don't interrupt current attack if bloom is active
+    }
+    
     if (!bCanAttack)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ Cannot attack right now (on cooldown). Maintaining current combo index: %d"), CurrentAttackIndex);
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Cannot attack - on cooldown"));
         return;
     }
 
-    if (bIsAttacking)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ Already attacking. Maintaining current combo index: %d"), CurrentAttackIndex);
-        return;
-    }
-
-    // Face nearest enemy before attacking
+    // Face the nearest enemy before attacking
     FaceNearestEnemy();
 
-    // Get the current attack montage based on combo index
+    // Get the appropriate attack montage based on current attack index
     UAnimMontage* CurrentMontage = GetCurrentAttackMontage();
+    
     if (CurrentMontage)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Playing attack montage: %s (Index: %d)"), 
-               *CurrentMontage->GetName(), CurrentAttackIndex);
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Playing attack montage %d: %s"), 
+               CurrentAttackIndex + 1, *CurrentMontage->GetName());
         
-        // Play the attack animation
-        float MontageDuration = GetMesh()->GetAnimInstance()->Montage_Play(CurrentMontage);
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ Montage duration: %f"), MontageDuration);
+        // Reset critical window flag at start of new attack sequence
+        bHitCriticalWindow = false;
         
-        if (MontageDuration > 0.0f)
+        // Try to play the montage
+        float MontageLength = PlayAnimMontage(CurrentMontage);
+        
+        if (MontageLength > 0.0f)
         {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Successfully playing attack montage with duration: %f"), MontageDuration);
+            // Store the montage length for bloom effect timing
+            CurrentMontageLength = MontageLength;
             
-            // Set attack state
-            bCanAttack = false;
-            bIsAttacking = true; TriggerProgrammaticBloomEffect(MontageDuration);
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Montage duration: %f"), MontageLength);
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Successfully playing attack montage with duration: %f"), MontageLength);
             
-            // Set cooldown timer
-            GetWorld()->GetTimerManager().SetTimer(AttackCooldownTimer, this, 
-                &AAtlantisEonsCharacter::ResetAttack, AttackCooldown, false);
+            // Check animation state
+            if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Current animation state: IsPlaying=%d"), AnimInstance->IsAnyMontagePlaying());
+            }
             
-            // Set combo reset timer (2 seconds to input next attack or combo resets to attack 1)
-            GetWorld()->GetTimerManager().SetTimer(ComboResetTimer, this, 
-                &AAtlantisEonsCharacter::ResetComboChain, 2.0f, false);
-                
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⏰ Attack cooldown and combo reset timers set (2s window for next input)"));
+            // Start the bloom circle immediately when attack begins
+            UE_LOG(LogTemp, Warning, TEXT("🔵 ⚡ BLOOM WINDOW ACTIVATED - Starting immediately with attack"));
+            
+            // CRITICAL FIX: Clear any existing bloom hide timers to prevent conflicts
+            GetWorld()->GetTimerManager().ClearTimer(SwordBloomHideTimer);
+            UE_LOG(LogTemp, Warning, TEXT("🔧 Cleared existing bloom hide timers for new attack"));
+            
+            bBloomWindowActive = true;
+            if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) 
+            { 
+                SwordBloom->StartBloomCircle(); 
+                UE_LOG(LogTemp, Warning, TEXT("🔵 ✅ SwordBloom widget found - StartBloomCircle() called at attack start")); 
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("🔵 ❌ SwordBloom widget NOT found - no visual effects will show")); 
+            }
+            
+            // Start the combo window after this attack
+            StartComboWindow();
+            
+            // CRITICAL FIX: Add a backup timer to call OnMeleeAttackNotify since animation notify may not be set up
+            // This ensures damage application happens even without animation notify setup
+            float NotifyTiming = MontageLength * 0.6f; // Call at 60% through the animation
+            FTimerHandle AttackNotifyTimer;
+            GetWorld()->GetTimerManager().SetTimer(
+                AttackNotifyTimer,
+                FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::OnMeleeAttackNotify),
+                NotifyTiming,
+                false
+            );
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Set backup timer to call OnMeleeAttackNotify in %.2f seconds"), NotifyTiming);
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ Failed to play attack montage. Resetting combo to MeleeAttackMontage1"));
-            CurrentAttackIndex = 0; // Reset to first attack on animation failure
+            UE_LOG(LogTemp, Error, TEXT("🗡️ Failed to play attack montage. Current anim mode: %d"), GetMesh()->GetAnimationMode());
+            ResetAttack();
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ No valid attack montage found for index: %d. Resetting to MeleeAttackMontage1"), CurrentAttackIndex);
-        // Fallback to first attack if current montage is invalid - ALWAYS RESET TO ATTACK 1
-        CurrentAttackIndex = 0;
-        if (MeleeAttackMontage1)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ 🔄 Falling back to MeleeAttackMontage1"));
-            float MontageDuration = GetMesh()->GetAnimInstance()->Montage_Play(MeleeAttackMontage1);
-            if (MontageDuration > 0.0f)
-            {
-                bCanAttack = false;
-                bIsAttacking = true; TriggerProgrammaticBloomEffect(MontageDuration);
-                GetWorld()->GetTimerManager().SetTimer(AttackCooldownTimer, this, 
-                    &AAtlantisEonsCharacter::ResetAttack, AttackCooldown, false);
-                GetWorld()->GetTimerManager().SetTimer(ComboResetTimer, this, 
-                    &AAtlantisEonsCharacter::ResetComboChain, 2.0f, false);
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Successfully fell back to MeleeAttackMontage1"));
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ CRITICAL ERROR: Even MeleeAttackMontage1 failed to play!"));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ CRITICAL ERROR: MeleeAttackMontage1 is null!"));
-        }
+        UE_LOG(LogTemp, Error, TEXT("🗡️ No attack montage available for index %d!"), CurrentAttackIndex);
+        ResetAttack();
     }
+    
+    // Set timer for cooldown reset
+    GetWorld()->GetTimerManager().SetTimer(
+        AttackCooldownTimer,
+        FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::ResetAttack),
+        AttackCooldown,
+        false
+    );
 }
 
 void AAtlantisEonsCharacter::ResetAttack()
 {
     bCanAttack = true;
     bIsAttacking = false;
+    
+    // Always reset critical window flag after processing
+    if (bHitCriticalWindow)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Resetting critical window flag after combo processing"));
+        bHitCriticalWindow = false;
+    }
+    else
+    {
+        // If we're not continuing a combo, reset the chain
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack finished without critical window hit - resetting combo"));
+        ResetComboChain();
+    }
+    
     UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack cooldown reset. Can attack again."));
 }
 
@@ -1893,6 +1512,10 @@ void AAtlantisEonsCharacter::CloseInventoryImpl()
             UE_LOG(LogTemp, Error, TEXT("Failed to get HUD in CloseInventory"));
             return;
         }
+        
+        // POPUP FIX: Clear all item info popups BEFORE hiding the inventory widget
+        // This ensures we can still access the slots to clear their tooltips
+        ClearAllInventoryPopups();
         
         // Hide the inventory widget
         HUD->HideInventoryWidget();
@@ -1957,6 +1580,74 @@ void AAtlantisEonsCharacter::CloseInventoryImpl()
     else
     {
         // UE_LOG(LogTemp, Warning, TEXT("CloseInventory called but inventory was not open"));
+    }
+}
+
+void AAtlantisEonsCharacter::ClearAllInventoryPopups()
+{
+    // Clear all item info popups from inventory slots to prevent them from staying visible
+    // when the inventory is closed while hovering over items
+    
+    UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: Starting comprehensive popup clearing"));
+    
+    if (!MainWidget)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: MainWidget is null"));
+        return;
+    }
+    
+    // Get the inventory widget
+    UWBP_Inventory* InventoryWidget = MainWidget->GetInventoryWidget();
+    if (!InventoryWidget)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: InventoryWidget is null"));
+        return;
+    }
+    
+    // Get all inventory slot widgets and clear their popups
+    const TArray<UWBP_InventorySlot*>& InventorySlots = InventoryWidget->GetInventorySlotWidgets();
+    
+    int32 ClearedPopups = 0;
+    for (UWBP_InventorySlot* Slot : InventorySlots)
+    {
+        if (Slot)
+        {
+            // Call the slot's RemoveItemDescription function to clear any active popups
+            Slot->RemoveItemDescription();
+            ClearedPopups++;
+        }
+    }
+    
+    // ENHANCED CLEARING: Also clear any ItemDescription widgets directly from each slot's reference
+    // This ensures complete cleanup even if some widgets weren't properly removed
+    for (UWBP_InventorySlot* Slot : InventorySlots)
+    {
+        if (Slot)
+        {
+            // Also clear the ItemDescription widget directly if it exists
+            if (Slot->ItemDescription && Slot->ItemDescription->IsInViewport())
+            {
+                Slot->ItemDescription->RemoveFromParent();
+                UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: Force-removed slot %d ItemDescription widget"), Slot->SlotIndex);
+            }
+            
+            // Clear the WidgetItemDescriptionRef too
+            if (Slot->WidgetItemDescriptionRef && Slot->WidgetItemDescriptionRef->IsInViewport())
+            {
+                Slot->WidgetItemDescriptionRef->RemoveFromParent();
+                UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: Force-removed slot %d WidgetItemDescriptionRef"), Slot->SlotIndex);
+            }
+        }
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("ClearAllInventoryPopups: Cleared popups from %d inventory slots with enhanced cleanup"), ClearedPopups);
+    
+    // ADDITIONAL SAFETY: Clear any focus from widgets that might be keeping tooltips alive
+    if (GEngine && GEngine->GameViewport)
+    {
+        FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
+        FSlateApplication::Get().SetAllUserFocus(GEngine->GameViewport->GetGameViewportWidget());
+        UE_LOG(LogTemp, Log, TEXT("ClearAllInventoryPopups: Cleared widget focus to ensure tooltip cleanup"));
     }
 }
 
@@ -2049,55 +1740,9 @@ void AAtlantisEonsCharacter::OpenInventory()
 
 void AAtlantisEonsCharacter::UpdateInventorySlots()
 {
-    if (!MainWidget)
+    if (InventoryComp)
     {
-        UE_LOG(LogTemp, Error, TEXT("%s: Cannot update inventory slots - Main widget is null"), *GetName());
-        return;
-    }
-
-    // Get the inventory widget from the main widget
-    UWBP_Inventory* InventoryWidget = MainWidget->GetInventoryWidget();
-    if (InventoryWidget)
-    {
-        // Get all inventory slot widgets
-        TArray<UWBP_InventorySlot*> Slots = InventoryWidget->GetInventorySlotWidgets();
-        
-        // Update each slot with the corresponding inventory item
-        for (int32 i = 0; i < Slots.Num(); ++i)
-        {
-            if (Slots[i])
-            {
-                // Set the slot index first
-                Slots[i]->SetSlotIndex(i);
-                
-                // Set slot type to Inventory to enable context menu
-                Slots[i]->SetInventorySlotType(EInventorySlotType::Inventory);
-                
-                // Bind context menu events to character handlers
-                if (!Slots[i]->ContextMenuClickUse.IsBound())
-                {
-                    Slots[i]->ContextMenuClickUse.AddDynamic(this, &AAtlantisEonsCharacter::OnContextMenuUse);
-                }
-                if (!Slots[i]->ContextMenuClickThrow.IsBound())
-                {
-                    Slots[i]->ContextMenuClickThrow.AddDynamic(this, &AAtlantisEonsCharacter::OnContextMenuThrow);
-                }
-                
-                // Check if we have an item for this slot
-                if (i < InventoryItems.Num() && InventoryItems[i])
-                {
-                    Slots[i]->UpdateSlot(InventoryItems[i]);
-                }
-                else
-                {
-                    Slots[i]->ClearSlot();
-                }
-            }
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Cannot update inventory slots - Inventory widget not found"), *GetName());
+        InventoryComp->UpdateInventorySlots();
     }
 }
 
@@ -2165,122 +1810,12 @@ FStructure_ItemInfo AAtlantisEonsCharacter::CreateHardcodedItemData(int32 ItemIn
 
 bool AAtlantisEonsCharacter::AddItemToInventory(UBP_ItemInfo* ItemInfo)
 {
-    if (!ItemInfo)
+    if (InventoryComp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Attempted to add null item to inventory"), *GetName());
-        return false;
+        return InventoryComp->AddItemToInventory(ItemInfo);
     }
-
-    // Validate item data
-    if (!ItemInfo->bIsValid || ItemInfo->ItemIndex < 0)
-    {
-        return false;
-    }
-
-    // RESTORED ORIGINAL INVENTORY LOGIC
-    bool bItemAdded = false;
-    int32 RemainingStack = ItemInfo->StackNumber;
-    const int32 MaxStackSize = 99;
-
-    // First try to stack with existing items if stackable
-    if (ItemInfo->bIsStackable)
-    {
-        for (int32 i = 0; i < InventoryItems.Num(); ++i)
-        {
-            if (InventoryItems[i] && InventoryItems[i]->ItemIndex == ItemInfo->ItemIndex)
-            {
-                // Calculate how much we can add to this stack
-                int32 SpaceInStack = MaxStackSize - InventoryItems[i]->StackNumber;
-                if (SpaceInStack > 0)
-                {
-                    int32 AmountToAdd = FMath::Min(RemainingStack, SpaceInStack);
-                    InventoryItems[i]->StackNumber += AmountToAdd;
-                    RemainingStack -= AmountToAdd;
-                    bItemAdded = true;
-
-                    // Update UI for this slot
-                    if (MainWidget)
-                    {
-                        if (UWBP_Inventory* InventoryWidget = MainWidget->GetInventoryWidget())
-                        {
-                            TArray<UWBP_InventorySlot*> Slots = InventoryWidget->GetInventorySlotWidgets();
-                            if (Slots.IsValidIndex(i) && Slots[i])
-                            {
-                                Slots[i]->UpdateSlot(InventoryItems[i]);
-                            }
-                        }
-                    }
-
-                    if (RemainingStack <= 0)
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    // If we still have items to add, find empty slots
-    while (RemainingStack > 0)
-    {
-        bool bFoundEmptySlot = false;
-        
-        for (int32 i = 0; i < InventoryItems.Num(); ++i)
-        {
-            if (!InventoryItems[i])
-            {
-                
-                // Create a new item info object directly from C++ class
-                UBP_ConcreteItemInfo* NewItemInfo = NewObject<UBP_ConcreteItemInfo>(this);
-                if (!NewItemInfo)
-                {
-                    continue;
-                }
-
-                // Copy data from original item using CopyFromItemInfo
-                NewItemInfo->CopyFromItemInfo(ItemInfo);
-
-                // If stackable, add up to max stack size
-                if (ItemInfo->bIsStackable)
-                {
-                    NewItemInfo->StackNumber = FMath::Min(RemainingStack, MaxStackSize);
-                    RemainingStack -= NewItemInfo->StackNumber;
-                }
-                else
-                {
-                    NewItemInfo->StackNumber = 1;
-                    RemainingStack--;
-                }
-
-                // Add to inventory
-                InventoryItems[i] = NewItemInfo;
-                bItemAdded = true;
-                bFoundEmptySlot = true;
-
-                // Update UI for this slot
-                if (MainWidget)
-                {
-                    if (UWBP_Inventory* InventoryWidget = MainWidget->GetInventoryWidget())
-                    {
-                        TArray<UWBP_InventorySlot*> Slots = InventoryWidget->GetInventorySlotWidgets();
-                        if (Slots.IsValidIndex(i) && Slots[i])
-                        {
-                            Slots[i]->UpdateSlot(NewItemInfo);
-                        }
-                    }
-                }
-
-                break;
-            }
-        }
-
-        if (!bFoundEmptySlot)
-        {
-            break;
-        }
-    }
-
-    return bItemAdded;
+    UE_LOG(LogTemp, Warning, TEXT("AddItemToInventory: InventoryComponent is null"));
+    return false;
 }
 
 void AAtlantisEonsCharacter::SetMainWidget(UWBP_Main* NewWidget)
@@ -2316,57 +1851,18 @@ void AAtlantisEonsCharacter::SetMainWidget(UWBP_Main* NewWidget)
 
 void AAtlantisEonsCharacter::UpdateEquipmentSlotUI(EItemEquipSlot EquipSlot, UBP_ItemInfo* ItemInfo)
 {
-    UWBP_InventorySlot* TargetSlot = nullptr;
-    FString SlotName;
-    
-    // Get the appropriate UI slot based on equipment type
-    switch (EquipSlot)
+    if (EquipmentComponent)
     {
-        case EItemEquipSlot::Head:
-            TargetSlot = HeadSlot;
-            SlotName = TEXT("Head");
-            break;
-        case EItemEquipSlot::Body:
-            TargetSlot = SuitSlot;
-            SlotName = TEXT("Suit");
-            break;
-        case EItemEquipSlot::Weapon:
-            TargetSlot = WeaponSlot;
-            SlotName = TEXT("Weapon");
-            break;
-        case EItemEquipSlot::Accessory:
-            TargetSlot = CollectableSlot;
-            SlotName = TEXT("Collectable");
-            break;
-        default:
-            UE_LOG(LogTemp, Warning, TEXT("UpdateEquipmentSlotUI: Unknown equipment slot %d"), static_cast<int32>(EquipSlot));
-            return;
-    }
-    
-    if (TargetSlot)
-    {
-        if (ItemInfo)
-        {
-            // Update the slot with the equipped item
-            TargetSlot->UpdateSlot(ItemInfo);
-            UE_LOG(LogTemp, Log, TEXT("✅ Updated %s equipment slot UI with item"), *SlotName);
-        }
-        else
-        {
-            // Clear the slot
-            TargetSlot->ClearSlot();
-            UE_LOG(LogTemp, Log, TEXT("🔄 Cleared %s equipment slot UI"), *SlotName);
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("UpdateEquipmentSlotUI: %s slot widget is null"), *SlotName);
+        EquipmentComponent->UpdateEquipmentSlotUI(EquipSlot, ItemInfo);
     }
 }
 
 void AAtlantisEonsCharacter::ClearEquipmentSlotUI(EItemEquipSlot EquipSlot)
 {
-    UpdateEquipmentSlotUI(EquipSlot, nullptr);
+    if (EquipmentComponent)
+    {
+        EquipmentComponent->ClearEquipmentSlotUI(EquipSlot);
+    }
 }
 
 void AAtlantisEonsCharacter::UpdateAllEquipmentSlotsUI()
@@ -2470,526 +1966,135 @@ void AAtlantisEonsCharacter::InitializeEquipmentSlotReferences()
 
 void AAtlantisEonsCharacter::OnEquipmentSlotClicked(EItemEquipSlot EquipSlot)
 {
-    // Get the equipment slot index
-    int32 EquipSlotIndex = -1;
-    switch (EquipSlot)
+    if (EquipmentComponent)
     {
-        case EItemEquipSlot::Head:
-            EquipSlotIndex = 0;
-            break;
-        case EItemEquipSlot::Body:
-            EquipSlotIndex = 1;
-            break;
-        case EItemEquipSlot::Weapon:
-            EquipSlotIndex = 2;
-            break;
-        case EItemEquipSlot::Accessory:
-            EquipSlotIndex = 3;
-            break;
-        default:
-            UE_LOG(LogTemp, Warning, TEXT("OnEquipmentSlotClicked: Invalid equipment slot"));
-            return;
-    }
-    
-    // Check if there's an item equipped in this slot
-    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num() && EquipmentSlots[EquipSlotIndex])
-    {
-        UBP_ItemInfo* EquippedItem = EquipmentSlots[EquipSlotIndex];
-        
-        // Get item data for logging and visual updates
-        bool bFound = false;
-        FStructure_ItemInfo ItemData;
-        EquippedItem->GetItemTableRow(bFound, ItemData);
-        
-        // Find the item in the inventory and mark it as unequipped (instead of creating duplicate)
-        bool bFoundInInventory = false;
-        for (int32 i = 0; i < InventoryItems.Num(); ++i)
-        {
-            if (InventoryItems[i] && InventoryItems[i]->ItemIndex == EquippedItem->ItemIndex && InventoryItems[i]->Equipped)
-            {
-                // Mark as unequipped (keeping it in inventory)
-                InventoryItems[i]->Equipped = false;
-                bFoundInInventory = true;
-                
-                UE_LOG(LogTemp, Log, TEXT("✅ Marked item in inventory slot %d as unequipped"), i);
-                break;
-            }
-        }
-        
-        if (!bFoundInInventory)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("❌ Could not find equipped item in inventory - this shouldn't happen"));
-            // Fallback: mark the equipped item as unequipped
-            EquippedItem->Equipped = false;
-        }
-        
-        // Clear the equipment slot
-        EquipmentSlots[EquipSlotIndex] = nullptr;
-        
-        // Handle visual unequipping
-        if (bFound)
-        {
-            HandleDisarmItem(EquipSlot, ItemData.StaticMeshID, EquippedItem->ItemIndex);
-            
-            // Remove stat bonuses from the unequipped item
-            SubtractingCharacterStatus(EquippedItem->ItemIndex);
-            
-            UE_LOG(LogTemp, Log, TEXT("✅ Successfully unequipped '%s' from %s slot (keeping in inventory)"), 
-                   *ItemData.ItemName,
-                   EquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
-                   EquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
-                   EquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
-        }
-        
-        // Clear equipment slot UI
-        ClearEquipmentSlotUI(EquipSlot);
-        
-        // Update inventory display to remove "EQUIPPED" text
-        UpdateInventorySlots();
-        
-        // Update character stats
-        UpdateAllStats();
-        
-        // Force refresh the stats display
-        RefreshStatsDisplay();
-        
-        // Play unequip sound
-        if (UGameplayStatics::GetCurrentLevelName(this) != TEXT(""))
-        {
-            UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")));
-        }
-        
-        // Show success message
-        if (GEngine && bFound)
-        {
-            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, 
-                FString::Printf(TEXT("Unequipped %s"), *ItemData.ItemName));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Log, TEXT("OnEquipmentSlotClicked: No item equipped in this slot"));
+        EquipmentComponent->OnEquipmentSlotClicked(EquipSlot);
     }
 }
 
 void AAtlantisEonsCharacter::OnHeadSlotClicked(int32 SlotIndex)
 {
-    UE_LOG(LogTemp, Log, TEXT("Head slot clicked (SlotIndex: %d)"), SlotIndex);
-    OnEquipmentSlotClicked(EItemEquipSlot::Head);
+    if (EquipmentComponent)
+    {
+        EquipmentComponent->OnHeadSlotClicked(SlotIndex);
+    }
 }
 
 void AAtlantisEonsCharacter::OnWeaponSlotClicked(int32 SlotIndex)
 {
-    UE_LOG(LogTemp, Log, TEXT("Weapon slot clicked (SlotIndex: %d)"), SlotIndex);
-    OnEquipmentSlotClicked(EItemEquipSlot::Weapon);
+    if (EquipmentComponent)
+    {
+        EquipmentComponent->OnWeaponSlotClicked(SlotIndex);
+    }
 }
 
 void AAtlantisEonsCharacter::OnSuitSlotClicked(int32 SlotIndex)
 {
-    UE_LOG(LogTemp, Log, TEXT("Suit slot clicked (SlotIndex: %d)"), SlotIndex);
-    OnEquipmentSlotClicked(EItemEquipSlot::Body);
+    if (EquipmentComponent)
+    {
+        EquipmentComponent->OnSuitSlotClicked(SlotIndex);
+    }
 }
 
 void AAtlantisEonsCharacter::OnCollectableSlotClicked(int32 SlotIndex)
 {
-    UE_LOG(LogTemp, Log, TEXT("Collectable slot clicked (SlotIndex: %d)"), SlotIndex);
-    OnEquipmentSlotClicked(EItemEquipSlot::Accessory);
+    if (EquipmentComponent)
+    {
+        EquipmentComponent->OnCollectableSlotClicked(SlotIndex);
+    }
 }
 
 void AAtlantisEonsCharacter::EquipInventoryItem(UBP_ItemInfo* ItemInfoRef)
 {
-    if (!ItemInfoRef) return;
-    
-    // Get item information from the data table
-    bool bFound = false;
-    FStructure_ItemInfo ItemData;
-    ItemInfoRef->GetItemTableRow(bFound, ItemData);
-    
-    if (!bFound)
+    if (EquipmentComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("EquipInventoryItem: Failed to get item data for item index %d"), ItemInfoRef->ItemIndex);
-        return;
-    }
-    
-    // Verify this is an equipable item
-    if (ItemData.ItemType != EItemType::Equip)
-    {
-        return;
-    }
-    
-    // Apply the same hotfixes for equipment slots as in the original function
-    bool bIsWeapon = false;
-    bool bIsShield = false;
-    bool bIsHelmet = false;
-    bool bIsBodyArmor = false;
-    
-    // Check by item index (known weapon items)
-    if (ItemInfoRef->ItemIndex == 7 || ItemInfoRef->ItemIndex == 11 || ItemInfoRef->ItemIndex == 12 || 
-        ItemInfoRef->ItemIndex == 13 || ItemInfoRef->ItemIndex == 14 || ItemInfoRef->ItemIndex == 15 || 
-        ItemInfoRef->ItemIndex == 16)
-    {
-        bIsWeapon = true;
-    }
-    // Check by item name patterns for weapons
-    else if (ItemData.ItemName.Contains(TEXT("Sword")) || ItemData.ItemName.Contains(TEXT("Axe")) || 
-             ItemData.ItemName.Contains(TEXT("Pistol")) || ItemData.ItemName.Contains(TEXT("Rifle")) || 
-             ItemData.ItemName.Contains(TEXT("Spike")) || ItemData.ItemName.Contains(TEXT("Laser")) ||
-             ItemData.ItemName.Contains(TEXT("Blade")) || ItemData.ItemName.Contains(TEXT("Gun")) ||
-             ItemData.ItemName.Contains(TEXT("Weapon")) || ItemData.ItemName.Contains(TEXT("Bow")) ||
-             ItemData.ItemName.Contains(TEXT("Staff")) || ItemData.ItemName.Contains(TEXT("Wand")) ||
-             ItemData.ItemName.Contains(TEXT("Hammer")) || ItemData.ItemName.Contains(TEXT("Mace")) ||
-             ItemData.ItemName.Contains(TEXT("Spear")) || ItemData.ItemName.Contains(TEXT("Dagger")) ||
-             ItemData.ItemName.Contains(TEXT("Katana")) || ItemData.ItemName.Contains(TEXT("Scythe")))
-    {
-        bIsWeapon = true;
-    }
-    // Check for shields/accessories
-    else if (ItemInfoRef->ItemIndex == 17 || ItemInfoRef->ItemIndex == 18 ||
-             ItemData.ItemName.Contains(TEXT("Shield")) || ItemData.ItemName.Contains(TEXT("Buckler")))
-    {
-        bIsShield = true;
-    }
-    // Check for helmets/head gear
-    else if (ItemInfoRef->ItemIndex == 19 || ItemInfoRef->ItemIndex == 20 || ItemInfoRef->ItemIndex == 21 || ItemInfoRef->ItemIndex == 22 ||
-             ItemData.ItemName.Contains(TEXT("Helmet")) || ItemData.ItemName.Contains(TEXT("Hat")) || 
-             ItemData.ItemName.Contains(TEXT("Cap")) || ItemData.ItemName.Contains(TEXT("Crown")) ||
-             ItemData.ItemName.Contains(TEXT("Mask")) || ItemData.ItemName.Contains(TEXT("Hood")))
-    {
-        bIsHelmet = true;
-    }
-    // Check for body armor
-    else if (ItemInfoRef->ItemIndex == 23 || ItemInfoRef->ItemIndex == 24 || ItemInfoRef->ItemIndex == 25 || ItemInfoRef->ItemIndex == 26 ||
-             ItemData.ItemName.Contains(TEXT("Suit")) || ItemData.ItemName.Contains(TEXT("Armor")) || 
-             ItemData.ItemName.Contains(TEXT("Chestplate")) || ItemData.ItemName.Contains(TEXT("Vest")) ||
-             ItemData.ItemName.Contains(TEXT("Robe")) || ItemData.ItemName.Contains(TEXT("Tunic")))
-    {
-        bIsBodyArmor = true;
-    }
-    
-    // Apply the corrections
-    if (bIsWeapon)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Weapon;
-    }
-    else if (bIsShield)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Accessory;
-    }
-    else if (bIsHelmet)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Head;
-    }
-    else if (bIsBodyArmor)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Body;
-    }
-    
-    // Check if the item has a valid equipment slot
-    if (ItemData.ItemEquipSlot == EItemEquipSlot::None)
-    {
-        return;
-    }
-    
-    // Calculate equipment slot index
-    int32 EquipSlotIndex = -1;
-    switch (ItemData.ItemEquipSlot)
-    {
-        case EItemEquipSlot::Head:
-            EquipSlotIndex = 0;
-            break;
-        case EItemEquipSlot::Body:
-            EquipSlotIndex = 1;
-            break;
-        case EItemEquipSlot::Weapon:
-            EquipSlotIndex = 2;
-            break;
-        case EItemEquipSlot::Accessory:
-            EquipSlotIndex = 3;
-            break;
-        default:
-            return;
-    }
-    
-    // Check if there's already an item equipped in this slot
-    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num() && EquipmentSlots[EquipSlotIndex])
-    {
-        // Unequip the current item first - but keep it in inventory and mark as unequipped
-        UBP_ItemInfo* CurrentEquippedItem = EquipmentSlots[EquipSlotIndex];
-        if (CurrentEquippedItem)
-        {
-            // Mark the current item as unequipped
-            CurrentEquippedItem->Equipped = false;
-            
-            // Handle visual unequipping
-            HandleDisarmItem(ItemData.ItemEquipSlot, CurrentEquippedItem->MeshID, CurrentEquippedItem->ItemIndex);
-            
-            // Clear equipment slot UI
-            ClearEquipmentSlotUI(ItemData.ItemEquipSlot);
-            
-            // Remove stat bonuses from the unequipped item
-            SubtractingCharacterStatus(CurrentEquippedItem->ItemIndex);
-        }
-    }
-    
-    // Mark the item as equipped (DON'T remove from inventory)
-    ItemInfoRef->Equipped = true;
-    
-    // Equip the new item
-    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num())
-    {
-        EquipmentSlots[EquipSlotIndex] = ItemInfoRef;
-        
-        // Handle visual equipping
-        EquipItemInSlot(ItemData.ItemEquipSlot, ItemData.StaticMeshID, ItemData.ItemThumbnail, 
-                       ItemInfoRef->ItemIndex, nullptr, nullptr);
-        
-        // Apply stat bonuses from the equipped item
-        AddingCharacterStatus(ItemInfoRef->ItemIndex);
-        
-        // Update inventory display to show "Equipped" text
-        UpdateInventorySlots();
-        
-        // Update equipment slot UI
-        UpdateEquipmentSlotUI(ItemData.ItemEquipSlot, ItemInfoRef);
-        
-        // Update character stats
-        UpdateAllStats();
-        
-        // Force refresh the stats display
-        RefreshStatsDisplay();
-        
-        // Play equip sound
-        if (UGameplayStatics::GetCurrentLevelName(this) != TEXT(""))
-        {
-            UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")));
-        }
-        
-        // Show success message
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, 
-                FString::Printf(TEXT("Equipped %s"), *ItemData.ItemName));
-        }
-        
-        UE_LOG(LogTemp, Log, TEXT("✅ Successfully equipped '%s' in %s slot (keeping in inventory)"), 
-               *ItemData.ItemName, 
-               ItemData.ItemEquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
-               ItemData.ItemEquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
-               ItemData.ItemEquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
-    }
-}
-
-void AAtlantisEonsCharacter::UnequipInventoryItem(UBP_ItemInfo* ItemInfoRef)
-{
-    if (!ItemInfoRef) return;
-    
-    // Get item information from the data table
-    bool bFound = false;
-    FStructure_ItemInfo ItemData;
-    ItemInfoRef->GetItemTableRow(bFound, ItemData);
-    
-    if (!bFound)
-    {
-        UE_LOG(LogTemp, Error, TEXT("UnequipInventoryItem: Failed to get item data for item index %d"), ItemInfoRef->ItemIndex);
-        return;
-    }
-    
-    // Verify this is an equipable item and is currently equipped
-    if (ItemData.ItemType != EItemType::Equip || !ItemInfoRef->Equipped)
-    {
-        return;
-    }
-    
-    // Apply the same hotfixes for equipment slots
-    bool bIsWeapon = false;
-    bool bIsShield = false;
-    bool bIsHelmet = false;
-    bool bIsBodyArmor = false;
-    
-    // Check by item index (known weapon items)
-    if (ItemInfoRef->ItemIndex == 7 || ItemInfoRef->ItemIndex == 11 || ItemInfoRef->ItemIndex == 12 || 
-        ItemInfoRef->ItemIndex == 13 || ItemInfoRef->ItemIndex == 14 || ItemInfoRef->ItemIndex == 15 || 
-        ItemInfoRef->ItemIndex == 16)
-    {
-        bIsWeapon = true;
-    }
-    // Check by item name patterns for weapons
-    else if (ItemData.ItemName.Contains(TEXT("Sword")) || ItemData.ItemName.Contains(TEXT("Axe")) || 
-             ItemData.ItemName.Contains(TEXT("Pistol")) || ItemData.ItemName.Contains(TEXT("Rifle")) || 
-             ItemData.ItemName.Contains(TEXT("Spike")) || ItemData.ItemName.Contains(TEXT("Laser")) ||
-             ItemData.ItemName.Contains(TEXT("Blade")) || ItemData.ItemName.Contains(TEXT("Gun")) ||
-             ItemData.ItemName.Contains(TEXT("Weapon")) || ItemData.ItemName.Contains(TEXT("Bow")) ||
-             ItemData.ItemName.Contains(TEXT("Staff")) || ItemData.ItemName.Contains(TEXT("Wand")) ||
-             ItemData.ItemName.Contains(TEXT("Hammer")) || ItemData.ItemName.Contains(TEXT("Mace")) ||
-             ItemData.ItemName.Contains(TEXT("Spear")) || ItemData.ItemName.Contains(TEXT("Dagger")) ||
-             ItemData.ItemName.Contains(TEXT("Katana")) || ItemData.ItemName.Contains(TEXT("Scythe")))
-    {
-        bIsWeapon = true;
-    }
-    // Check for shields/accessories
-    else if (ItemInfoRef->ItemIndex == 17 || ItemInfoRef->ItemIndex == 18 ||
-             ItemData.ItemName.Contains(TEXT("Shield")) || ItemData.ItemName.Contains(TEXT("Buckler")))
-    {
-        bIsShield = true;
-    }
-    // Check for helmets/head gear
-    else if (ItemInfoRef->ItemIndex == 19 || ItemInfoRef->ItemIndex == 20 || ItemInfoRef->ItemIndex == 21 || ItemInfoRef->ItemIndex == 22 ||
-             ItemData.ItemName.Contains(TEXT("Helmet")) || ItemData.ItemName.Contains(TEXT("Hat")) || 
-             ItemData.ItemName.Contains(TEXT("Cap")) || ItemData.ItemName.Contains(TEXT("Crown")) ||
-             ItemData.ItemName.Contains(TEXT("Mask")) || ItemData.ItemName.Contains(TEXT("Hood")))
-    {
-        bIsHelmet = true;
-    }
-    // Check for body armor
-    else if (ItemInfoRef->ItemIndex == 23 || ItemInfoRef->ItemIndex == 24 || ItemInfoRef->ItemIndex == 25 || ItemInfoRef->ItemIndex == 26 ||
-             ItemData.ItemName.Contains(TEXT("Suit")) || ItemData.ItemName.Contains(TEXT("Armor")) || 
-             ItemData.ItemName.Contains(TEXT("Chestplate")) || ItemData.ItemName.Contains(TEXT("Vest")) ||
-             ItemData.ItemName.Contains(TEXT("Robe")) || ItemData.ItemName.Contains(TEXT("Tunic")))
-    {
-        bIsBodyArmor = true;
-    }
-    
-    // Apply the corrections
-    if (bIsWeapon)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Weapon;
-    }
-    else if (bIsShield)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Accessory;
-    }
-    else if (bIsHelmet)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Head;
-    }
-    else if (bIsBodyArmor)
-    {
-        ItemData.ItemEquipSlot = EItemEquipSlot::Body;
-    }
-    
-    // Calculate equipment slot index
-    int32 EquipSlotIndex = -1;
-    switch (ItemData.ItemEquipSlot)
-    {
-        case EItemEquipSlot::Head:
-            EquipSlotIndex = 0;
-            break;
-        case EItemEquipSlot::Body:
-            EquipSlotIndex = 1;
-            break;
-        case EItemEquipSlot::Weapon:
-            EquipSlotIndex = 2;
-            break;
-        case EItemEquipSlot::Accessory:
-            EquipSlotIndex = 3;
-            break;
-        default:
-            return;
-    }
-    
-    // Mark the item as unequipped (but keep in inventory)
-    ItemInfoRef->Equipped = false;
-    
-    // Clear the equipment slot
-    if (EquipSlotIndex >= 0 && EquipSlotIndex < EquipmentSlots.Num())
-    {
-        EquipmentSlots[EquipSlotIndex] = nullptr;
-        
-        // Handle visual unequipping
-        HandleDisarmItem(ItemData.ItemEquipSlot, ItemData.StaticMeshID, ItemInfoRef->ItemIndex);
-        
-        // Remove stat bonuses from the unequipped item
-        SubtractingCharacterStatus(ItemInfoRef->ItemIndex);
-        
-        // Clear equipment slot UI
-        ClearEquipmentSlotUI(ItemData.ItemEquipSlot);
-        
-        // Update inventory display to remove "Equipped" text
-        UpdateInventorySlots();
-        
-        // Update character stats
-        UpdateAllStats();
-        
-        // Force refresh the stats display
-        RefreshStatsDisplay();
-        
-        // Play unequip sound
-        if (UGameplayStatics::GetCurrentLevelName(this) != TEXT(""))
-        {
-            UGameplayStatics::PlaySound2D(this, LoadObject<USoundBase>(nullptr, TEXT("/Game/AtlantisEons/Sources/Sounds/S_Equip_Cue2")));
-        }
-        
-        // Show success message
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, 
-                FString::Printf(TEXT("Unequipped %s"), *ItemData.ItemName));
-        }
-        
-        UE_LOG(LogTemp, Log, TEXT("✅ Successfully unequipped '%s' from %s slot (keeping in inventory)"), 
-               *ItemData.ItemName,
-               ItemData.ItemEquipSlot == EItemEquipSlot::Weapon ? TEXT("Weapon") :
-               ItemData.ItemEquipSlot == EItemEquipSlot::Head ? TEXT("Head") :
-               ItemData.ItemEquipSlot == EItemEquipSlot::Body ? TEXT("Body") : TEXT("Accessory"));
+        // Pass character reference directly to bypass world context issues
+        EquipmentComponent->EquipInventoryItemWithCharacter(ItemInfoRef, this);
     }
 }
 
 void AAtlantisEonsCharacter::OnMeleeAttackNotify()
 {
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ OnMeleeAttackNotify called - Player attacking"));
+    
+    // Note: Bloom circle activation now happens immediately when attack starts
+    // This function now only handles damage application
+    
     if (bIsDead) 
     {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Character is dead, skipping attack"));
         return;
     }
     
     // Prevent multiple calls in the same attack sequence
     if (bAttackNotifyInProgress)
     {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack notify already in progress, skipping duplicate call"));
         return;
     }
     
     bAttackNotifyInProgress = true;
     
+    // Reset the flag after a short delay to allow for the next attack
+    FTimerHandle ResetNotifyTimer;
+    GetWorld()->GetTimerManager().SetTimer(
+        ResetNotifyTimer,
+        [this]() { 
+            bAttackNotifyInProgress = false; // Reset the flag
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack notify flag reset - ready for next attack"));
+        },
+        0.5f, // Reset after 0.5 seconds
+        false
+    );
+    
     // Calculate damage based on character stats and equipped weapon
-    float BaseDamage = static_cast<float>(CurrentDamage);
+    float BaseDamage = static_cast<float>(CurrentDamage); // Use character's current damage stat
     float WeaponDamage = 0.0f;
     
     // Check if we have a weapon equipped and get its damage bonus
-    if (EquipmentSlots.Num() > 2 && EquipmentSlots[2])
+    if (EquipmentSlots.Num() > 2 && EquipmentSlots[2]) // Weapon slot is index 2
     {
         UBP_ItemInfo* WeaponItem = EquipmentSlots[2];
         if (WeaponItem)
         {
+            // Get weapon data from store system
             FStructure_ItemInfo WeaponData;
             if (UStoreSystemFix::GetItemData(WeaponItem->GetItemIndex(), WeaponData))
             {
                 WeaponDamage = static_cast<float>(WeaponData.Damage);
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Equipped weapon '%s' adds %f damage"), 
+                       *WeaponData.ItemName, WeaponDamage);
             }
         }
     }
     
     float TotalDamage = BaseDamage + WeaponDamage;
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ Total calculated damage: %f (Base: %f + Weapon: %f)"), 
+           TotalDamage, BaseDamage, WeaponDamage);
     
-    // Attack detection
+    // IMPROVED ATTACK DETECTION: Use multiple detection methods for maximum reliability
     FVector StartLocation = GetActorLocation();
     FVector ForwardVector = GetActorForwardVector();
-    float AttackRange = 300.0f;
-    float AttackRadius = 200.0f;
+    float AttackRange = 300.0f; // Reasonable attack range
+    float AttackRadius = 200.0f; // Larger radius for better detection
     
     // Track which actors we've already hit to prevent multiple hits
     TSet<AActor*> AlreadyHitActors;
     bool bSuccessfulHit = false;
     
-    // Sphere overlap detection
+    // METHOD 1: Direct sphere overlap at player location (most reliable)
     TArray<FOverlapResult> OverlapResults;
     FCollisionShape SphereShape = FCollisionShape::MakeSphere(AttackRadius);
     
     bool bHitDetected = GetWorld()->OverlapMultiByChannel(
         OverlapResults,
-        StartLocation,
+        StartLocation, // Use player location directly instead of calculated center
         FQuat::Identity,
         ECollisionChannel::ECC_Pawn,
         SphereShape
     );
+    
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ Sphere overlap found %d results"), OverlapResults.Num());
     
     if (bHitDetected)
     {
@@ -3002,37 +2107,58 @@ void AAtlantisEonsCharacter::OnMeleeAttackNotify()
             // Skip if we already hit this actor
             if (AlreadyHitActors.Contains(HitActor))
             {
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Skipping already hit actor: %s"), *HitActor->GetName());
                 continue;
             }
             
-            // Check if it's a zombie by class name
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Checking actor: %s (Class: %s)"), 
+                   *HitActor->GetName(), *HitActor->GetClass()->GetName());
+            
+            // Check if it's a zombie by class name (most reliable method)
             bool bIsZombie = HitActor->GetClass()->GetName().Contains(TEXT("ZombieCharacter"));
             
             if (bIsZombie)
             {
-                // Calculate distance and direction for validation
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ ✓ Found zombie by class name: %s"), 
+                       *HitActor->GetClass()->GetName());
+                
+                // Calculate distance and direction for additional validation
                 FVector ToTarget = HitActor->GetActorLocation() - GetActorLocation();
                 float DistanceToTarget = ToTarget.Size();
                 float DotProduct = FVector::DotProduct(ForwardVector, ToTarget.GetSafeNormal());
                 
-                // Check if target is within range and direction
-                if (DistanceToTarget <= AttackRange && DotProduct > -0.5f)
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Zombie %s - Distance: %.1f, Dot: %.2f"), 
+                       *HitActor->GetName(), DistanceToTarget, DotProduct);
+                
+                // More lenient distance and direction check for better hit detection
+                if (DistanceToTarget <= AttackRange && DotProduct > -0.5f) // Allow hits from wider angles
                 {
                     // Mark this actor as hit
                     AlreadyHitActors.Add(HitActor);
                     
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ ATTACKING zombie %s with %.1f damage!"), 
+                           *HitActor->GetName(), TotalDamage);
+                    
                     // Apply damage to the zombie
                     float ActualDamage = HitActor->TakeDamage(TotalDamage, FDamageEvent(), GetController(), this);
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ TakeDamage returned: %.1f"), ActualDamage);
                     
                     bSuccessfulHit = true;
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ Zombie %s out of range or wrong direction (Distance: %.1f, Dot: %.2f)"), 
+                           *HitActor->GetName(), DistanceToTarget, DotProduct);
                 }
             }
         }
     }
     
-    // Backup forward sweep if no hits found
+    // METHOD 2: If no hits found, try a forward sweep as backup
     if (!bSuccessfulHit)
     {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ No hits from sphere overlap, trying forward sweep backup"));
+        
         TArray<FHitResult> HitResults;
         FVector EndLocation = StartLocation + (ForwardVector * AttackRange);
         
@@ -3042,11 +2168,13 @@ void AAtlantisEonsCharacter::OnMeleeAttackNotify()
             EndLocation,
             FQuat::Identity,
             ECollisionChannel::ECC_Pawn,
-            FCollisionShape::MakeSphere(AttackRadius * 0.8f)
+            FCollisionShape::MakeSphere(AttackRadius * 0.8f) // Slightly smaller for sweep
         );
         
         if (bSweepHit)
         {
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Forward sweep found %d results"), HitResults.Num());
+            
             for (const FHitResult& Hit : HitResults)
             {
                 AActor* HitActor = Hit.GetActor();
@@ -3058,26 +2186,42 @@ void AAtlantisEonsCharacter::OnMeleeAttackNotify()
                 {
                     AlreadyHitActors.Add(HitActor);
                     
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ SWEEP ATTACKING zombie %s with %.1f damage!"), 
+                           *HitActor->GetName(), TotalDamage);
+                    
                     float ActualDamage = HitActor->TakeDamage(TotalDamage, FDamageEvent(), GetController(), this);
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Sweep TakeDamage returned: %.1f"), ActualDamage);
                     
                     bSuccessfulHit = true;
-                    break;
+                    break; // Only hit one enemy per attack
                 }
             }
         }
     }
     
-    // Reset attack cooldown after attack completes
-    ResetAttack();
+    if (bSuccessfulHit)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Successfully hit at least one enemy!"));
+        
+        // 🎯 DON'T trigger spark here - spark should only show during critical timing window
+        // BloomSparkNotify(); // REMOVED - this was causing spark to show on every hit
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ No valid enemies found in attack range"));
+    }
     
-    // Reset the flag after a short delay to allow for the next attack
-    FTimerHandle ResetNotifyTimer;
+    // 🎯 SCHEDULE HIDING BLOOM EFFECTS AFTER A SHORT DELAY
+    float BloomDuration = FMath::Max(CurrentMontageLength - 0.2f, 0.5f);
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ 🔵 Bloom effects will last for %.2f seconds (montage: %.2f)"), BloomDuration, CurrentMontageLength);
+    
     GetWorld()->GetTimerManager().SetTimer(
-        ResetNotifyTimer,
+        SwordBloomHideTimer, // Use the class member timer handle instead of local variable
         [this]() { 
-            bAttackNotifyInProgress = false;
+            HideBloomEffectsNotify(); // This will call HideBloomEffectsNotify() and set bBloomWindowActive = false
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ 🔒 SwordBloom effects hidden after attack"));
         },
-        0.5f,
+        BloomDuration,
         false
     );
 }
@@ -3331,7 +2475,25 @@ void AAtlantisEonsCharacter::RespawnCharacter()
 
 void AAtlantisEonsCharacter::FaceNearestEnemy()
 {
-    UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: Looking for nearest enemy to face"));
+    // SAFETY CHECKS: Prevent crashes during shutdown or invalid states
+    if (!IsValid(this) || IsActorBeingDestroyed())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: Character is being destroyed, skipping"));
+        return;
+    }
+    
+    UWorld* World = GetWorld();
+    if (!World || !IsValid(World))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: World is null or invalid, skipping"));
+        return;
+    }
+    
+    if (!Controller || !IsValid(Controller))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: Controller is null or invalid, skipping"));
+        return;
+    }
     
     // Find the nearest enemy within a reasonable range
     const float SearchRadius = 500.0f; // 5 meter search radius
@@ -3340,7 +2502,7 @@ void AAtlantisEonsCharacter::FaceNearestEnemy()
     
     // Get all actors in the world
     TArray<AActor*> AllActors;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AActor::StaticClass(), AllActors);
+    UGameplayStatics::GetAllActorsOfClass(World, AActor::StaticClass(), AllActors);
     
     FGenericTeamId MyTeamId = GetGenericTeamId();
     FVector MyLocation = GetActorLocation();
@@ -3349,24 +2511,31 @@ void AAtlantisEonsCharacter::FaceNearestEnemy()
     {
         if (!Actor || Actor == this || !IsValid(Actor)) continue;
         
+        // Additional safety check for actor state
+        if (Actor->IsActorBeingDestroyed()) continue;
+        
         // Check if this is an enemy
         bool bIsEnemy = false;
         
-        // Check 1: Class name contains "Zombie"
-        if (Actor->GetClass()->GetName().Contains("Zombie"))
-        {
-            bIsEnemy = true;
-        }
-        // Check 2: Actor has enemy tags
-        else if (Actor->ActorHasTag(TEXT("AdvancedZombieEnemy")) || Actor->ActorHasTag(TEXT("Enemy")))
-        {
-            bIsEnemy = true;
-        }
-        // Check 3: Different team ID
-        else
+        // Check if actor has IGenericTeamAgentInterface
+        if (Actor->GetClass() && Actor->GetClass()->ImplementsInterface(UGenericTeamAgentInterface::StaticClass()))
         {
             IGenericTeamAgentInterface* TeamAgent = Cast<IGenericTeamAgentInterface>(Actor);
-            if (TeamAgent && TeamAgent->GetGenericTeamId() != MyTeamId)
+            if (TeamAgent)
+            {
+                FGenericTeamId ActorTeamId = TeamAgent->GetGenericTeamId();
+                if (ActorTeamId != MyTeamId && ActorTeamId.GetId() != 255) // 255 is usually neutral
+                {
+                    bIsEnemy = true;
+                }
+            }
+        }
+        
+        // Also check by class name for ZombieCharacter
+        if (!bIsEnemy && Actor->GetClass())
+        {
+            FString ClassName = Actor->GetClass()->GetName();
+            if (ClassName.Contains(TEXT("Zombie")) || ClassName.Contains(TEXT("Enemy")))
             {
                 bIsEnemy = true;
             }
@@ -3383,32 +2552,40 @@ void AAtlantisEonsCharacter::FaceNearestEnemy()
         }
     }
     
-    // If we found an enemy, face towards it
-    if (NearestEnemy)
+    if (NearestEnemy && IsValid(NearestEnemy))
     {
+        // Calculate direction to enemy
         FVector DirectionToEnemy = (NearestEnemy->GetActorLocation() - MyLocation).GetSafeNormal();
+        
+        // Calculate target rotation (only yaw, keep character upright)
         FRotator TargetRotation = DirectionToEnemy.Rotation();
+        TargetRotation.Pitch = 0.0f; // Keep character upright
+        TargetRotation.Roll = 0.0f;  // Keep character upright
         
-        // Only rotate on the Z axis (yaw) to keep the character upright
-        TargetRotation.Pitch = 0.0f;
-        TargetRotation.Roll = 0.0f;
+        // Get current rotation for logging
+        FRotator CurrentRotation = GetActorRotation();
         
-        // FIXED: Use immediate rotation instead of interpolation for better combat responsiveness
-        // This ensures the player immediately faces the enemy when attacking
+        // DEBUG: Log rotation details
+        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy DEBUG:"));
+        UE_LOG(LogTemp, Warning, TEXT("  Current Rotation: P=%.2f Y=%.2f R=%.2f"), CurrentRotation.Pitch, CurrentRotation.Yaw, CurrentRotation.Roll);
+        UE_LOG(LogTemp, Warning, TEXT("  Target Rotation: P=%.2f Y=%.2f R=%.2f"), TargetRotation.Pitch, TargetRotation.Yaw, TargetRotation.Roll);
+        UE_LOG(LogTemp, Warning, TEXT("  Direction to Enemy: X=%.2f Y=%.2f Z=%.2f"), DirectionToEnemy.X, DirectionToEnemy.Y, DirectionToEnemy.Z);
+        
+        // INSTANT ROTATION for testing - no interpolation
         SetActorRotation(TargetRotation);
         
-        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: Immediately rotated to face enemy %s at distance %.1f"), 
-               *NearestEnemy->GetName(), NearestDistance);
+        // Verify the rotation was applied
+        FRotator NewRotation = GetActorRotation();
+        UE_LOG(LogTemp, Warning, TEXT("  Applied Rotation: P=%.2f Y=%.2f R=%.2f"), NewRotation.Pitch, NewRotation.Yaw, NewRotation.Roll);
         
-        // Draw debug line to show targeting
-        DrawDebugLine(GetWorld(), MyLocation, NearestEnemy->GetActorLocation(), FColor::Orange, false, 1.0f, 0, 2.0f);
+        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: INSTANTLY rotated character to face enemy %s at distance %.1f"), 
+               *NearestEnemy->GetName(), NearestDistance);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: No enemies found within range"));
+        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: No valid enemies found within %.1f units"), SearchRadius);
     }
 }
-
 
 void AAtlantisEonsCharacter::PlayHitReactMontage()
 {
@@ -3508,204 +2685,746 @@ void AAtlantisEonsCharacter::PlayHitReactMontage()
     }
 }
 
-// SwordBloom Widget Functions
-
-// Character Status Functions
-void AAtlantisEonsCharacter::AddingCharacterStatus_Implementation(int32 ItemIndex)
+// Stat bonus functions
+void AAtlantisEonsCharacter::AddingCharacterStatus(int32 ItemIndex)
 {
-    // TODO: Implement stat bonuses from equipped items
-    UE_LOG(LogTemp, Log, TEXT("AddingCharacterStatus called for item index: %d"), ItemIndex);
+    // Get item data and apply stat bonuses
+    FStructure_ItemInfo ItemData;
+    if (UStoreSystemFix::GetItemData(ItemIndex, ItemData))
+    {
+        BaseSTR += ItemData.STR;
+        BaseDEX += ItemData.DEX;
+        BaseINT += ItemData.INT;
+        BaseDefence += ItemData.Defence;
+        BaseDamage += ItemData.Damage;
+        BaseHealth += ItemData.HP;
+        BaseMP += ItemData.MP;
+        
+        UE_LOG(LogTemp, Log, TEXT("Added stat bonuses for item %d: STR+%d, DEX+%d, INT+%d, DEF+%d, DMG+%d, HP+%d, MP+%d"), 
+               ItemIndex, ItemData.STR, ItemData.DEX, ItemData.INT, 
+               ItemData.Defence, ItemData.Damage, ItemData.HP, ItemData.MP);
+    }
 }
 
 void AAtlantisEonsCharacter::SubtractingCharacterStatus(int32 ItemIndex)
 {
-    // TODO: Implement stat reductions when unequipping items
-    UE_LOG(LogTemp, Log, TEXT("SubtractingCharacterStatus called for item index: %d"), ItemIndex);
+    // Get item data and remove stat bonuses
+    FStructure_ItemInfo ItemData;
+    if (UStoreSystemFix::GetItemData(ItemIndex, ItemData))
+    {
+        BaseSTR = FMath::Max(0, BaseSTR - ItemData.STR);
+        BaseDEX = FMath::Max(0, BaseDEX - ItemData.DEX);
+        BaseINT = FMath::Max(0, BaseINT - ItemData.INT);
+        BaseDefence = FMath::Max(0, BaseDefence - ItemData.Defence);
+        BaseDamage = FMath::Max(0, BaseDamage - ItemData.Damage);
+        BaseHealth = FMath::Max(1.0f, BaseHealth - ItemData.HP);
+        BaseMP = FMath::Max(0, BaseMP - ItemData.MP);
+        
+        UE_LOG(LogTemp, Log, TEXT("Removed stat bonuses for item %d: STR-%d, DEX-%d, INT-%d, DEF-%d, DMG-%d, HP-%d, MP-%d"), 
+               ItemIndex, ItemData.STR, ItemData.DEX, ItemData.INT, ItemData.Defence, ItemData.Damage, ItemData.HP, ItemData.MP);
+    }
 }
 
-// SwordBloom Animation Notify Functions
+int32 AAtlantisEonsCharacter::GetYourGold() const
+{
+    return YourGold;
+}
+
+int32 AAtlantisEonsCharacter::GetCurrentMP() const
+{
+    return CurrentMP;
+}
+
+// Context Menu Event Handlers - called by inventory slots via events
+void AAtlantisEonsCharacter::OnContextMenuUse(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot)
+{
+    ContextMenuUse(InventorySlot);
+}
+
+void AAtlantisEonsCharacter::OnContextMenuThrow(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot)
+{
+    ContextMenuThrow(InventorySlot);
+}
+
+// SwordBloom Widget Functions - disabled due to type confusion
+
+// Animation Notify Functions - now using Blueprint implementable events
 void AAtlantisEonsCharacter::BloomCircleNotify()
 {
-    UE_LOG(LogTemp, Warning, TEXT("🌸 BloomCircleNotify: Starting bloom circle timing window"));
-    
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
-    {
-        Widget->StartBloomCircle();
-        UE_LOG(LogTemp, Warning, TEXT("🌸 BloomCircleNotify: Successfully started bloom circle on widget"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("🌸 BloomCircleNotify: SwordBloom widget not available"));
-    }
+    bBloomWindowActive = true;
+    UE_LOG(LogTemp, Warning, TEXT("🔵 ⚡ BLOOM WINDOW ACTIVATED - Critical timing now available"));
+    if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) { SwordBloom->StartBloomCircle(); UE_LOG(LogTemp, Warning, TEXT("🔵 ✅ SwordBloom widget found - StartBloomCircle() called")); } else { UE_LOG(LogTemp, Error, TEXT("🔵 ❌ SwordBloom widget NOT found - no visual effects will show")); }
+    UE_LOG(LogTemp, Warning, TEXT("🔵 Bloom circle notify called - Blueprint should handle visual effects"));
 }
 
 void AAtlantisEonsCharacter::BloomSparkNotify()
 {
-    UE_LOG(LogTemp, Warning, TEXT("⚡ BloomSparkNotify: Animation notify attempting automatic spark trigger"));
-    
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
-    {
-        bool bSuccess = Widget->TryTriggerSpark();
-        if (bSuccess)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("⚡ BloomSparkNotify: ✅ AUTOMATIC SPARK TRIGGERED from animation notify"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("⚡ BloomSparkNotify: ❌ Automatic trigger failed (wrong timing or window closed)"));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("⚡ BloomSparkNotify: SwordBloom widget not available"));
-    }
+    if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) { SwordBloom->ShowSwordSpark(); UE_LOG(LogTemp, Warning, TEXT("✨ ✅ SwordBloom widget found - ShowSwordSpark() called")); } else { UE_LOG(LogTemp, Error, TEXT("✨ ❌ SwordBloom widget NOT found - no spark effects will show")); }
+    UE_LOG(LogTemp, Warning, TEXT("✨ Bloom spark notify called - Blueprint should handle visual effects"));
 }
 
 void AAtlantisEonsCharacter::HideBloomEffectsNotify()
 {
-    UE_LOG(LogTemp, Warning, TEXT("🔒 HideBloomEffectsNotify: Hiding bloom effects"));
-    
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
-    {
-        Widget->HideAllEffects();
-        UE_LOG(LogTemp, Warning, TEXT("🔒 HideBloomEffectsNotify: Successfully hid all bloom effects"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("🔒 HideBloomEffectsNotify: SwordBloom widget not available"));
-    }
+    bBloomWindowActive = false;
+    if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) { SwordBloom->HideAllEffects(); }
+    UE_LOG(LogTemp, Warning, TEXT("🔒 Hide bloom effects notify called - Blueprint should handle visual effects"));
 }
 
 bool AAtlantisEonsCharacter::TryTriggerSparkEffect()
 {
-    UE_LOG(LogTemp, Warning, TEXT("⚡ TryTriggerSparkEffect: Manual spark trigger attempt"));
-    
-    UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-    if (Widget)
+    // Check if we're currently in a bloom window (this is the main requirement)
+    if (!bBloomWindowActive)
     {
-        return Widget->TryTriggerSpark();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("⚡ TryTriggerSparkEffect: SwordBloom widget not available"));
         return false;
     }
+    
+    // Get the SwordBloom widget and check if we hit the critical window
+    if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget())
+    {
+        bool bSuccessfulSpark = SwordBloom->TryTriggerSpark();
+        
+        if (bSuccessfulSpark)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("✨ ✅ CRITICAL WINDOW HIT! Processing spark effect"));
+            
+            // If we're not already in a combo, start one
+            if (!bIsInCombo)
+            {
+                bIsInCombo = true;
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Starting combo chain from first attack"));
+            }
+            
+            // Advance to the next attack in the combo
+            AdvanceComboChain();
+            
+            // ========== SWORD EFFECT ACTIVATION LOGIC ==========
+            // Activate SwordEffect when hitting critical windows on second montage and beyond
+            if (CurrentAttackIndex == 2) // Only when transitioning from second to third montage
+            {
+                UE_LOG(LogTemp, Warning, TEXT("⚡ 🌟 Critical window hit on second montage - ACTIVATING SwordEffect for third montage!"));
+                ActivateSwordEffect();
+            }
+            else
+            {
+                UE_LOG(LogTemp, Log, TEXT("⚡ Critical window hit on attack %d - SwordEffect remains inactive"), CurrentAttackIndex);
+            }
+            
+            // ========== DRAGON VISIBILITY LOGIC ==========
+            // Show Dragons when transitioning to final attack (fourth montage)
+            if (CurrentAttackIndex == 3) // Only when transitioning to final attack
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🐉 Critical window hit on third montage - SHOWING Dragons for final attack!"));
+                ShowDragons();
+            }
+            
+            // Immediately start the next attack montage if available
+            if (CurrentAttackIndex < MaxComboAttacks)
+            {
+                UAnimMontage* NextMontage = GetCurrentAttackMontage();
+                if (NextMontage)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ CHAINING to attack montage %d: %s"), 
+                           CurrentAttackIndex + 1, *NextMontage->GetName());
+                    
+                    // Stop current montage and play next one
+                    if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+                    {
+                        AnimInstance->Montage_Stop(0.1f);
+                    }
+                    
+                    // Small delay to ensure clean transition
+                    FTimerHandle ChainTimer;
+                    GetWorld()->GetTimerManager().SetTimer(
+                        ChainTimer,
+                        [this, NextMontage]()
+                        {
+                            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ CHAINING TIMER CALLBACK: About to play %s for attack index %d"), 
+                                   NextMontage ? *NextMontage->GetName() : TEXT("NULL"), CurrentAttackIndex);
+                            
+                            // Face the nearest enemy before chained attack (like in main attack function)
+                            FaceNearestEnemy();
+                            
+                            // Reset attack notify flag for chained attacks
+                            bAttackNotifyInProgress = false;
+                            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Attack notify flag reset for chained attack"));
+                            
+                            float MontageLength = PlayAnimMontage(NextMontage);
+                            if (MontageLength > 0.0f)
+                            {
+                                // Store the new montage length for bloom timing
+                                CurrentMontageLength = MontageLength;
+                                
+                                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Successfully chained to next attack (duration: %.2f)"), MontageLength);
+                                
+                                // IMPORTANT: Start bloom circle for the chained attack immediately
+                                UE_LOG(LogTemp, Warning, TEXT("🔵 ⚡ BLOOM WINDOW ACTIVATED - Starting for chained attack index %d (%s)"), 
+                                       CurrentAttackIndex, NextMontage ? *NextMontage->GetName() : TEXT("NULL"));
+                                
+                                // CRITICAL FIX: Clear any existing bloom hide timers to prevent conflicts
+                                GetWorld()->GetTimerManager().ClearTimer(SwordBloomHideTimer);
+                                UE_LOG(LogTemp, Warning, TEXT("🔧 Cleared existing bloom hide timers to prevent conflicts"));
+                                
+                                bBloomWindowActive = true;
+                                if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) 
+                                { 
+                                    SwordBloom->StartBloomCircle(); 
+                                    UE_LOG(LogTemp, Warning, TEXT("🔵 ✅ SwordBloom widget found - StartBloomCircle() called for chained attack %s"), 
+                                           NextMontage ? *NextMontage->GetName() : TEXT("NULL")); 
+                                } 
+                                else 
+                                { 
+                                    UE_LOG(LogTemp, Error, TEXT("🔵 ❌ SwordBloom widget NOT found for chained attack %s"), 
+                                           NextMontage ? *NextMontage->GetName() : TEXT("NULL")); 
+                                }
+                                
+                                // CRITICAL FIX: Add backup timer for chained attacks to ensure damage application
+                                // This was missing and causing damage numbers to stop appearing after first combo hit
+                                float NotifyTiming = MontageLength * 0.6f; // Call at 60% through the animation
+                                FTimerHandle AttackNotifyTimer;
+                                GetWorld()->GetTimerManager().SetTimer(
+                                    AttackNotifyTimer,
+                                    FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::OnMeleeAttackNotify),
+                                    NotifyTiming,
+                                    false
+                                );
+                                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Set backup attack notify timer for chained attack in %.2f seconds"), NotifyTiming);
+                                
+                                StartComboWindow(); // Restart the combo timing window
+                            }
+                            else
+                            {
+                                UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ Failed to play chained montage %s for attack index %d"), 
+                                       NextMontage ? *NextMontage->GetName() : TEXT("NULL"), CurrentAttackIndex);
+                            }
+                        },
+                        0.05f,
+                        false
+                    );
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🔚 Ending combo chain - resetting to first attack"));
+                ResetComboChain();
+            }
+            
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+void AAtlantisEonsCharacter::StartBloomScaling()
+{
+    // This function now handled in Blueprint
+    UE_LOG(LogTemp, Warning, TEXT("📈 StartBloomScaling called - implement in Blueprint"));
+}
+
+void AAtlantisEonsCharacter::UpdateBloomScaling()
+{
+    // This function now handled in Blueprint  
+    UE_LOG(LogTemp, Warning, TEXT("📈 UpdateBloomScaling called - implement in Blueprint"));
+}
+
+void AAtlantisEonsCharacter::TriggerProgrammaticBloomEffect(float MontageLength)
+{
+    if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) { SwordBloom->StartBloomCircle(); UE_LOG(LogTemp, Warning, TEXT("🔵 ✅ SwordBloom widget found - StartBloomCircle() called")); } else { UE_LOG(LogTemp, Error, TEXT("🔵 ❌ SwordBloom widget NOT found - no visual effects will show")); }
+    UE_LOG(LogTemp, Warning, TEXT("🎯 Programmatic bloom effect triggered via Blueprint for %.2f second montage"), MontageLength);
 }
 
 void AAtlantisEonsCharacter::CreateSwordBloomWidget()
 {
-    // Don't create a new widget - user already has one set up
-    UE_LOG(LogTemp, Warning, TEXT("CreateSwordBloomWidget: Looking for existing SwordBloom widget component"));
+    if (!SwordBloomWidgetComponent) return;
     
-    // Find existing widget component in the actor
-    TArray<UWidgetComponent*> WidgetComponents;
-    GetComponents<UWidgetComponent>(WidgetComponents);
+    UE_LOG(LogTemp, Warning, TEXT("🌟 CreateSwordBloomWidget: Starting widget setup..."));
     
-    for (UWidgetComponent* WidgetComp : WidgetComponents)
+    // First, try to get an existing widget if one is already set
+    if (UUserWidget* ExistingWidget = SwordBloomWidgetComponent->GetUserWidgetObject())
     {
-        if (WidgetComp && WidgetComp->GetUserWidgetObject())
+        SwordBloomWidget = Cast<UWBP_SwordBloom>(ExistingWidget);
+        if (SwordBloomWidget)
         {
-            UWBP_SwordBloom* FoundWidget = Cast<UWBP_SwordBloom>(WidgetComp->GetUserWidgetObject());
-            if (FoundWidget)
+            UE_LOG(LogTemp, Log, TEXT("✅ Found existing SwordBloom widget"));
+            return;
+        }
+    }
+    
+    // Load the WBP_SwordBloom class with correct path
+    UClass* SwordBloomClass = LoadClass<UWBP_SwordBloom>(nullptr, TEXT("/Game/AtlantisEons/Blueprints/WBP_SwordBloom.WBP_SwordBloom_C"));
+    
+    if (SwordBloomClass)
+    {
+        SwordBloomWidgetComponent->SetWidgetClass(SwordBloomClass);
+        
+        // Set up widget component properties for proper display
+        SwordBloomWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
+        SwordBloomWidgetComponent->SetDrawSize(FVector2D(800.0f, 800.0f));  // Make it larger
+        SwordBloomWidgetComponent->SetPivot(FVector2D(0.5f, 0.5f));  // Center pivot
+        SwordBloomWidgetComponent->SetVisibility(true);
+        SwordBloomWidgetComponent->SetHiddenInGame(false);
+        SwordBloomWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        
+        // Position it in screen center
+        SwordBloomWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+        
+        UE_LOG(LogTemp, Warning, TEXT("🌟 SwordBloom widget component configured - Size: 800x800, Screen space"));
+        
+        SwordBloomWidget = Cast<UWBP_SwordBloom>(SwordBloomWidgetComponent->GetUserWidgetObject());
+        if (SwordBloomWidget)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("✅ SwordBloom widget created and cast successfully"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("❌ Failed to cast widget to UWBP_SwordBloom"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Failed to load WBP_SwordBloom class"));
+    }
+}
+
+UWBP_SwordBloom* AAtlantisEonsCharacter::GetSwordBloomWidget()
+{
+    if (!SwordBloomWidget && SwordBloomWidgetComponent)
+    {
+        SwordBloomWidget = Cast<UWBP_SwordBloom>(SwordBloomWidgetComponent->GetUserWidgetObject()); if (SwordBloomWidget) { UE_LOG(LogTemp, Warning, TEXT("✅ GetSwordBloomWidget: Found widget via cast")); } else { UE_LOG(LogTemp, Warning, TEXT("❌ GetSwordBloomWidget: Cast failed")); }
+    }
+    return SwordBloomWidget;
+}
+
+// Animation Notify Functions
+
+// Missing function implementations for linker
+
+void AAtlantisEonsCharacter::ResetComboChain()
+{
+    CurrentAttackIndex = 0;
+    bIsInCombo = false;
+    bHitCriticalWindow = false;
+    
+    // CRITICAL FIX: Reset bloom window when combo chain ends
+    bBloomWindowActive = false;
+    UE_LOG(LogTemp, Warning, TEXT("🔧 Reset bloom window flag when resetting combo chain"));
+    
+    // ========== SWORD EFFECT DEACTIVATION LOGIC ==========
+    // Deactivate SwordEffect when reverting to first attack
+    UE_LOG(LogTemp, Warning, TEXT("🔒 🌟 Combo chain reset - DEACTIVATING SwordEffect"));
+    DeactivateSwordEffect();
+    
+    // ========== DRAGON HIDING LOGIC ==========
+    // Hide Dragons when combo ends
+    UE_LOG(LogTemp, Warning, TEXT("🔒 🐉 Combo chain reset - HIDING Dragons"));
+    HideDragons();
+    
+    // Clear combo reset timer
+    GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
+    
+    UE_LOG(LogTemp, Warning, TEXT("🔄 Combo chain reset to first attack"));
+}
+
+void AAtlantisEonsCharacter::AdvanceComboChain()
+{
+    if (CurrentAttackIndex < MaxComboAttacks - 1)
+    {
+        CurrentAttackIndex++;
+        UE_LOG(LogTemp, Warning, TEXT("⚡ Advanced combo to attack %d/%d"), CurrentAttackIndex + 1, MaxComboAttacks);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("⚡ Reached maximum combo attacks, resetting chain"));
+        ResetComboChain();
+    }
+}
+
+bool AAtlantisEonsCharacter::CanContinueCombo() const
+{
+    return bIsInCombo && bHitCriticalWindow && (CurrentAttackIndex < MaxComboAttacks - 1);
+}
+
+void AAtlantisEonsCharacter::StartComboWindow()
+{
+    bIsInCombo = true;
+    
+    // Clear any existing combo reset timer
+    GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
+    
+    // Set timer to reset combo if no critical window is hit
+    GetWorld()->GetTimerManager().SetTimer(
+        ComboResetTimer,
+        FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::EndComboChain),
+        ComboWindowDuration,
+        false
+    );
+    
+    UE_LOG(LogTemp, Warning, TEXT("⏰ Started combo window (%.1fs to hit critical timing)"), ComboWindowDuration);
+}
+
+void AAtlantisEonsCharacter::EndComboChain()
+{
+    UE_LOG(LogTemp, Warning, TEXT("🔚 Ending combo chain - resetting to first attack"));
+    
+    // CRITICAL FIX: Reset bloom window when combo chain ends
+    bBloomWindowActive = false;
+    UE_LOG(LogTemp, Warning, TEXT("🔧 Reset bloom window flag when ending combo chain"));
+    
+    // ========== SWORD EFFECT DEACTIVATION LOGIC ==========
+    // Deactivate SwordEffect when combo times out
+    UE_LOG(LogTemp, Warning, TEXT("🔒 🌟 Combo chain timed out - DEACTIVATING SwordEffect"));
+    DeactivateSwordEffect();
+    
+    // ========== DRAGON HIDING LOGIC ==========
+    // Hide Dragons when combo times out
+    UE_LOG(LogTemp, Warning, TEXT("🔒 🐉 Combo chain timed out - HIDING Dragons"));
+    HideDragons();
+    
+    ResetComboChain();
+}
+
+void AAtlantisEonsCharacter::HandleDisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex)
+{
+    if (EquipmentComponent)
+    {
+        EquipmentComponent->HandleDisarmItem(ItemEquipSlot, StaticMeshID, ItemIndex);
+    }
+}
+
+void AAtlantisEonsCharacter::OnDamageTakenEvent(float IncomingDamage, bool bIsAlive)
+{
+    UE_LOG(LogTemp, Log, TEXT("OnDamageTakenEvent: %.1f damage, alive: %s"), IncomingDamage, bIsAlive ? TEXT("Yes") : TEXT("No"));
+    // Implementation for damage taken event
+}
+
+void AAtlantisEonsCharacter::OnHealthChangedEvent(float NewHealthPercent)
+{
+    UE_LOG(LogTemp, Log, TEXT("OnHealthChangedEvent: %.1f%%"), NewHealthPercent * 100.0f);
+    // Implementation for health changed event
+}
+
+void AAtlantisEonsCharacter::OnCharacterDeathEvent()
+{
+    UE_LOG(LogTemp, Log, TEXT("OnCharacterDeathEvent called"));
+    HandleDeath();
+}
+
+void AAtlantisEonsCharacter::OnInventoryChangedEvent()
+{
+    UE_LOG(LogTemp, Log, TEXT("OnInventoryChangedEvent called"));
+    UpdateInventorySlots();
+}
+
+float AAtlantisEonsCharacter::GetMaxHealth() const
+{
+    return MaxHealth;
+}
+
+int32 AAtlantisEonsCharacter::GetCurrentDEX() const
+{
+    return CurrentDEX;
+}
+
+int32 AAtlantisEonsCharacter::GetCurrentINT() const
+{
+    return CurrentINT;
+}
+
+int32 AAtlantisEonsCharacter::GetCurrentSTR() const
+{
+    return CurrentSTR;
+}
+
+int32 AAtlantisEonsCharacter::GetCurrentDamage() const
+{
+    return CurrentDamage;
+}
+
+float AAtlantisEonsCharacter::GetCurrentHealth() const
+{
+    return CurrentHealth;
+}
+
+int32 AAtlantisEonsCharacter::GetCurrentDefence() const
+{
+    return CurrentDefence;
+}
+
+UAnimMontage* AAtlantisEonsCharacter::GetCurrentAttackMontage() const
+{
+    UAnimMontage* SelectedMontage = nullptr;
+    
+    switch (CurrentAttackIndex)
+    {
+        case 0:
+            SelectedMontage = MeleeAttackMontage1;
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack Index 0 -> MeleeAttackMontage1: %s"), 
+                   SelectedMontage ? *SelectedMontage->GetName() : TEXT("NULL"));
+            break;
+        case 1:
+            SelectedMontage = MeleeAttackMontage2;
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack Index 1 -> MeleeAttackMontage2: %s"), 
+                   SelectedMontage ? *SelectedMontage->GetName() : TEXT("NULL"));
+            break;
+        case 2:
+            SelectedMontage = MeleeAttackMontage4; // Skip MeleeAttackMontage3
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack Index 2 -> MeleeAttackMontage4: %s"), 
+                   SelectedMontage ? *SelectedMontage->GetName() : TEXT("NULL"));
+            break;
+        case 3:
+            SelectedMontage = MeleeAttackMontage5;
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack Index 3 -> MeleeAttackMontage5: %s"), 
+                   SelectedMontage ? *SelectedMontage->GetName() : TEXT("NULL"));
+            break;
+        default:
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ Invalid attack index %d, returning first montage"), CurrentAttackIndex);
+            SelectedMontage = MeleeAttackMontage1;
+            break;
+    }
+    
+    return SelectedMontage;
+}
+
+int32 AAtlantisEonsCharacter::GetGold() const
+{
+    return YourGold;
+}
+
+int32 AAtlantisEonsCharacter::GetMaxMP() const
+{
+    return MaxMP;
+}
+
+void AAtlantisEonsCharacter::UnequipInventoryItem(UBP_ItemInfo* ItemInfoRef)
+{
+    if (EquipmentComponent)
+    {
+        // Pass character reference directly to bypass world context issues
+        EquipmentComponent->UnequipInventoryItemWithCharacter(ItemInfoRef, this);
+    }
+}
+
+// ========== SWORD EFFECT NIAGARA SYSTEM MANAGEMENT ==========
+
+void AAtlantisEonsCharacter::FindSwordEffectComponent()
+{
+    UE_LOG(LogTemp, Warning, TEXT("🔍 FindSwordEffectComponent: Searching for SwordEffect Niagara component..."));
+    
+    // Try to find the component by name from all components
+    TArray<UActorComponent*> Components;
+    GetComponents<UActorComponent>(Components);
+    
+    for (UActorComponent* Component : Components)
+    {
+        if (Component && Component->GetName() == TEXT("SwordEffect"))
+        {
+            SwordEffectComponent = Cast<UNiagaraComponent>(Component);
+            if (SwordEffectComponent)
             {
-                SwordBloomWidget = FoundWidget;
-                UE_LOG(LogTemp, Warning, TEXT("CreateSwordBloomWidget: ✅ Found existing SwordBloom widget component"));
+                UE_LOG(LogTemp, Warning, TEXT("✅ Found SwordEffect Niagara component by name!"));
+                
+                // Ensure it starts deactivated
+                SwordEffectComponent->Deactivate();
+                UE_LOG(LogTemp, Warning, TEXT("🔧 SwordEffect component deactivated on startup"));
                 return;
             }
         }
     }
     
-    UE_LOG(LogTemp, Error, TEXT("CreateSwordBloomWidget: ❌ Could not find existing SwordBloom widget component"));
-}
-
-UWBP_SwordBloom* AAtlantisEonsCharacter::GetSwordBloomWidget()
-{
-    if (!SwordBloomWidget)
+    // Alternative search by class type
+    UNiagaraComponent* FoundNiagara = FindComponentByClass<UNiagaraComponent>();
+    if (FoundNiagara && FoundNiagara->GetName().Contains(TEXT("SwordEffect")))
     {
-        CreateSwordBloomWidget();
-    }
-    
-    return SwordBloomWidget;
-}
-
-UAnimMontage* AAtlantisEonsCharacter::GetCurrentAttackMontage() const
-{
-    switch (CurrentAttackIndex)
-    {
-        case 0: return MeleeAttackMontage1;
-        case 1: return MeleeAttackMontage2;
-        case 2: return MeleeAttackMontage3;
-        case 3: return MeleeAttackMontage4;
-        case 4: return MeleeAttackMontage5;
-        default: return MeleeAttackMontage1; // Fallback to first attack
-    }
-}
-
-void AAtlantisEonsCharacter::ResetComboChain()
-{
-    CurrentAttackIndex = 0;
-    GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ Combo chain reset to MeleeAttackMontage1"));
-}
-// Programmatic bloom effect trigger - fallback for animations without notifies
-void AAtlantisEonsCharacter::TriggerProgrammaticBloomEffect(float MontageLength)
-{
-    if (MontageLength <= 0.0f)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🌸 TriggerProgrammaticBloomEffect: Invalid montage length, skipping bloom effect"));
+        SwordEffectComponent = FoundNiagara;
+        UE_LOG(LogTemp, Warning, TEXT("✅ Found SwordEffect Niagara component by class search!"));
+        
+        // Ensure it starts deactivated
+        SwordEffectComponent->Deactivate();
+        UE_LOG(LogTemp, Warning, TEXT("🔧 SwordEffect component deactivated on startup"));
         return;
     }
     
-    // Calculate when to trigger the bloom effect (30% through the animation)
-    float BloomStartTime = MontageLength * 0.3f;
-    // Calculate how long the bloom should last (from 30% until the end = 70% of total duration)
-    float BloomDuration = MontageLength * 0.7f;
-    
-    // CRITICAL FIX: Add attack damage timing (60% through animation)
-    float AttackNotifyTime = MontageLength * 0.6f;
-    
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ 🌸 Set programmatic bloom effect timer for %.2f seconds start, %.2f seconds duration (until end of %.2f montage)"), 
-           BloomStartTime, BloomDuration, MontageLength);
-    
-    // Set a timer to trigger the bloom effect
-    FTimerHandle BloomEffectTimer;
-    GetWorld()->GetTimerManager().SetTimer(
-        BloomEffectTimer,
-        [this, BloomDuration]()
+    UE_LOG(LogTemp, Error, TEXT("❌ Could not find SwordEffect Niagara component! Make sure it's named 'SwordEffect' in the Blueprint."));
+}
+
+void AAtlantisEonsCharacter::ActivateSwordEffect()
+{
+    if (SwordEffectComponent)
+    {
+        if (!SwordEffectComponent->IsActive())
         {
-            UE_LOG(LogTemp, Warning, TEXT("🌸 Programmatic BloomCircleNotify: Starting bloom circle timing window for attack index %d, duration: %.2f seconds"), 
-                   CurrentAttackIndex, BloomDuration);
-            
-            UWBP_SwordBloom* Widget = GetSwordBloomWidget();
-            if (Widget)
-            {
-                Widget->StartBloomCircleWithDuration(BloomDuration);
-                UE_LOG(LogTemp, Warning, TEXT("🌸 Programmatic BloomCircleNotify: Successfully started bloom circle with extended duration"));
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🌸 Programmatic BloomCircleNotify: No SwordBloom widget found"));
-            }
-        },
-        BloomStartTime,
-        false
-    );
-    
-    // CRITICAL: Set a timer to trigger the actual attack damage
-    FTimerHandle AttackDamageTimer;
-    GetWorld()->GetTimerManager().SetTimer(
-        AttackDamageTimer,
-        [this]()
+            SwordEffectComponent->Activate();
+            UE_LOG(LogTemp, Warning, TEXT("⚡ SwordEffect Niagara system ACTIVATED for combo chain!"));
+        }
+        else
         {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ Programmatic attack notify triggered - calling OnMeleeAttackNotify"));
-            OnMeleeAttackNotify();
-        },
-        AttackNotifyTime,
-        false
-    );
+            UE_LOG(LogTemp, Log, TEXT("⚡ SwordEffect already active"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Cannot activate SwordEffect - component not found!"));
+        // Try to find it again
+        FindSwordEffectComponent();
+    }
+}
+
+void AAtlantisEonsCharacter::DeactivateSwordEffect()
+{
+    if (SwordEffectComponent)
+    {
+        if (SwordEffectComponent->IsActive())
+        {
+            SwordEffectComponent->Deactivate();
+            UE_LOG(LogTemp, Warning, TEXT("🔒 SwordEffect Niagara system DEACTIVATED - combo ended"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Log, TEXT("🔒 SwordEffect already inactive"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Cannot deactivate SwordEffect - component not found!"));
+    }
+}
+
+bool AAtlantisEonsCharacter::ShouldSwordEffectBeActive() const
+{
+    // SwordEffect should be active when:
+    // 1. We're in a combo (bIsInCombo = true)
+    // 2. We're on the third montage or higher (CurrentAttackIndex >= 2)
+    bool bShouldBeActive = bIsInCombo && (CurrentAttackIndex >= 2);
     
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ Set programmatic attack damage timer for %.2f seconds (60%% through animation)"), AttackNotifyTime);
-} 
+    UE_LOG(LogTemp, VeryVerbose, TEXT("🔍 ShouldSwordEffectBeActive: InCombo=%s, AttackIndex=%d, Result=%s"),
+           bIsInCombo ? TEXT("Yes") : TEXT("No"), CurrentAttackIndex, bShouldBeActive ? TEXT("Yes") : TEXT("No"));
+    
+    return bShouldBeActive;
+}
+
+// ========== DRAGON SKELETAL MESH VISIBILITY MANAGEMENT ==========
+
+void AAtlantisEonsCharacter::FindDragonComponents()
+{
+    UE_LOG(LogTemp, Warning, TEXT("🔍 FindDragonComponents: Searching for Dragon1 and Dragon2 skeletal mesh components..."));
+    
+    // Try to find the components by name from all components
+    TArray<UActorComponent*> Components;
+    GetComponents<UActorComponent>(Components);
+    
+    for (UActorComponent* Component : Components)
+    {
+        if (Component)
+        {
+            // Check for Dragon1
+            if (Component->GetName() == TEXT("Dragon1"))
+            {
+                Dragon1Component = Cast<USkeletalMeshComponent>(Component);
+                if (Dragon1Component)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("✅ Found Dragon1 skeletal mesh component by name!"));
+                    
+                    // Ensure it starts hidden
+                    Dragon1Component->SetVisibility(false);
+                    UE_LOG(LogTemp, Warning, TEXT("🔧 Dragon1 component hidden on startup"));
+                }
+            }
+            // Check for Dragon2
+            else if (Component->GetName() == TEXT("Dragon2"))
+            {
+                Dragon2Component = Cast<USkeletalMeshComponent>(Component);
+                if (Dragon2Component)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("✅ Found Dragon2 skeletal mesh component by name!"));
+                    
+                    // Ensure it starts hidden
+                    Dragon2Component->SetVisibility(false);
+                    UE_LOG(LogTemp, Warning, TEXT("🔧 Dragon2 component hidden on startup"));
+                }
+            }
+        }
+    }
+    
+    // Log results
+    if (!Dragon1Component)
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Could not find Dragon1 skeletal mesh component! Make sure it's named 'Dragon1' in the Blueprint."));
+    }
+    if (!Dragon2Component)
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Could not find Dragon2 skeletal mesh component! Make sure it's named 'Dragon2' in the Blueprint."));
+    }
+}
+
+void AAtlantisEonsCharacter::ShowDragons()
+{
+    bool bShowedAny = false;
+    
+    if (Dragon1Component)
+    {
+        Dragon1Component->SetVisibility(true);
+        UE_LOG(LogTemp, Warning, TEXT("🐉 Dragon1 skeletal mesh SHOWN for final attack!"));
+        bShowedAny = true;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Cannot show Dragon1 - component not found!"));
+    }
+    
+    if (Dragon2Component)
+    {
+        Dragon2Component->SetVisibility(true);
+        UE_LOG(LogTemp, Warning, TEXT("🐉 Dragon2 skeletal mesh SHOWN for final attack!"));
+        bShowedAny = true;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Cannot show Dragon2 - component not found!"));
+    }
+    
+    if (!bShowedAny)
+    {
+        // Try to find them again
+        FindDragonComponents();
+    }
+}
+
+void AAtlantisEonsCharacter::HideDragons()
+{
+    if (Dragon1Component)
+    {
+        Dragon1Component->SetVisibility(false);
+        UE_LOG(LogTemp, Warning, TEXT("🔒 Dragon1 skeletal mesh HIDDEN - final attack ended"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Cannot hide Dragon1 - component not found!"));
+    }
+    
+    if (Dragon2Component)
+    {
+        Dragon2Component->SetVisibility(false);
+        UE_LOG(LogTemp, Warning, TEXT("🔒 Dragon2 skeletal mesh HIDDEN - final attack ended"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Cannot hide Dragon2 - component not found!"));
+    }
+}
+
+bool AAtlantisEonsCharacter::ShouldDragonsBeVisible() const
+{
+    // Dragons should be visible when:
+    // 1. We're in a combo (bIsInCombo = true)
+    // 2. We're on the final attack (CurrentAttackIndex == 3)
+    bool bShouldBeVisible = bIsInCombo && (CurrentAttackIndex == 3);
+    
+    UE_LOG(LogTemp, VeryVerbose, TEXT("🔍 ShouldDragonsBeVisible: InCombo=%s, AttackIndex=%d, Result=%s"),
+           bIsInCombo ? TEXT("Yes") : TEXT("No"), CurrentAttackIndex, bShouldBeVisible ? TEXT("Yes") : TEXT("No"));
+    
+    return bShouldBeVisible;
+}
+
+
+
+

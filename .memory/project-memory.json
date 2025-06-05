@@ -1,7 +1,7 @@
 {
   "projectName": "AtlantisEons",
   "created": "2025-05-23T09:50:24.246Z",
-  "lastUpdated": "2025-05-29T02:24:45.705Z",
+  "lastUpdated": "2025-06-04T06:24:25.824Z",
   "version": "1.0.0",
   "sessions": [
     {
@@ -45,6 +45,18 @@
       "actions": [],
       "filesModified": [],
       "insights": [],
+      "problems": [],
+      "solutions": []
+    },
+    {
+      "id": "6e15a9da-def1-4164-9262-656167ca18fc",
+      "started": "2025-06-04T05:37:24.059Z",
+      "description": "MCP Memory-Enhanced Analysis Session",
+      "actions": [],
+      "filesModified": [],
+      "insights": [
+        "eb601170-816f-499c-946a-d005eed94c39"
+      ],
       "problems": [],
       "solutions": []
     }
@@ -202,6 +214,64 @@
       "description": "Successfully fixed zombie hit reaction montage system with comprehensive debugging and proper delegate handling. Key improvements: 1) Fixed compilation errors with delegate creation, 2) Added comprehensive animation blueprint debugging, 3) Implemented proper montage slot handling to prevent locomotion interference, 4) Added retry mechanism when montages fail to play, 5) Enhanced fallback system with dramatic visual effects, 6) Proper blend out delegate handling for AI restoration. The system now forces hit reaction montages to play correctly even when Animation Blueprint tries to override them.",
       "context": {},
       "relevance": 0
+    },
+    {
+      "id": "eb601170-816f-499c-946a-d005eed94c39",
+      "timestamp": "2025-06-04T05:37:24.089Z",
+      "sessionId": "6e15a9da-def1-4164-9262-656167ca18fc",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
+    },
+    {
+      "id": "6189aacd-79f5-4025-894a-6173fb3d11e4",
+      "timestamp": "2025-06-04T05:42:54.164Z",
+      "type": "combat-analysis",
+      "description": "Analyzed combat system combo montages and bloom critical spark timing mechanics",
+      "context": {},
+      "relevance": 0
+    },
+    {
+      "id": "14d93ca2-0cb7-4628-99f6-77584db94888",
+      "timestamp": "2025-06-04T05:59:21.640Z",
+      "type": "sword-effect-implementation",
+      "description": "Implemented SwordEffect Niagara component activation system that activates on critical windows starting from second montage and deactivates when reverting to first attack",
+      "context": {},
+      "relevance": 0
+    },
+    {
+      "id": "644a6e93-16da-4286-adea-35e0a55a6f50",
+      "timestamp": "2025-06-04T06:06:31.956Z",
+      "type": "sword-effect-timing",
+      "description": "Fixed SwordEffect activation to only trigger when hitting critical window on second montage (transitioning to third montage), CurrentAttackIndex == 2",
+      "context": {},
+      "relevance": 0
+    },
+    {
+      "id": "baf366db-4a50-4dc2-9ff0-8cb39f830c25",
+      "timestamp": "2025-06-04T06:13:23.082Z",
+      "type": "dragon-visibility-system",
+      "description": "Implemented Dragon1 and Dragon2 skeletal mesh visibility system that shows Dragons when transitioning to final attack (MeleeAttackMontage5, CurrentAttackIndex==3) and hides them when attack ends or combo resets",
+      "context": {},
+      "relevance": 0
+    },
+    {
+      "id": "57e096a2-2f70-4ab6-941f-e3480c106905",
+      "timestamp": "2025-06-04T06:24:25.823Z",
+      "type": "combat-notify-fix",
+      "description": "Fixed critical combat bug where damage numbers stopped appearing after first hit by adding backup attack notify timers to chained attacks and resetting attack notify flags properly",
+      "context": {},
+      "relevance": 0.14285714285714285
     }
   ],
   "patterns": [
@@ -273,6 +343,20 @@
       "firstSeen": "2025-05-28T01:29:27.120Z",
       "lastSeen": "2025-05-28T01:29:27.121Z",
       "confidence": 0.1
+    },
+    {
+      "id": "f14e0d63-a649-430b-92d8-5b7c1e461a06",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-06-04T05:37:24.090Z",
+      "lastSeen": "2025-06-04T05:37:24.090Z",
+      "confidence": 0.5
     }
   ],
   "contextWindows": [
@@ -394,6 +478,17 @@
       "id": "2139b461-e243-441e-8ad8-ca92cc2c228d",
       "timestamp": "2025-05-27T03:12:01.219Z",
       "sessionId": "936affcb-b9ad-4595-ac3b-863514fad4fb",
+      "type": "server-start",
+      "description": "Memory-Enhanced MCP Server started",
+      "files": [
+        "memory-mcp-server.js"
+      ],
+      "impact": "low"
+    },
+    {
+      "id": "4d71cced-77b1-41a6-b76a-b0e5d59d5ef1",
+      "timestamp": "2025-06-04T05:37:24.064Z",
+      "sessionId": "6e15a9da-def1-4164-9262-656167ca18fc",
       "type": "server-start",
       "description": "Memory-Enhanced MCP Server started",
       "files": [

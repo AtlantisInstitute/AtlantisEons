@@ -107,4 +107,8 @@ public:
     /** Called when bloom window times out */
     UFUNCTION()
     void OnBloomWindowTimeout();
+
+    /** Check if bloom window is currently active */
+    UFUNCTION(BlueprintPure, Category = "Combat|Effects")
+    bool IsBloomWindowActive() const { return bBloomWindowActive; }
 }; 

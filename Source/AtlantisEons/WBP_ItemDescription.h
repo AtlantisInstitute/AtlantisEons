@@ -6,6 +6,7 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "BP_Item.h"
+
 #include "WBP_ItemDescription.generated.h"
 
 UCLASS()
@@ -17,6 +18,7 @@ public:
     UWBP_ItemDescription(const FObjectInitializer& ObjectInitializer);
 
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UImage* ItemThumbnail;
@@ -70,6 +72,12 @@ public:
     UTextBlock* DescriptionText;
 
     UFUNCTION(BlueprintPure, Category = "Item Description")
+    FText GetRecoveryHPText() const { return RecoveryHP ? RecoveryHP->GetText() : FText::GetEmpty(); }
+
+    UFUNCTION(BlueprintPure, Category = "Item Description")
+    FText GetRecoveryMPText() const { return RecoveryMP ? RecoveryMP->GetText() : FText::GetEmpty(); }
+
+    UFUNCTION(BlueprintPure, Category = "Item Description")
     FText GetDamageText() const { return DamageText ? DamageText->GetText() : FText::GetEmpty(); }
 
     UFUNCTION(BlueprintPure, Category = "Item Description")
@@ -96,4 +104,15 @@ public:
 protected:
     FString GetItemTypeString(EItemType ItemType) const;
     FString GetItemStatsString(const FStructure_ItemInfo& ItemInfo) const;
+
+    // INVENTORY STATE MONITORING: Check if inventory is closed and auto-remove tooltip
+    UFUNCTION()
+    void CheckInventoryState();
+    
+    // Timer for monitoring inventory state
+    FTimerHandle InventoryStateCheckTimer;
+    
+    // Track if monitoring is active
+    UPROPERTY()
+    bool bIsMonitoring;
 };

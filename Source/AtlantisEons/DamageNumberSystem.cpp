@@ -71,28 +71,51 @@ void ADamageNumberSystem::BeginPlay()
     // Try to load the widget class now that initialization is complete
     if (!DamageNumberWidgetClass)
     {
-        // FIXED: Use StaticLoadClass for more reliable loading
-        DamageNumberWidgetClass = StaticLoadClass(UUserWidget::StaticClass(), nullptr, 
-            TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C"));
+        // FIXED: Use the correct path for the widget blueprint
+        const FString WidgetBlueprintPath = TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C");
+        
+        // Method 1: Try StaticLoadClass first
+        DamageNumberWidgetClass = StaticLoadClass(UUserWidget::StaticClass(), nullptr, *WidgetBlueprintPath);
         
         if (DamageNumberWidgetClass)
         {
-            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Successfully loaded widget class via StaticLoadClass"));
+            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: ✅ Successfully loaded widget class via StaticLoadClass: %s"), 
+                   *DamageNumberWidgetClass->GetName());
         }
         else
         {
-            // Fallback: Try direct Blueprint loading
-            UBlueprint* WidgetBlueprint = LoadObject<UBlueprint>(nullptr, TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber"));
-            if (WidgetBlueprint && WidgetBlueprint->GeneratedClass)
+            // Method 2: Try LoadClass as fallback
+            DamageNumberWidgetClass = LoadClass<UUserWidget>(nullptr, *WidgetBlueprintPath);
+            
+            if (DamageNumberWidgetClass)
             {
-                DamageNumberWidgetClass = WidgetBlueprint->GeneratedClass;
-                UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Found widget class via blueprint loading"));
+                UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: ✅ Successfully loaded widget class via LoadClass: %s"), 
+                       *DamageNumberWidgetClass->GetName());
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: FAILED to load widget class from any method!"));
+                // Method 3: Try loading the blueprint asset directly
+                const FString BlueprintAssetPath = TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber");
+                UBlueprint* WidgetBlueprint = LoadObject<UBlueprint>(nullptr, *BlueprintAssetPath);
+                
+                if (WidgetBlueprint && WidgetBlueprint->GeneratedClass)
+                {
+                    DamageNumberWidgetClass = WidgetBlueprint->GeneratedClass;
+                    UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: ✅ Successfully loaded widget class via blueprint asset: %s"), 
+                           *DamageNumberWidgetClass->GetName());
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: ❌ FAILED to load widget class from any method! Blueprint path: %s"), 
+                           *BlueprintAssetPath);
+                }
             }
         }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Widget class already set: %s"), 
+               *DamageNumberWidgetClass->GetName());
     }
     
     // Set up the singleton instance properly
@@ -149,32 +172,75 @@ void ADamageNumberSystem::Tick(float DeltaTime)
 
 void ADamageNumberSystem::CleanupExpiredWidgets()
 {
+    // CRASH FIX: Add safety check for world validity
+    if (!GetWorld() || !IsValid(GetWorld()))
+    {
+        return;
+    }
+    
     // Remove any null or pending kill actors from the array
     for (int32 i = ActiveDamageNumberActors.Num() - 1; i >= 0; --i)
     {
-        if (!ActiveDamageNumberActors[i] || !IsValid(ActiveDamageNumberActors[i]))
+        // CRASH FIX: Enhanced safety checks (UE5 compatible)
+        AActor* Actor = ActiveDamageNumberActors[i];
+        if (!Actor || !IsValid(Actor) || Actor->IsActorBeingDestroyed())
         {
             ActiveDamageNumberActors.RemoveAt(i);
         }
+    }
+    
+    // CRASH FIX: Limit array size to prevent memory issues
+    if (ActiveDamageNumberActors.Num() > 100)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Too many active actors (%d), force cleaning oldest"), 
+               ActiveDamageNumberActors.Num());
+        
+        // Remove oldest actors
+        int32 ToRemove = ActiveDamageNumberActors.Num() - 50;
+        for (int32 i = 0; i < ToRemove; ++i)
+        {
+            if (ActiveDamageNumberActors.IsValidIndex(i) && IsValid(ActiveDamageNumberActors[i]))
+            {
+                ActiveDamageNumberActors[i]->Destroy();
+            }
+        }
+        ActiveDamageNumberActors.RemoveAt(0, ToRemove);
     }
 }
 
 void ADamageNumberSystem::DestroyDamageNumber()
 {
+    // CRASH FIX: Add comprehensive safety checks (UE5 compatible)
+    if (!IsValid(this) || IsActorBeingDestroyed())
+    {
+        return;
+    }
+    
     // Log that we're destroying this damage number
     UE_LOG(LogTemp, Log, TEXT("DamageNumberSystem: Destroying damage number actor at location: X=%.1f, Y=%.1f, Z=%.1f"), 
            GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
     
-    // Make sure we clean up timers
-    if (GetWorld())
+    // Make sure we clean up timers SAFELY
+    if (GetWorld() && IsValid(GetWorld()))
     {
         GetWorld()->GetTimerManager().ClearAllTimersForObject(this);
     }
     
     // Remove from the tracking array if this is in it
-    if (ADamageNumberSystem::Instance)
+    if (ADamageNumberSystem::Instance && IsValid(ADamageNumberSystem::Instance))
     {
-        Instance->ActiveDamageNumberActors.Remove(this);
+        Instance->ActiveDamageNumberActors.RemoveSingle(this);
+    }
+    
+    // CRASH FIX: Clean up widget component safely
+    if (WidgetComponent && IsValid(WidgetComponent))
+    {
+        UUserWidget* Widget = WidgetComponent->GetUserWidgetObject();
+        if (Widget && IsValid(Widget))
+        {
+            Widget->RemoveFromParent();
+        }
+        WidgetComponent->SetWidget(nullptr);
     }
     
     // Destroy the actor
@@ -183,6 +249,14 @@ void ADamageNumberSystem::DestroyDamageNumber()
 
 void ADamageNumberSystem::SpawnDamageNumber(AActor* DamagedActor, float DamageAmount, bool bIsPlayerDamage)
 {
+    // CRASH FIX: Add safety checks to prevent system overload
+    if (ActiveDamageNumberActors.Num() > 50) // Limit active damage numbers
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Too many active damage numbers (%d), skipping spawn"), 
+               ActiveDamageNumberActors.Num());
+        return;
+    }
+    
     // Log damage information for debugging
     UE_LOG(LogTemp, Log, TEXT("Damage Number System: Spawning damage number of %.1f for %s (Player Damage: %s)"), 
            DamageAmount, 
@@ -200,6 +274,13 @@ void ADamageNumberSystem::SpawnDamageNumber(AActor* DamagedActor, float DamageAm
     if (DamageAmount <= 0.0f)
     {
         UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Skipping damage number for zero or negative damage"));
+        return;
+    }
+    
+    // CRASH FIX: Check if we're being destroyed
+    if (IsActorBeingDestroyed() || !IsValid(this))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: System is being destroyed, skipping spawn"));
         return;
     }
     
@@ -290,19 +371,32 @@ void ADamageNumberSystem::SpawnDamageNumber(AActor* DamagedActor, float DamageAm
     {
         const float DestroyDelay = 2.0f; // Slightly longer than animation duration to ensure it completes
         FTimerHandle DestroyTimerHandle;
-        GetWorld()->GetTimerManager().SetTimer(
-            DestroyTimerHandle, 
-            FTimerDelegate::CreateUObject(DamageNumberActor, &ADamageNumberSystem::DestroyDamageNumber),
-            DestroyDelay, 
-            false
-        );
         
-        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Set destroy timer for %.1f seconds"), DestroyDelay);
+        // CRASH FIX: Use a safer timer approach with proper cleanup
+        if (GetWorld())
+        {
+            GetWorld()->GetTimerManager().SetTimer(
+                DestroyTimerHandle,
+                FTimerDelegate::CreateWeakLambda(DamageNumberActor, [DamageNumberActor]() {
+                    if (IsValid(DamageNumberActor) && !DamageNumberActor->IsActorBeingDestroyed()) {
+                        DamageNumberActor->DestroyDamageNumber();
+                    }
+                }),
+                DestroyDelay,
+                false
+            );
+            
+            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Set destroy timer for %.1f seconds"), DestroyDelay);
+        }
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: No widget class set, cannot initialize damage number"));
-        DamageNumberActor->Destroy();
+        // CRASH FIX: Clean up properly
+        if (IsValid(DamageNumberActor))
+        {
+            DamageNumberActor->Destroy();
+        }
         ActiveDamageNumberActors.Remove(DamageNumberActor);
     }
 }

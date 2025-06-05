@@ -7,6 +7,8 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStatsChangedSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthChangedSignature, float, NewHealthPercent);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnManaChangedSignature, float, NewManaPercent);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnDamageTakenSignature, float, DamageAmount, bool, bIsAlive);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCharacterDeathSignature);
 
 /**
  * Component responsible for managing character stats like Health, Mana, STR, DEX, INT, etc.
@@ -29,6 +31,13 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Stats")
     FOnManaChangedSignature OnManaChanged;
+
+    // Enhanced damage system events
+    UPROPERTY(BlueprintAssignable, Category = "Damage")
+    FOnDamageTakenSignature OnDamageTaken;
+
+    UPROPERTY(BlueprintAssignable, Category = "Damage")
+    FOnCharacterDeathSignature OnCharacterDeath;
 
     // Base stats (set in editor/defaults)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Base Stats")
@@ -159,6 +168,22 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Currency")
     void AddGold(int32 Amount);
 
+    // Enhanced damage system functions
+    UFUNCTION(BlueprintCallable, Category = "Damage")
+    void ApplyDamageAdvanced(float DamageAmount, AActor* DamageSource = nullptr);
+
+    UFUNCTION(BlueprintCallable, Category = "Damage")
+    bool CheckForDeath();
+
+    UFUNCTION(BlueprintPure, Category = "Damage")
+    bool IsDead() const { return bIsDead; }
+
+    UFUNCTION(BlueprintCallable, Category = "Damage")
+    void ResetDeathState();
+
+    UFUNCTION(BlueprintCallable, Category = "Damage")
+    void ReviveCharacter();
+
 protected:
     virtual void BeginPlay() override;
 
@@ -168,4 +193,11 @@ private:
 
     // Helper function to broadcast stat changes
     void BroadcastStatChanges();
+
+    // Death state tracking
+    UPROPERTY()
+    bool bIsDead = false;
+
+    // UI update helpers
+    void NotifyUIUpdate();
 }; 

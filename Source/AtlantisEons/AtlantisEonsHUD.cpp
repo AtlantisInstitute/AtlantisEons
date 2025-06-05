@@ -814,6 +814,15 @@ bool AAtlantisEonsHUD::ShowInventoryWidget()
             UE_LOG(LogTemp, Error, TEXT("HUD - Failed to create Main widget"));
             return false;
         }
+        
+        // Connect the inventory component to the newly created MainWidget
+        if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+        {
+            if (AAtlantisEonsCharacter* Character = Cast<AAtlantisEonsCharacter>(PC->GetPawn()))
+            {
+                Character->ConnectInventoryToMainWidget();
+            }
+        }
     }
     
     // Add the widget to the viewport if it's not already there

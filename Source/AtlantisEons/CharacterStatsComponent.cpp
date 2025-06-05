@@ -96,6 +96,93 @@ void UCharacterStatsComponent::TakeDamage(float DamageAmount)
     }
 }
 
+void UCharacterStatsComponent::ApplyDamageAdvanced(float DamageAmount, AActor* DamageSource)
+{
+    UE_LOG(LogTemp, Warning, TEXT("📊 REFACTOR: ApplyDamageAdvanced called in StatsComponent - DamageAmount: %.1f"), DamageAmount);
+    
+    if (bIsDead) 
+    {
+        UE_LOG(LogTemp, Warning, TEXT("📊 Character is already dead, ignoring damage"));
+        return;
+    }
+
+    if (DamageAmount <= 0.0f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("📊 Invalid damage amount: %.1f"), DamageAmount);
+        return;
+    }
+
+    // Store previous health for comparison
+    float PreviousHealth = CurrentHealth;
+    
+    // Apply damage
+    CurrentHealth = FMath::Max(CurrentHealth - DamageAmount, 0.0f);
+    
+    UE_LOG(LogTemp, Warning, TEXT("💔 StatsComponent: Health reduced from %.1f to %.1f (damage: %.1f)"), 
+           PreviousHealth, CurrentHealth, DamageAmount);
+
+    // Check if character dies from this damage
+    bool bWasAlive = PreviousHealth > 0.0f;
+    bool bIsAliveAfterDamage = CurrentHealth > 0.0f;
+    
+    // Update UI
+    NotifyUIUpdate();
+    
+    // Broadcast damage taken event
+    OnDamageTaken.Broadcast(DamageAmount, bIsAliveAfterDamage);
+    
+    // Broadcast health changed event
+    OnHealthChanged.Broadcast(GetHealthPercent());
+    
+    // Check for death
+    if (bWasAlive && !bIsAliveAfterDamage)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("💀 StatsComponent: Character has died! Triggering death event."));
+        bIsDead = true;
+        OnCharacterDeath.Broadcast();
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("📊 StatsComponent ApplyDamageAdvanced completed: DamageAmount=%.1f, NewHealth=%.1f, IsDead=%s"), 
+           DamageAmount, CurrentHealth, bIsDead ? TEXT("Yes") : TEXT("No"));
+}
+
+bool UCharacterStatsComponent::CheckForDeath()
+{
+    if (CurrentHealth <= 0.0f && !bIsDead)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("📊 CheckForDeath: Character should be dead (Health: %.1f)"), CurrentHealth);
+        bIsDead = true;
+        OnCharacterDeath.Broadcast();
+        return true;
+    }
+    return bIsDead;
+}
+
+void UCharacterStatsComponent::ResetDeathState()
+{
+    UE_LOG(LogTemp, Warning, TEXT("📊 ResetDeathState: Resetting death state"));
+    bIsDead = false;
+}
+
+void UCharacterStatsComponent::ReviveCharacter()
+{
+    UE_LOG(LogTemp, Warning, TEXT("📊 ReviveCharacter: Reviving character with full health"));
+    
+    // Reset health to maximum
+    CurrentHealth = MaxHealth;
+    
+    // Reset death state
+    bIsDead = false;
+    
+    // Update UI
+    NotifyUIUpdate();
+    
+    // Broadcast health changed event
+    OnHealthChanged.Broadcast(GetHealthPercent());
+    
+    UE_LOG(LogTemp, Log, TEXT("📊 Character revived with %.1f/%.1f health"), CurrentHealth, MaxHealth);
+}
+
 float UCharacterStatsComponent::GetHealthPercent() const
 {
     return MaxHealth > 0.0f ? CurrentHealth / MaxHealth : 0.0f;
@@ -223,4 +310,12 @@ void UCharacterStatsComponent::BroadcastStatChanges()
     OnStatsChanged.Broadcast();
     OnHealthChanged.Broadcast(GetHealthPercent());
     OnManaChanged.Broadcast(GetManaPercent());
+}
+
+void UCharacterStatsComponent::NotifyUIUpdate()
+{
+    // Broadcast all relevant UI update events
+    OnHealthChanged.Broadcast(GetHealthPercent());
+    OnManaChanged.Broadcast(GetManaPercent());
+    OnStatsChanged.Broadcast();
 } 
