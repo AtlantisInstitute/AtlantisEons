@@ -52,58 +52,63 @@ AZombieCharacter::AZombieCharacter()
     GetCharacterMovement()->bUseControllerDesiredRotation = true;
     GetCharacterMovement()->GravityScale = 1.0f;  // Make sure gravity is enabled
 
-    // FIXED: Configure collision to prevent physics impulse issues AND block player movement VERY STRONGLY
+    // ENHANCED: Configure collision to properly block player but prevent physics issues
     if (GetCapsuleComponent())
     {
         GetCapsuleComponent()->SetSimulatePhysics(false);
         GetCapsuleComponent()->SetEnableGravity(false);
         GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
         
-        // CRITICAL: MAXIMUM collision blocking - prevents overlapping completely
+        // OPTIMIZED: Strong collision blocking with proper channel setup
         GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block);
-        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // MAXIMUM blocking of player movement
-        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // Block player movement
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Allow camera
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Block visibility traces
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
         
-        // ENHANCED: MAXIMUM physics locking - extremely heavy and immovable
-        GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 20000.0f, true); // MASSIVE: Even heavier than player
-        GetCapsuleComponent()->SetLinearDamping(100.0f); // MAXIMUM damping - nearly immovable
-        GetCapsuleComponent()->SetAngularDamping(100.0f); // MAXIMUM rotational damping
-        GetCapsuleComponent()->SetUseCCD(false); // No continuous collision
-        GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // No collision events
+        // BALANCED: Heavy but not excessive mass to prevent penetration without physics chaos
+        GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 2000.0f, true); // Heavy but reasonable
+        GetCapsuleComponent()->SetLinearDamping(50.0f); // High damping to resist movement
+        GetCapsuleComponent()->SetAngularDamping(50.0f); // High rotational damping
+        GetCapsuleComponent()->SetUseCCD(true); // Enable CCD to prevent high-speed penetration
+        GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // No collision events for performance
         
-        // CRITICAL: MAXIMUM body instance locking
+        // ENHANCED: Proper body instance setup for solid collision
         if (GetCapsuleComponent()->GetBodyInstance())
         {
             GetCapsuleComponent()->GetBodyInstance()->SetResponseToAllChannels(ECR_Block);
-            GetCapsuleComponent()->GetBodyInstance()->SetResponseToChannel(ECC_Pawn, ECR_Block); // MAXIMUM player blocking
-            GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow AI movement but controlled
+            GetCapsuleComponent()->GetBodyInstance()->SetResponseToChannel(ECC_Pawn, ECR_Block); // Block player
+            GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow AI movement
             GetCapsuleComponent()->GetBodyInstance()->bLockYTranslation = false;
             GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock Z to prevent flying
-            GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true; // Lock rotations completely
+            GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true; // Lock pitch/roll
             GetCapsuleComponent()->GetBodyInstance()->bLockYRotation = true;
-            GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = false; // Allow yaw rotation only for AI
+            GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = false; // Allow yaw for AI
+            
+            // CRITICAL: Set collision shape to prevent penetration
+            GetCapsuleComponent()->GetBodyInstance()->bUseCCD = true; // Continuous collision detection
+            GetCapsuleComponent()->GetBodyInstance()->SetMassOverride(2000.0f, true); // Reinforce mass
         }
         
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: MAXIMUM collision blocking - BLOCKS PLAYER COMPLETELY - Mass: 20000kg"));
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: ENHANCED collision blocking - Mass: 2000kg, CCD enabled"));
     }
 
     // FIXED: Disable physics simulation to prevent flying when hit
     GetCapsuleComponent()->SetSimulatePhysics(false);
     GetCapsuleComponent()->SetEnableGravity(false); // Let character movement handle gravity
     
-    // FIXED: Configure mesh to not simulate physics but support collision queries
+    // ENHANCED: Configure mesh to prevent clipping with player during attacks
     if (GetMesh())
     {
         GetMesh()->SetSimulatePhysics(false);
         GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
         GetMesh()->SetCollisionResponseToAllChannels(ECR_Ignore);
-        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // Let capsule handle pawn collision
+        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // CRITICAL: Don't collide with player mesh
         GetMesh()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Support visibility/line traces
+        GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
         
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Mesh collision configured for combat (QueryOnly)"));
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Mesh collision configured to IGNORE player mesh - prevents clipping"));
     }
 
     // Set default values - adjusted for better gameplay
@@ -140,41 +145,45 @@ void AZombieCharacter::BeginPlay()
     
     UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter initialized with %f health"), CurrentHealth);
 
-    // CRITICAL: Completely prevent physics launching - MAXIMUM Enhanced setup
+    // ENHANCED: Prevent physics launching with optimized collision setup
     if (GetCapsuleComponent())
     {
         GetCapsuleComponent()->SetSimulatePhysics(false);
         GetCapsuleComponent()->SetEnableGravity(false);
         GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
         
-        // CRITICAL: MAXIMUM collision blocking to completely prevent overlapping
+        // OPTIMIZED: Strong collision blocking to prevent player penetration
         GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Block);
-        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // MAXIMUM: Block player movement completely
+        GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // Block player movement
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
         GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
         
-        // ENHANCED: MAXIMUM physics locking - completely immovable
-        GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 20000.0f, true); // MASSIVE: Even heavier than player
-        GetCapsuleComponent()->SetLinearDamping(100.0f); // MAXIMUM damping - nearly immovable
-        GetCapsuleComponent()->SetAngularDamping(100.0f); // MAXIMUM rotational damping
-        GetCapsuleComponent()->SetUseCCD(false); // No continuous collision
-        GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // No collision events
+        // BALANCED: Heavy but reasonable mass to prevent penetration
+        GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 2000.0f, true); // Heavy but not excessive
+        GetCapsuleComponent()->SetLinearDamping(50.0f); // High damping to resist movement
+        GetCapsuleComponent()->SetAngularDamping(50.0f); // High rotational damping
+        GetCapsuleComponent()->SetUseCCD(true); // Enable CCD to prevent high-speed penetration
+        GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // No collision events for performance
         
-        // CRITICAL: MAXIMUM body instance locking to prevent any physics movement
+        // ENHANCED: Proper body instance setup for solid collision
         if (GetCapsuleComponent()->GetBodyInstance())
         {
             GetCapsuleComponent()->GetBodyInstance()->SetResponseToAllChannels(ECR_Block);
-            GetCapsuleComponent()->GetBodyInstance()->SetResponseToChannel(ECC_Pawn, ECR_Block); // MAXIMUM player blocking
-            GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow AI movement but controlled
+            GetCapsuleComponent()->GetBodyInstance()->SetResponseToChannel(ECC_Pawn, ECR_Block); // Block player
+            GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow AI movement
             GetCapsuleComponent()->GetBodyInstance()->bLockYTranslation = false;
-            GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock Z completely to prevent flying
-            GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true; // Lock all rotations completely
+            GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock Z to prevent flying
+            GetCapsuleComponent()->GetBodyInstance()->bLockXRotation = true; // Lock pitch/roll
             GetCapsuleComponent()->GetBodyInstance()->bLockYRotation = true;
-            GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = false; // Allow yaw rotation only for AI facing
+            GetCapsuleComponent()->GetBodyInstance()->bLockZRotation = false; // Allow yaw for AI
+            
+            // CRITICAL: Enhanced collision detection
+            GetCapsuleComponent()->GetBodyInstance()->bUseCCD = true; // Continuous collision detection
+            GetCapsuleComponent()->GetBodyInstance()->SetMassOverride(2000.0f, true); // Reinforce mass
         }
         
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: MAXIMUM collision blocking applied - Mass: 20000kg"));
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: ENHANCED collision blocking applied - Mass: 2000kg, CCD enabled"));
     }
     
     if (GetMesh())
@@ -182,34 +191,35 @@ void AZombieCharacter::BeginPlay()
         GetMesh()->SetSimulatePhysics(false);
         GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
         
-        // ENHANCED: MAXIMUM mesh physics prevention
+        // ENHANCED: Configure mesh to prevent clipping with player
         GetMesh()->SetMassOverrideInKg(NAME_None, 0.0f, false); // Zero mass for mesh
         GetMesh()->SetEnableGravity(false);
         GetMesh()->SetUseCCD(false);
         GetMesh()->SetCollisionResponseToAllChannels(ECR_Ignore);
-        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+        GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // CRITICAL: Don't collide with player mesh
+        GetMesh()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Support visibility traces
+        GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera
         GetMesh()->SetNotifyRigidBodyCollision(false); // No collision events
-        GetMesh()->SetLinearDamping(100.0f); // Maximum damping even for mesh
-        GetMesh()->SetAngularDamping(100.0f); // Maximum rotational damping for mesh
+        GetMesh()->SetLinearDamping(100.0f); // Maximum damping
+        GetMesh()->SetAngularDamping(100.0f); // Maximum rotational damping
         
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: MAXIMUM mesh physics prevention - Mass: 0kg, Max damping"));
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Mesh configured to IGNORE player mesh - prevents attack clipping"));
     }
     
-    // ENHANCED: MAXIMUM character movement physics resistance
+    // ENHANCED: Balanced character movement with proper collision resistance
     if (GetCharacterMovement())
     {
         GetCharacterMovement()->bIgnoreBaseRotation = true;
         GetCharacterMovement()->bIgnoreClientMovementErrorChecksAndCorrection = true;
-        GetCharacterMovement()->Mass = 20000.0f; // MASSIVE: Even heavier to resist any physics impulses completely
-        GetCharacterMovement()->GroundFriction = 100.0f; // MAXIMUM friction - nearly immovable
-        GetCharacterMovement()->MaxAcceleration = 2048.0f;
-        GetCharacterMovement()->BrakingDecelerationWalking = 10000.0f; // MAXIMUM braking - instant stop
+        GetCharacterMovement()->Mass = 2000.0f; // Heavy but reasonable mass
+        GetCharacterMovement()->GroundFriction = 25.0f; // High friction to resist sliding
+        GetCharacterMovement()->MaxAcceleration = 1024.0f; // Controlled acceleration
+        GetCharacterMovement()->BrakingDecelerationWalking = 2048.0f; // Fast but reasonable braking
         GetCharacterMovement()->bApplyGravityWhileJumping = false;
         GetCharacterMovement()->bNotifyApex = false;
         GetCharacterMovement()->bCanWalkOffLedges = false; // Prevent falling off edges
-        GetCharacterMovement()->bIgnoreBaseRotation = true;
         
-        // CRITICAL: MAXIMUM prevention of external velocity changes
+        // BALANCED: Prevent external velocity changes without being excessive
         GetCharacterMovement()->bRequestedMoveUseAcceleration = true;
         GetCharacterMovement()->bForceMaxAccel = false;
         GetCharacterMovement()->bRunPhysicsWithNoController = false;
@@ -217,15 +227,14 @@ void AZombieCharacter::BeginPlay()
         GetCharacterMovement()->bImpartBaseVelocityX = false; // Don't inherit velocity
         GetCharacterMovement()->bImpartBaseVelocityY = false; // Don't inherit velocity
         
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: MAXIMUM movement physics resistance - Mass: 20000kg, Max friction: 100.0"));
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: ENHANCED movement physics resistance - Mass: 2000kg, Friction: 25.0"));
         
-        // COMBAT TESTING: Keep movement disabled for maximum stability
-        GetCharacterMovement()->DisableMovement();
-        GetCharacterMovement()->StopMovementImmediately();
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Movement COMPLETELY disabled for maximum collision stability"));
+        // TESTING: Re-enable movement for AI behavior with proper collision
+        GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Movement enabled with enhanced collision resistance"));
         
-        // MAXIMUM: Log movement settings to verify physics prevention
-        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: MAXIMUM Movement Settings - MaxWalkSpeed: %.1f, Mass: %.1f"), 
+        // LOG: Movement settings for verification
+        UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter: Movement Settings - MaxWalkSpeed: %.1f, Mass: %.1f"), 
                GetCharacterMovement()->MaxWalkSpeed, GetCharacterMovement()->Mass);
     }
 

@@ -331,6 +331,140 @@ protected:
     bool bCanAttack;
     bool bIsAttacking;
     bool bAttackNotifyInProgress = false;
+    
+    // ========== CAMERA STABILIZATION SYSTEM ==========
+    UFUNCTION(BlueprintCallable, Category = "Camera")
+    void EnableAttackCameraStabilization();
+    
+    UFUNCTION(BlueprintCallable, Category = "Camera")
+    void DisableAttackCameraStabilization();
+    
+    UFUNCTION(BlueprintCallable, Category = "Camera")
+    bool IsNearEnemies() const;
+
+    // ========== CAMERA STABILIZATION VARIABLES ==========
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    bool bSuppressAttackRootMotion = false;
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    FVector LockedPosition = FVector::ZeroVector;
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    bool bPositionLocked = false;
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    FRotator LockedCameraRotation = FRotator::ZeroRotator;
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    bool bCameraRotationLocked = false;
+    
+    // ULTRA-AGGRESSIVE: Maximum stabilization variables for rock-solid camera control
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float CameraStabilizationStrength = 0.98f; // ULTRA-AGGRESSIVE: Near-maximum stabilization strength
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.1", ClampMax = "10.0"))
+    float StabilizationThreshold = 0.5f; // ULTRA-AGGRESSIVE: Much tighter threshold for immediate correction
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.1", ClampMax = "100.0"))
+    float StabilizationLerpSpeed = 35.0f; // ULTRA-AGGRESSIVE: Much faster correction speed
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+    bool bAllowVerticalMovementDuringAttacks = true; // Allow Z-axis movement during attacks
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+    bool bAllowRotationDuringAttacks = false; // Prevent camera rotation during attacks
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float CameraRotationStabilizationStrength = 0.99f; // ULTRA-AGGRESSIVE: Maximum rotation stabilization
+    
+    // BREAKABLE STABILIZATION: Allow player to override stabilization with movement input
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+    bool bAllowBreakableStabilization = true; // Enable input-based stabilization override
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float MovementInputStabilizationStrength = 0.0f; // DISABLED - No stabilization when player is actively moving
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "5.0"))
+    float MovementInputThreshold = 0.1f; // Minimum input magnitude to trigger breakable mode
+    
+    // ULTRA-AGGRESSIVE: Extended sequence stabilization to prevent cumulative drift
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "10.0"))
+    float PositionRefreshInterval = 1.0f; // ULTRA-AGGRESSIVE: Refresh locked position every 1 second
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "5.0"))
+    float MaxCumulativeDrift = 0.8f; // ULTRA-AGGRESSIVE: Much tighter drift tolerance
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float ExtendedSequenceStabilizationStrength = 0.99f; // ULTRA-AGGRESSIVE: Maximum stabilization for extended sequences
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float PositionTolerance = 0.05f; // ULTRA-AGGRESSIVE: Extremely tight tolerance to prevent any micro-drift
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "2.0"))
+    float RotationTolerance = 0.01f; // ULTRA-AGGRESSIVE: Virtually zero rotation tolerance for rock-solid control
+    
+    // Attack-specific stabilization timing
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float StabilizationStartDelay = 0.0f; // No delay - instant activation to prevent any frame distortions
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float StabilizationEndEarly = 0.2f; // End stabilization before attack animation ends
+    
+    // Simplified parameters (removed ultra-aggressive modes)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "5.0"))
+    float MaxStabilizationDistance = 3.0f; // Reasonable distance before correction (increased from 1.0)
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+    bool bUseHardSnapForLargeMovements = false; // Disabled to prevent frame snaps
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+    bool bUseUltraStabilizationMode = false; // Disabled to prevent aggressive corrections
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float UltraStabilizationThreshold = 0.5f; // More reasonable threshold (increased from 0.05)
+    
+    // Proximity-based stabilization for enemy interactions
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+    bool bUseProximityStabilization = false; // Disabled - was too restrictive for normal movement
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "50.0", ClampMax = "500.0"))
+    float ProximityStabilizationDistance = 200.0f; // Distance to enemies that triggers stabilization
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float ProximityStabilizationStrength = 0.7f; // Weaker than attack stabilization but still effective
+    
+    FTimerHandle StabilizationDelayTimer;
+    FTimerHandle PositionRefreshTimer; // ENHANCED: Timer for refreshing locked position during extended sequences
+    
+    // Smoothing variables for better interpolation
+    FVector LastStabilizedPosition = FVector::ZeroVector;
+    bool bStabilizationActive = false;
+    
+    // ENHANCED: Extended sequence tracking variables
+    float StabilizationStartTime = 0.0f; // Track how long stabilization has been active
+    FVector InitialLockedPosition = FVector::ZeroVector; // Store original position for drift detection
+    FRotator InitialLockedCameraRotation = FRotator::ZeroRotator; // Store original rotation for drift detection
+    
+    // ULTRA-AGGRESSIVE: Persistent stabilization variables
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "10.0"))
+    float MinimumStabilizationDuration = 3.0f; // ULTRA-AGGRESSIVE: Minimum time before stabilization can be disabled
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+    bool bPersistentStabilizationMode = true; // ULTRA-AGGRESSIVE: Keep stabilization active longer during combat
+    
+    // COMBAT MODE: Extended stabilization that persists across multiple attack sequences
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "30.0"))
+    float CombatModeStabilizationDuration = 15.0f; // Stay locked for 15 seconds of combat activity
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+    bool bCombatModeStabilization = true; // Enable extended combat stabilization mode
+    
+    float LastCombatActivity = 0.0f; // Track when combat last occurred
+    bool bInCombatMode = false; // Are we in extended combat stabilization mode?
+    
+    // BREAKABLE STABILIZATION: Track current movement input
+    FVector2D CurrentMovementInput = FVector2D::ZeroVector; // Current movement input from player
+    bool bIsPlayerTryingToMove = false; // Is player actively providing movement input?
 
     // Timer handles for combat and effects
     FTimerHandle AttackCooldownTimer;
@@ -558,6 +692,11 @@ public:
 
     /** Called for melee attack input */
     void MeleeAttack(const FInputActionValue& Value);
+    
+    // ========== CAMERA STABILIZATION - ROOT MOTION CONTROL ==========
+    
+    /** Override to handle root motion extraction and filtering during attacks */
+    virtual void Tick(float DeltaSeconds) override;
 
     /** Get the current attack montage based on combo index */
     UFUNCTION(BlueprintCallable, Category = "Combat")

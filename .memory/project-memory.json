@@ -1,7 +1,7 @@
 {
   "projectName": "AtlantisEons",
   "created": "2025-05-23T09:50:24.246Z",
-  "lastUpdated": "2025-06-04T06:24:25.824Z",
+  "lastUpdated": "2025-06-05T06:43:58.559Z",
   "version": "1.0.0",
   "sessions": [
     {
@@ -56,6 +56,18 @@
       "filesModified": [],
       "insights": [
         "eb601170-816f-499c-946a-d005eed94c39"
+      ],
+      "problems": [],
+      "solutions": []
+    },
+    {
+      "id": "ebd35c0b-684a-4a07-9cfc-1c80fad5b548",
+      "started": "2025-06-05T03:07:24.419Z",
+      "description": "MCP Memory-Enhanced Analysis Session",
+      "actions": [],
+      "filesModified": [],
+      "insights": [
+        "be2dd062-0d0a-48a6-ab29-0ad49ccd249f"
       ],
       "problems": [],
       "solutions": []
@@ -272,6 +284,32 @@
       "description": "Fixed critical combat bug where damage numbers stopped appearing after first hit by adding backup attack notify timers to chained attacks and resetting attack notify flags properly",
       "context": {},
       "relevance": 0.14285714285714285
+    },
+    {
+      "id": "be2dd062-0d0a-48a6-ab29-0ad49ccd249f",
+      "timestamp": "2025-06-05T03:07:24.537Z",
+      "sessionId": "ebd35c0b-684a-4a07-9cfc-1c80fad5b548",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
+    },
+    {
+      "id": "5b40302b-9b93-4b4a-ab08-e4709a032006",
+      "timestamp": "2025-06-05T06:43:30.424Z",
+      "type": "camera-stabilization",
+      "description": "Successfully implemented breakable camera stabilization system that allows player movement during attacks while maintaining camera lock for precision. MovementInputStabilizationStrength=0.0f completely disables stabilization when movement input detected, providing tactical combat positioning while preventing camera clipping.",
+      "context": {},
+      "relevance": 0.14285714285714285
     }
   ],
   "patterns": [
@@ -357,6 +395,34 @@
       "firstSeen": "2025-06-04T05:37:24.090Z",
       "lastSeen": "2025-06-04T05:37:24.090Z",
       "confidence": 0.5
+    },
+    {
+      "id": "894a1e86-9204-4a33-8975-93cae3601778",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-06-05T03:07:24.538Z",
+      "lastSeen": "2025-06-05T03:07:24.538Z",
+      "confidence": 0.5
+    },
+    {
+      "id": "89867efd-8a22-468f-a598-93e421c0e95f",
+      "name": "breakable-stabilization",
+      "description": "Camera stabilization with movement override: track movement input via CurrentMovementInput and bIsPlayerTryingToMove, dynamically adjust stabilization strength (98% -> 0%) based on player input detection",
+      "examples": [
+        "MovementInputStabilizationStrength = 0.0f",
+        "bAllowBreakableStabilization = true",
+        "MovementInputThreshold = 0.1f"
+      ],
+      "frequency": 1,
+      "firstSeen": "2025-06-05T06:43:35.943Z",
+      "lastSeen": "2025-06-05T06:43:35.944Z",
+      "confidence": 0.1
     }
   ],
   "contextWindows": [
@@ -458,6 +524,39 @@
       },
       "summary": "Context involving: filePath, fileName, fileSize",
       "tags": []
+    },
+    {
+      "id": "338a575f-d32f-409d-82fc-ef57f2a4e2fb",
+      "timestamp": "2025-06-05T06:43:51.835Z",
+      "data": {
+        "filePath": "/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/Source/AtlantisEons/AtlantisEonsCharacter.h",
+        "fileName": "AtlantisEonsCharacter.h",
+        "fileSize": 46839,
+        "lineCount": 1123,
+        "description": "Final breakable camera stabilization system header file with all necessary variables",
+        "timestamp": "2025-06-05T06:43:51.833Z",
+        "preview": "// Copyright Epic Games, Inc. All Rights Reserved.\n\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"ItemTypes.h\"\n#include \"GameFramework/Character.h\"\n#include \"InputActionValue.h\"\n#include \"NiagaraComponent.h\"\n#include \"BP_ItemInterface.h\"\n#include \"GenericTeamAgentInterface.h\"\n#include \"Materials/MaterialInterface.h\"\n#include \"Materials/MaterialInstanceDynamic.h\"\n#include \"Components/Image.h\"\n#include \"Components/ProgressBar.h\"\n#include \"Components/WidgetComponent.h\"\n#include \"BP_ItemInterface..."
+      },
+      "summary": "Context involving: filePath, fileName, fileSize",
+      "tags": []
+    },
+    {
+      "id": "9361f150-80ce-4e05-8a1d-b792efe88758",
+      "timestamp": "2025-06-05T06:43:58.556Z",
+      "data": {
+        "filePath": "/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/Source/AtlantisEons/AtlantisEonsCharacter.cpp",
+        "fileName": "AtlantisEonsCharacter.cpp",
+        "fileSize": 154620,
+        "lineCount": 3921,
+        "description": "Final breakable camera stabilization system implementation with Move() input tracking and Tick() dynamic stabilization logic",
+        "timestamp": "2025-06-05T06:43:58.555Z",
+        "preview": "// Copyright Epic Games, Inc. All Rights Reserved.\n\n#include \"AtlantisEonsCharacter.h\"\n#include \"WBP_CharacterInfo.h\"\n#include \"Engine/LocalPlayer.h\"\n#include \"WBP_Main.h\"\n#include \"ZombieCharacter.h\"\n#include \"Camera/CameraComponent.h\"\n#include \"Kismet/KismetMathLibrary.h\"\n#include \"Engine/DamageEvents.h\"\n#include \"Components/CapsuleComponent.h\"\n#include \"Components/InputComponent.h\"\n#include \"Components/Button.h\"\n#include \"Components/CanvasPanel.h\"\n#include \"Components/CanvasPanelSlot.h\"\n#incl..."
+      },
+      "summary": "Context involving: filePath, fileName, fileSize",
+      "tags": [
+        "Move",
+        "Tick"
+      ]
     }
   ],
   "keyClasses": {},
@@ -495,10 +594,37 @@
         "memory-mcp-server.js"
       ],
       "impact": "low"
+    },
+    {
+      "id": "704debfa-e534-4f92-a628-8071a541b860",
+      "timestamp": "2025-06-05T03:07:24.441Z",
+      "sessionId": "ebd35c0b-684a-4a07-9cfc-1c80fad5b548",
+      "type": "server-start",
+      "description": "Memory-Enhanced MCP Server started",
+      "files": [
+        "memory-mcp-server.js"
+      ],
+      "impact": "low"
     }
   ],
   "codePatterns": {},
-  "problemsSolved": [],
+  "problemsSolved": [
+    {
+      "id": "9e35c080-9089-41c7-aea7-d10d5e53a835",
+      "timestamp": "2025-06-05T06:43:40.984Z",
+      "description": "Camera clipping during extended attack sequences - camera position locked too aggressively preventing tactical movement",
+      "context": {},
+      "status": "solved",
+      "attempts": [
+        {
+          "timestamp": "2025-06-05T06:43:47.370Z",
+          "solution": "Implemented breakable camera stabilization system - MovementInputStabilizationStrength=0.0f completely disables stabilization when movement input detected. Added variables: bAllowBreakableStabilization, CurrentMovementInput, bIsPlayerTryingToMove. Modified Move() function to track input and Tick() to dynamically adjust stabilization (98% -> 0% when moving). Provides tactical positioning while maintaining precision for stationary attacks.",
+          "successful": true
+        }
+      ],
+      "solution": "Implemented breakable camera stabilization system - MovementInputStabilizationStrength=0.0f completely disables stabilization when movement input detected. Added variables: bAllowBreakableStabilization, CurrentMovementInput, bIsPlayerTryingToMove. Modified Move() function to track input and Tick() to dynamically adjust stabilization (98% -> 0% when moving). Provides tactical positioning while maintaining precision for stationary attacks."
+    }
+  ],
   "bestPractices": [],
   "technicalDebt": [],
   "architecture": {

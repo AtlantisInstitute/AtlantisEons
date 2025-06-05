@@ -32,11 +32,18 @@ public class AtlantisEons : ModuleRules
 			"UMG", 
 			"Slate", 
 			"SlateCore",
-			"Niagara",
-			"ToolMenus", // For editor integration
-			"EditorStyle", // For editor styling
-			"EditorWidgets" // For editor widgets
+			"Niagara"
 		});
+
+		// Editor-only modules
+		if (Target.Type == TargetType.Editor)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[] {
+				"ToolMenus", // For editor integration
+				"EditorStyle", // For editor styling
+				"EditorWidgets" // For editor widgets
+			});
+		}
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

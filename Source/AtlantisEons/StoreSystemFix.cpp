@@ -190,54 +190,15 @@ void UStoreSystemFix::ExtractDataTableAsJSON()
         return;
     }
 
-    // Extract the entire data table as JSON
-    FString JSONOutput = ItemDataTable->GetTableAsJSON(EDataTableExportFlags::None);
+    // Get the first few rows instead of full JSON
+    TArray<FName> RowNames = ItemDataTable->GetRowNames();
+    UE_LOG(LogTemp, Warning, TEXT("Data table has %d rows"), RowNames.Num());
 
-    UE_LOG(LogTemp, Warning, TEXT("JSON Data: %s"), *JSONOutput.Left(500)); // Limit to first 500 chars
-
-    // Parse the JSON array to show structured data
-    TSharedPtr<FJsonValue> JsonValue;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JSONOutput);
-
-    if (FJsonSerializer::Deserialize(Reader, JsonValue) && JsonValue.IsValid())
+    // Show first few row names
+    for (int32 i = 0; i < FMath::Min(5, RowNames.Num()); i++)
     {
-        UE_LOG(LogTemp, Warning, TEXT("JSON parsed successfully"));
-        
-        // Check if it's an array
-        const TArray<TSharedPtr<FJsonValue>>* JsonArray;
-        if (JsonValue->TryGetArray(JsonArray))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("Found %d items in JSON"), JsonArray->Num());
-            
-            // Show first few items only
-            for (int32 i = 0; i < FMath::Min(3, JsonArray->Num()); i++)
-            {
-                const TSharedPtr<FJsonValue>& ArrayItem = (*JsonArray)[i];
-                TSharedPtr<FJsonObject> ItemData = ArrayItem->AsObject();
-                
-                if (ItemData.IsValid())
-                {
-                    FString ItemName;
-                    ItemData->TryGetStringField(TEXT("ItemName"), ItemName);
-                    
-                    int32 ItemIndex = 0;
-                    ItemData->TryGetNumberField(TEXT("ItemIndex"), ItemIndex);
-                    
-                    int32 Price = 0;
-                    ItemData->TryGetNumberField(TEXT("Price"), Price);
-                    
-                    UE_LOG(LogTemp, Warning, TEXT("Item %d: %s (Price: %d)"), ItemIndex, *ItemName, Price);
-                }
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("JSON is not an array"));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to parse JSON"));
+        FString RowName = RowNames[i].ToString();
+        UE_LOG(LogTemp, Warning, TEXT("Row %d: %s"), i, *RowName);
     }
 
     UE_LOG(LogTemp, Warning, TEXT("=== JSON EXTRACT END ==="));
