@@ -65,6 +65,7 @@
 #include "InventoryComponent.h"
 #include "CharacterStatsComponent.h"
 #include "EquipmentComponent.h"
+#include "DodgeComponent.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -250,6 +251,7 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     StatsComponent = CreateDefaultSubobject<UCharacterStatsComponent>(TEXT("CharacterStatsComponent"));
     InventoryComp = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
     EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
+    DodgeComponent = CreateDefaultSubobject<UDodgeComponent>(TEXT("DodgeComponent"));
     
     // Create SwordBloom widget component (restored to original approach)
     SwordBloomWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("SwordBloomWidgetComponent"));
@@ -527,7 +529,8 @@ void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
         if (MoveAction)
         {
             EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AAtlantisEonsCharacter::Move);
-            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Move action"));
+            EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Completed, this, &AAtlantisEonsCharacter::StopMoving);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Move action (Triggered + Completed)"));
         }
         else
         {
@@ -597,6 +600,17 @@ void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
             EnhancedInputComponent->BindAction(DebugDamageAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::DebugDamage);
             UE_LOG(LogTemp, Warning, TEXT("Character - Bound Debug Damage action"));
         }
+
+        // Dash
+        if (DashAction)
+        {
+                    EnhancedInputComponent->BindAction(DashAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::PerformDodge);
+        UE_LOG(LogTemp, Warning, TEXT("Character - Bound Dodge action"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character - DashAction is null! Dash functionality won't work"));
+        }
     }
     else
     {
@@ -637,6 +651,15 @@ void AAtlantisEonsCharacter::Move(const FInputActionValue& Value)
         AddMovementInput(ForwardDirection, MovementVector.Y);
         AddMovementInput(RightDirection, MovementVector.X);
     }
+}
+
+void AAtlantisEonsCharacter::StopMoving(const FInputActionValue& Value)
+{
+    // Clear the movement input when all movement keys are released
+    CurrentMovementInput = FVector2D::ZeroVector;
+    bIsPlayerTryingToMove = false;
+    
+    UE_LOG(LogTemp, Warning, TEXT("🎮 MOVEMENT STOPPED: CurrentMovementInput cleared to (0,0)"));
 }
 
 void AAtlantisEonsCharacter::Look(const FInputActionValue& Value)
@@ -3741,6 +3764,15 @@ void AAtlantisEonsCharacter::Tick(float DeltaSeconds)
     {
         FVector CurrentLocation = GetActorLocation();
         
+        // DODGE OVERRIDE: Completely disable stabilization during dodge to prevent teleport-back effect
+        bool bIsDodgingNow = (DodgeComponent && DodgeComponent->IsDodging());
+        if (bIsDodgingNow)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🚀 DODGE OVERRIDE - Completely disabling camera stabilization during dodge to prevent teleport-back"));
+            // Skip all stabilization while dodging - let the dodge movement happen freely
+            return;
+        }
+        
         // Determine which components to stabilize
         FVector TargetLocation = CurrentLocation;
         
@@ -3909,6 +3941,18 @@ void AAtlantisEonsCharacter::Tick(float DeltaSeconds)
             }
         }
      }
+}
+
+void AAtlantisEonsCharacter::PerformDodge(const FInputActionValue& Value)
+{
+    if (DodgeComponent)
+    {
+        DodgeComponent->AttemptDodge(Value);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Character: DodgeComponent is null! Cannot perform dodge"));
+    }
 }
 
 

@@ -28,6 +28,8 @@ class UWBP_CharacterInfo;
 
 #include "AtlantisEonsCharacter.generated.h"
 
+class UDodgeComponent;
+
 class USkeletalMeshComponent;
 class USceneComponent;
 class UCameraComponent;
@@ -321,8 +323,12 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
     class UInputAction* ResumeAction;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
     class UInputAction* DebugDamageAction;
+
+    /** Dash input action */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
+    class UInputAction* DashAction;
 
     // ========== COMBAT STATE (MUST STAY - Blueprint reads these) ==========
     
@@ -331,6 +337,11 @@ protected:
     bool bCanAttack;
     bool bIsAttacking;
     bool bAttackNotifyInProgress = false;
+
+    // ========== DODGE SYSTEM ==========
+    /** Dodge component - handles all dodge functionality */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UDodgeComponent* DodgeComponent;
     
     // ========== CAMERA STABILIZATION SYSTEM ==========
     UFUNCTION(BlueprintCallable, Category = "Camera")
@@ -345,12 +356,6 @@ protected:
     // ========== CAMERA STABILIZATION VARIABLES ==========
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
     bool bSuppressAttackRootMotion = false;
-    
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
-    FVector LockedPosition = FVector::ZeroVector;
-    
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
-    bool bPositionLocked = false;
     
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
     FRotator LockedCameraRotation = FRotator::ZeroRotator;
@@ -434,11 +439,20 @@ protected:
     float ProximityStabilizationStrength = 0.7f; // Weaker than attack stabilization but still effective
     
     FTimerHandle StabilizationDelayTimer;
-    FTimerHandle PositionRefreshTimer; // ENHANCED: Timer for refreshing locked position during extended sequences
     
-    // Smoothing variables for better interpolation
+public:
+    // Timer for refreshing locked position during extended sequences (public for DashComponent access)
+    FTimerHandle PositionRefreshTimer;
+    // Smoothing variables for better interpolation (public for DashComponent access)
     FVector LastStabilizedPosition = FVector::ZeroVector;
     bool bStabilizationActive = false;
+    
+    // Camera stabilization state variables (public for DashComponent access)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    FVector LockedPosition = FVector::ZeroVector;
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    bool bPositionLocked = false;
     
     // ENHANCED: Extended sequence tracking variables
     float StabilizationStartTime = 0.0f; // Track how long stabilization has been active
@@ -462,6 +476,7 @@ protected:
     float LastCombatActivity = 0.0f; // Track when combat last occurred
     bool bInCombatMode = false; // Are we in extended combat stabilization mode?
     
+public:
     // BREAKABLE STABILIZATION: Track current movement input
     FVector2D CurrentMovementInput = FVector2D::ZeroVector; // Current movement input from player
     bool bIsPlayerTryingToMove = false; // Is player actively providing movement input?
@@ -469,9 +484,7 @@ protected:
     // Timer handles for combat and effects
     FTimerHandle AttackCooldownTimer;
     FTimerHandle AttackNotifyTimer;
-    FTimerHandle DashCooldownTimer;
     FTimerHandle InvulnerabilityTimer;
-    FTimerHandle DashTimer;
     FTimerHandle CameraLagTimer;
     FTimerHandle CameraRotationLagTimer;
     FTimerHandle RespawnTimerHandle;
@@ -518,6 +531,14 @@ protected:
     /** Hit reaction animation montage */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     UAnimMontage* HitReactMontage;
+
+    /** Backward dash animation montage */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
+    UAnimMontage* BackwardDashMontage;
+
+    /** Forward dash animation montage */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
+    UAnimMontage* ForwardDashMontage;
 
     // ========== VFX AND MATERIALS (MUST STAY - Blueprint sets these) ==========
     
@@ -678,6 +699,9 @@ public:
     /** Called for movement input */
     void Move(const FInputActionValue& Value);
 
+    /** Called when movement input is released */
+    void StopMoving(const FInputActionValue& Value);
+
     /** Called for looking input */
     void Look(const FInputActionValue& Value);
 
@@ -692,6 +716,9 @@ public:
 
     /** Called for melee attack input */
     void MeleeAttack(const FInputActionValue& Value);
+
+    /** Called for dodge input */
+    void PerformDodge(const FInputActionValue& Value);
     
     // ========== CAMERA STABILIZATION - ROOT MOTION CONTROL ==========
     
