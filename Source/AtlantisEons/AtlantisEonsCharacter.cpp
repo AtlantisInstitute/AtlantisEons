@@ -66,7 +66,7 @@
 #include "InventoryComponent.h"
 #include "CharacterStatsComponent.h"
 #include "EquipmentComponent.h"
-#include "DodgeComponent.h"
+
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -211,8 +211,7 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     BaseMP = 100;
     CurrentMP = BaseMP;
     
-    // Initialize camera stabilization variables
-    LastCustomDodgeInputTime = 0.0f;
+
 
     // Initialize combat stats
     BaseSTR = 10;
@@ -255,7 +254,7 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     StatsComponent = CreateDefaultSubobject<UCharacterStatsComponent>(TEXT("CharacterStatsComponent"));
     InventoryComp = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
     EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
-    DodgeComponent = CreateDefaultSubobject<UDodgeComponent>(TEXT("DodgeComponent"));
+
     
     // Create SwordBloom widget component (restored to original approach)
     SwordBloomWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("SwordBloomWidgetComponent"));
@@ -605,16 +604,7 @@ void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
             UE_LOG(LogTemp, Warning, TEXT("Character - Bound Debug Damage action"));
         }
 
-        // Dash
-        if (DashAction)
-        {
-                    EnhancedInputComponent->BindAction(DashAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::PerformDodge);
-        UE_LOG(LogTemp, Warning, TEXT("Character - Bound Dodge action"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Character - DashAction is null! Dash functionality won't work"));
-        }
+
 
         // Block
         if (BlockAction)
@@ -3525,30 +3515,28 @@ void AAtlantisEonsCharacter::EnableAttackCameraStabilization()
                 [this]()
                 {
                     bStabilizationActive = true;
-                    LockedPosition = GetActorLocation();
-                    LastStabilizedPosition = LockedPosition;
-                    bPositionLocked = true;
+                    // NOTE: Position locking disabled to prevent teleporting
+                    bPositionLocked = false; // DISABLED - no position locking
                     
-                    // ENHANCED: Store initial positions for drift detection
-                    InitialLockedPosition = LockedPosition;
+                    // Store initial positions for logging only
                     StabilizationStartTime = GetWorld()->GetTimeSeconds();
                     
-                    // COMBAT MODE: Activate extended stabilization mode
+                    // COMBAT MODE: Activate extended stabilization mode for camera only
                     if (bCombatModeStabilization)
                     {
                         LastCombatActivity = GetWorld()->GetTimeSeconds();
                         if (!bInCombatMode)
                         {
                             bInCombatMode = true;
-                            UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE ACTIVATED - Extended stabilization for %.1f seconds"), CombatModeStabilizationDuration);
+                            UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE ACTIVATED - Camera stabilization only (no position locking)"));
                         }
                         else
                         {
-                            UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXTENDED - Activity refreshed"));
+                            UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXTENDED - Camera activity refreshed"));
                         }
                     }
                     
-                    // Lock camera rotation as well
+                    // Lock camera rotation to prevent shake and clipping
                     if (!bAllowRotationDuringAttacks && CameraBoom)
                     {
                         LockedCameraRotation = CameraBoom->GetComponentTransform().Rotator();
@@ -3556,32 +3544,7 @@ void AAtlantisEonsCharacter::EnableAttackCameraStabilization()
                         bCameraRotationLocked = true;
                     }
                     
-                    // ENHANCED: Start position refresh timer for extended sequences
-                    if (PositionRefreshInterval > 0.0f)
-                    {
-                        GetWorld()->GetTimerManager().SetTimer(
-                            PositionRefreshTimer,
-                            [this]()
-                            {
-                                // Check for cumulative drift and refresh if needed
-                                float CurrentDrift = FVector::Dist2D(GetActorLocation(), InitialLockedPosition);
-                                if (CurrentDrift > MaxCumulativeDrift)
-                                {
-                                    FVector CurrentLocation = GetActorLocation();
-                                    LockedPosition = FVector(InitialLockedPosition.X, InitialLockedPosition.Y, CurrentLocation.Z);
-                                    LastStabilizedPosition = LockedPosition;
-                                    
-                                    UE_LOG(LogTemp, Warning, TEXT("📷 POSITION REFRESHED - Drift: %.2f, New lock: %s"), 
-                                           CurrentDrift, *LockedPosition.ToString());
-                                }
-                            },
-                            PositionRefreshInterval,
-                            true // Loop
-                        );
-                    }
-                    
-                    UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION ACTIVATED (delayed) - Position: %s, Rotation: %s"), 
-                           *LockedPosition.ToString(), *LockedCameraRotation.ToString());
+                    UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION ACTIVATED (delayed) - Camera rotation locked, position free"));
                 },
                 StabilizationStartDelay,
                 false
@@ -3592,30 +3555,28 @@ void AAtlantisEonsCharacter::EnableAttackCameraStabilization()
         {
             // Immediate activation
             bStabilizationActive = true;
-            LockedPosition = GetActorLocation();
-            LastStabilizedPosition = LockedPosition;
-            bPositionLocked = true;
+            // NOTE: Position locking disabled to prevent teleporting
+            bPositionLocked = false; // DISABLED - no position locking
             
-            // ENHANCED: Store initial positions for drift detection
-            InitialLockedPosition = LockedPosition;
+            // Store initial positions for logging only
             StabilizationStartTime = GetWorld()->GetTimeSeconds();
             
-            // COMBAT MODE: Activate extended stabilization mode
+            // COMBAT MODE: Activate extended stabilization mode for camera only
             if (bCombatModeStabilization)
             {
                 LastCombatActivity = GetWorld()->GetTimeSeconds();
                 if (!bInCombatMode)
                 {
                     bInCombatMode = true;
-                    UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE ACTIVATED - Extended stabilization for %.1f seconds"), CombatModeStabilizationDuration);
+                    UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE ACTIVATED - Camera stabilization only (no position locking)"));
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXTENDED - Activity refreshed"));
+                    UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXTENDED - Camera activity refreshed"));
                 }
             }
             
-            // Lock camera rotation as well
+            // Lock camera rotation to prevent shake and clipping
             if (!bAllowRotationDuringAttacks && CameraBoom)
             {
                 LockedCameraRotation = CameraBoom->GetComponentTransform().Rotator();
@@ -3623,32 +3584,7 @@ void AAtlantisEonsCharacter::EnableAttackCameraStabilization()
                 bCameraRotationLocked = true;
             }
             
-            // ENHANCED: Start position refresh timer for extended sequences
-            if (PositionRefreshInterval > 0.0f)
-            {
-                GetWorld()->GetTimerManager().SetTimer(
-                    PositionRefreshTimer,
-                    [this]()
-                    {
-                        // Check for cumulative drift and refresh if needed
-                        float CurrentDrift = FVector::Dist2D(GetActorLocation(), InitialLockedPosition);
-                        if (CurrentDrift > MaxCumulativeDrift)
-                        {
-                            FVector CurrentLocation = GetActorLocation();
-                            LockedPosition = FVector(InitialLockedPosition.X, InitialLockedPosition.Y, CurrentLocation.Z);
-                            LastStabilizedPosition = LockedPosition;
-                            
-                            UE_LOG(LogTemp, Warning, TEXT("📷 POSITION REFRESHED - Drift: %.2f, New lock: %s"), 
-                                   CurrentDrift, *LockedPosition.ToString());
-                        }
-                    },
-                    PositionRefreshInterval,
-                    true // Loop
-                );
-            }
-            
-            UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION ENABLED IMMEDIATELY - Position: %s, Rotation: %s"), 
-                   *LockedPosition.ToString(), *LockedCameraRotation.ToString());
+            UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION ENABLED IMMEDIATELY - Camera rotation locked, position free"));
         }
     }
 }
@@ -3657,48 +3593,44 @@ void AAtlantisEonsCharacter::DisableAttackCameraStabilization()
 {
     if (bSuppressAttackRootMotion)
     {
-        // ULTRA-AGGRESSIVE: Check if we should respect minimum stabilization duration
+        // Check if we should respect minimum stabilization duration for camera stability
         float StabilizationDuration = GetWorld()->GetTimeSeconds() - StabilizationStartTime;
         
         if (bPersistentStabilizationMode && StabilizationDuration < MinimumStabilizationDuration)
         {
-            UE_LOG(LogTemp, Warning, TEXT("📷 PERSISTENT STABILIZATION - Ignoring disable request, duration %.1fs < minimum %.1fs"), 
+            UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION - Ignoring disable request, duration %.1fs < minimum %.1fs for camera stability"), 
                    StabilizationDuration, MinimumStabilizationDuration);
-            return; // Don't disable stabilization yet
+            return; // Keep camera stabilization active for smooth combat
         }
         
-        // COMBAT MODE: Check if we're still in combat mode
+        // COMBAT MODE: Check if we're still in combat mode (camera stabilization only)
         if (bCombatModeStabilization && bInCombatMode)
         {
             float TimeSinceLastCombat = GetWorld()->GetTimeSeconds() - LastCombatActivity;
             if (TimeSinceLastCombat < CombatModeStabilizationDuration)
             {
-                UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE STABILIZATION - Ignoring disable request, %.1fs since last combat < %.1fs threshold"), 
+                UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE CAMERA - Keeping camera stabilization active, %.1fs since last combat < %.1fs threshold"), 
                        TimeSinceLastCombat, CombatModeStabilizationDuration);
-                return; // Don't disable stabilization - still in combat mode
+                return; // Keep camera stabilization for combat stability
             }
             else
             {
-                // Combat mode expired, disable it
                 bInCombatMode = false;
-                UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXPIRED - Allowing stabilization to disable"));
+                UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXPIRED - Allowing camera stabilization to disable"));
             }
         }
         
         bSuppressAttackRootMotion = false;
         bStabilizationActive = false;
-        bPositionLocked = false;
+        bPositionLocked = false; // This was already disabled anyway
         bCameraRotationLocked = false;
         
         // Clear any pending timers
         GetWorld()->GetTimerManager().ClearTimer(StabilizationDelayTimer);
         GetWorld()->GetTimerManager().ClearTimer(PositionRefreshTimer);
         
-        // ENHANCED: Calculate total stabilization duration for logging
-        float TotalDrift = FVector::Dist2D(GetActorLocation(), InitialLockedPosition);
-        
-        UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION DISABLED - Duration: %.1fs, Total drift: %.2f, Normal movement and rotation restored"), 
-               StabilizationDuration, TotalDrift);
+        UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION DISABLED - Duration: %.1fs, Normal camera movement restored"), 
+               StabilizationDuration);
     }
 }
 
@@ -3755,7 +3687,7 @@ void AAtlantisEonsCharacter::Tick(float DeltaSeconds)
         LastLogTime = CurrentTime;
     }
     
-    // COMBAT MODE: Check if combat mode should be automatically disabled
+    // COMBAT MODE: Check if combat mode should be automatically disabled (camera only)
     if (bCombatModeStabilization && bInCombatMode)
     {
         float TimeSinceLastCombat = GetWorld()->GetTimeSeconds() - LastCombatActivity;
@@ -3764,282 +3696,52 @@ void AAtlantisEonsCharacter::Tick(float DeltaSeconds)
             bInCombatMode = false;
             UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE AUTO-EXPIRED - %.1fs since last combat activity"), TimeSinceLastCombat);
             
-            // If we're not actively attacking, also disable stabilization
+            // If we're not actively attacking, also disable camera stabilization
             if (!bSuppressAttackRootMotion)
             {
                 bStabilizationActive = false;
-                bPositionLocked = false;
                 bCameraRotationLocked = false;
-                UE_LOG(LogTemp, Warning, TEXT("📷 COMBAT MODE STABILIZATION AUTO-DISABLED - No active attacks"));
+                UE_LOG(LogTemp, Warning, TEXT("📷 COMBAT MODE CAMERA STABILIZATION AUTO-DISABLED - No active attacks"));
             }
         }
     }
     
-    // ENHANCED CAMERA STABILIZATION: Smooth character position during attacks ONLY
-    if (bSuppressAttackRootMotion && bStabilizationActive && bPositionLocked)
+    // CAMERA ROTATION STABILIZATION: Prevent camera shake and clipping during attacks
+    // Position movement is free, but camera rotation is stabilized for smooth combat
+    if (bSuppressAttackRootMotion && bStabilizationActive && bCameraRotationLocked && CameraBoom)
     {
-        FVector CurrentLocation = GetActorLocation();
+
         
-        // DODGE OVERRIDE: Completely disable stabilization during dodge to prevent teleport-back effect
-        bool bIsDodgingNow = (DodgeComponent && DodgeComponent->IsDodging());
-        if (bIsDodgingNow)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🚀 DODGE OVERRIDE - Completely disabling camera stabilization during dodge to prevent teleport-back"));
-            // Skip all stabilization while dodging - let the dodge movement happen freely
-            return;
-        }
-        
-        // CUSTOM DODGE OVERRIDE: Disable stabilization when dodge input or S key is pressed
-        float CurrentTime = GetWorld()->GetTimeSeconds();
-        bool bCustomDodgeInputActive = false;
-        bool bBackwardMovementActive = (CurrentMovementInput.Y < -0.1f);
-        bool bAnyMovementInput = (CurrentMovementInput.SizeSquared() > 0.01f);
-        bool bDodgeInProgress = false;
-        
-        // Check if our DodgeComponent indicates a dodge is currently happening
-        if (DodgeComponent)
-        {
-            bDodgeInProgress = DodgeComponent->IsDodging();
-        }
-        
-        // Also check for high velocity which might indicate a custom dash system is active
-        bool bHighVelocityMovement = false;
-        if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
-        {
-            float CurrentSpeed = MovementComp->Velocity.Size2D();
-            bHighVelocityMovement = (CurrentSpeed > 800.0f); // Threshold for dash-like movement
-        }
-        
-        // Enhanced input detection
-        if (APlayerController* PC = Cast<APlayerController>(GetController()))
-        {
-            if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PC->InputComponent))
-            {
-                // Check if dodge action is currently being pressed
-                if (DashAction) // Note: Property still called DashAction but now used for dodge
-                {
-                    // Get current input value for dodge action
-                    FInputActionValue DodgeValue = EIC->GetBoundActionValue(DashAction);
-                    bCustomDodgeInputActive = DodgeValue.Get<bool>();
-                }
-            }
-        }
-        
-        // Update last dodge input time if any dodge-related input is detected
-        if (bCustomDodgeInputActive || bBackwardMovementActive || bAnyMovementInput || bDodgeInProgress || bHighVelocityMovement)
-        {
-            LastCustomDodgeInputTime = CurrentTime;
-            UE_LOG(LogTemp, Warning, TEXT("🎯 DODGE INPUT DETECTED - Updating LastCustomDodgeInputTime: %.2f (DodgeInProgress: %s, HighVelocity: %s)"), 
-                   CurrentTime, bDodgeInProgress ? TEXT("YES") : TEXT("NO"), bHighVelocityMovement ? TEXT("YES") : TEXT("NO"));
-        }
-        
-        // Check if we're within the dodge protection window
-        float TimeSinceLastDodgeInput = CurrentTime - LastCustomDodgeInputTime;
-        bool bInDodgeProtectionWindow = (TimeSinceLastDodgeInput < CustomDodgeStabilizationDelay);
-        
-        // PRIORITY CHECK: If DodgeComponent indicates an active dodge, IMMEDIATELY disable stabilization
-        if (bDodgeInProgress || bHighVelocityMovement || bCustomDodgeInputActive || bBackwardMovementActive || bInDodgeProtectionWindow)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🚀 CUSTOM DODGE OVERRIDE - Disabling camera stabilization (DodgeInProgress: %s, HighVelocity: %s, DodgeInput: %s, SKey: %s, AnyMovement: %s, TimeSince: %.2f)"), 
-                   bDodgeInProgress ? TEXT("YES") : TEXT("NO"),
-                   bHighVelocityMovement ? TEXT("YES") : TEXT("NO"),
-                   bCustomDodgeInputActive ? TEXT("YES") : TEXT("NO"),
-                   bBackwardMovementActive ? TEXT("YES") : TEXT("NO"),
-                   bAnyMovementInput ? TEXT("YES") : TEXT("NO"),
-                   TimeSinceLastDodgeInput);
-            
-            // CRITICAL: Clear any pending position refresh timers that could cause teleport-back
-            if (GetWorld())
-            {
-                GetWorld()->GetTimerManager().ClearTimer(PositionRefreshTimer);
-                UE_LOG(LogTemp, Warning, TEXT("🚀 DODGE PROTECTION - Cleared position refresh timer to prevent teleport"));
-            }
-            
-            // Skip all stabilization during custom dodge - let the dodge movement happen freely
-            return;
-        }
-        
-        // Determine which components to stabilize
-        FVector TargetLocation = CurrentLocation;
-        
-        // BREAKABLE STABILIZATION: Adjust stabilization based on player input and sequence duration
+        // CAMERA ROTATION STABILIZATION ONLY - prevents shake and clipping
+        FRotator CurrentCameraRotation = CameraBoom->GetComponentTransform().Rotator();
         float SequenceDuration = GetWorld()->GetTimeSeconds() - StabilizationStartTime;
-        float BaseStabilizationStrength = (SequenceDuration > 1.5f) ? 
-            ExtendedSequenceStabilizationStrength : CameraStabilizationStrength;
-            
-        // BREAKABLE: Reduce stabilization when player is actively trying to move
-        float EffectiveStabilizationStrength = BaseStabilizationStrength;
-        if (bAllowBreakableStabilization && bIsPlayerTryingToMove)
-        {
-            EffectiveStabilizationStrength = MovementInputStabilizationStrength;
-            if (EffectiveStabilizationStrength <= 0.0f)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("📷 BREAKABLE STABILIZATION - Player input detected, COMPLETELY DISABLING stabilization: %.1f%% -> 0%% (FREE MOVEMENT)"), 
-                       BaseStabilizationStrength * 100.0f);
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("📷 BREAKABLE STABILIZATION - Player input detected, reducing stabilization: %.1f%% -> %.1f%% (threshold: %.1f)"), 
-                       BaseStabilizationStrength * 100.0f, EffectiveStabilizationStrength * 100.0f, MovementInputThreshold);
-            }
-        }
-            
-        if (EffectiveStabilizationStrength > 0.0f)
-        {
-            // Calculate distance from locked position (2D only)
-            float Distance2D = FVector::Dist2D(CurrentLocation, LockedPosition);
-            
-            // BREAKABLE: Adjust threshold based on player input and sequence duration
-            float ActiveThreshold = (SequenceDuration > 1.5f) ? 
-                FMath::Min(StabilizationThreshold, 0.2f) : StabilizationThreshold;
-                
-            // BREAKABLE: Use much looser threshold when player is trying to move
-            if (bAllowBreakableStabilization && bIsPlayerTryingToMove)
-            {
-                ActiveThreshold = FMath::Max(ActiveThreshold, 10.0f); // Allow significant movement when player provides input (was 2.0f)
-            }
-            
-            // ULTRA-AGGRESSIVE STABILIZATION: Maximum correction for rock-solid camera
-            if (Distance2D > ActiveThreshold)
-            {
-                FVector DesiredXY = FVector(LockedPosition.X, LockedPosition.Y, CurrentLocation.Z);
-                
-                // ULTRA-AGGRESSIVE: Much faster speed calculation
-                float SmoothLerpSpeed = StabilizationLerpSpeed;
-                
-                // ULTRA-AGGRESSIVE: Increase speed much sooner and more dramatically
-                if (SequenceDuration > 1.5f)
-                {
-                    SmoothLerpSpeed *= 2.5f; // 250% faster correction for any extended sequence
-                }
-                
-                // ULTRA-AGGRESSIVE: More aggressive distance-based speed adjustment
-                float DistanceRatio = FMath::Clamp(Distance2D / ActiveThreshold, 1.0f, 4.0f);
-                SmoothLerpSpeed *= DistanceRatio;
-                
-                FVector StabilizedXY = FMath::VInterpTo(
-                    FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z),
-                    DesiredXY,
-                    DeltaSeconds,
-                    SmoothLerpSpeed * EffectiveStabilizationStrength
-                );
-                
-                TargetLocation.X = StabilizedXY.X;
-                TargetLocation.Y = StabilizedXY.Y;
-                
-                const FString StabilizationType = (bAllowBreakableStabilization && bIsPlayerTryingToMove) ? 
-                    TEXT("BREAKABLE") : TEXT("LOCKED");
-                UE_LOG(LogTemp, VeryVerbose, TEXT("📷 %s stabilization: Distance=%.3f, Speed=%.1f, Duration=%.1fs"), 
-                       *StabilizationType, Distance2D, SmoothLerpSpeed, SequenceDuration);
-                
-                // Store for smooth transitions
-                LastStabilizedPosition = FVector(TargetLocation.X, TargetLocation.Y, LastStabilizedPosition.Z);
-            }
-            else
-            {
-                // BREAKABLE: Within threshold - adjust tolerance based on player input
-                float MinCorrectionDistance = (SequenceDuration > 1.5f) ? 0.02f : 0.05f;
-                
-                // BREAKABLE: Use much looser tolerance when player is trying to move
-                if (bAllowBreakableStabilization && bIsPlayerTryingToMove)
-                {
-                    MinCorrectionDistance = FMath::Max(MinCorrectionDistance, 5.0f); // Very loose when player provides input (was 0.5f)
-                }
-                
-                if (Distance2D > MinCorrectionDistance)
-                {
-                    float MinorCorrectionStrength = (SequenceDuration > 1.5f) ? 0.4f : 0.2f;
-                    
-                    // BREAKABLE: Further reduce correction when player is trying to move
-                    if (bAllowBreakableStabilization && bIsPlayerTryingToMove)
-                    {
-                        MinorCorrectionStrength *= 0.5f; // Half strength when player provides input
-                    }
-                    
-                    TargetLocation.X = FMath::Lerp(CurrentLocation.X, LockedPosition.X, MinorCorrectionStrength);
-                    TargetLocation.Y = FMath::Lerp(CurrentLocation.Y, LockedPosition.Y, MinorCorrectionStrength);
-                    
-                    const FString CorrectionType = (bAllowBreakableStabilization && bIsPlayerTryingToMove) ? 
-                        TEXT("BREAKABLE") : TEXT("LOCKED");
-                    UE_LOG(LogTemp, VeryVerbose, TEXT("📷 %s minor correction: Distance=%.4f, Duration=%.1fs"), 
-                           *CorrectionType, Distance2D, SequenceDuration);
-                }
-            }
-        }
         
-        // Handle Z-axis (vertical) movement
-        if (bAllowVerticalMovementDuringAttacks)
+        // Apply rotation stabilization with tolerance
+        if (!CurrentCameraRotation.Equals(LockedCameraRotation, RotationTolerance))
         {
-            // Keep current Z position (allow gravity, jumping, etc.)
-            TargetLocation.Z = CurrentLocation.Z;
-        }
-        else
-        {
-            // Lock Z position as well
-            TargetLocation.Z = LockedPosition.Z;
-        }
-        
-        // BREAKABLE: Apply the stabilized position with adaptive tolerance
-        float PositionApplyTolerance = (SequenceDuration > 1.5f) ? PositionTolerance : 0.1f;
-        
-        // BREAKABLE: Use much looser tolerance when player is trying to move
-        if (bAllowBreakableStabilization && bIsPlayerTryingToMove)
-        {
-            PositionApplyTolerance = FMath::Max(PositionApplyTolerance, 10.0f); // Very loose when player provides input (was 0.5f)
-        }
-        
-        if (!TargetLocation.Equals(CurrentLocation, PositionApplyTolerance))
-        {
-            SetActorLocation(TargetLocation, false, nullptr, ETeleportType::None); // Smooth movement
-            
-            const FString ApplyType = (bAllowBreakableStabilization && bIsPlayerTryingToMove) ? 
-                TEXT("BREAKABLE") : TEXT("LOCKED");
-            UE_LOG(LogTemp, VeryVerbose, TEXT("📷 %s Position stabilized: %s -> %s"), 
-                   *ApplyType, *CurrentLocation.ToString(), *TargetLocation.ToString());
-        }
-        
-        // ULTRA-AGGRESSIVE camera rotation stabilization
-        if (!bAllowRotationDuringAttacks && bCameraRotationLocked && CameraBoom)
-        {
-            FRotator CurrentCameraRotation = CameraBoom->GetComponentTransform().Rotator();
-            
-            // ULTRA-AGGRESSIVE: Apply rotation stabilization with virtually zero tolerance
-            if (!CurrentCameraRotation.Equals(LockedCameraRotation, RotationTolerance))
+            // Calculate rotation correction speed
+            float RotationSpeed = StabilizationLerpSpeed * CameraRotationStabilizationStrength;
+            if (SequenceDuration > 1.5f)
             {
-                // ULTRA-AGGRESSIVE: Maximum rotation correction strength
-                float RotationSpeed = StabilizationLerpSpeed * CameraRotationStabilizationStrength;
-                if (SequenceDuration > 1.5f)
-                {
-                    RotationSpeed *= 3.0f; // Triple strength for any extended sequence
-                }
-                
-                FRotator StabilizedRotation = FMath::RInterpTo(
-                    CurrentCameraRotation,
-                    LockedCameraRotation,
-                    DeltaSeconds,
-                    RotationSpeed
-                );
-                
-                CameraBoom->SetWorldRotation(StabilizedRotation);
-                
-                UE_LOG(LogTemp, VeryVerbose, TEXT("📷 ULTRA-AGGRESSIVE Camera rotation stabilized: %s -> %s (Duration: %.1fs)"), 
-                       *CurrentCameraRotation.ToString(), *StabilizedRotation.ToString(), SequenceDuration);
+                RotationSpeed *= 2.0f; // Increase strength for extended sequences
             }
+            
+            FRotator StabilizedRotation = FMath::RInterpTo(
+                CurrentCameraRotation,
+                LockedCameraRotation,
+                DeltaSeconds,
+                RotationSpeed
+            );
+            
+            CameraBoom->SetWorldRotation(StabilizedRotation);
+            
+            UE_LOG(LogTemp, VeryVerbose, TEXT("📷 Camera rotation stabilized: %s -> %s (Duration: %.1fs)"), 
+                   *CurrentCameraRotation.ToString(), *StabilizedRotation.ToString(), SequenceDuration);
         }
-     }
+    }
 }
 
-void AAtlantisEonsCharacter::PerformDodge(const FInputActionValue& Value)
-{
-    if (DodgeComponent)
-    {
-        DodgeComponent->AttemptDodge(Value);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Character: DodgeComponent is null! Cannot perform dodge"));
-    }
-}
+
 
 void AAtlantisEonsCharacter::PerformBlock(const FInputActionValue& Value)
 {
@@ -4298,17 +4000,37 @@ void AAtlantisEonsCharacter::DestroyShield()
 
 void AAtlantisEonsCharacter::OnSuccessfulBlock(float BlockedDamage)
 {
-    UE_LOG(LogTemp, Warning, TEXT("🛡️ Successful block! Blocked %.2f damage"), BlockedDamage);
+    UE_LOG(LogTemp, Warning, TEXT("🛡️ Successfully blocked %.1f damage!"), BlockedDamage);
     
-    // You can add visual/audio effects here for successful blocks
-    // For example: play block hit effect, show damage numbers, etc.
+    // Here you could add visual/audio feedback for successful blocks
+    // For example:
+    // - Play block sound effect
+    // - Spawn block particle effect
+    // - Apply camera shake
+    // - Show blocked damage number
     
-    // Example: Show damage number at shield location
-    if (CurrentShieldActor)
+    // Example: Show damage number for blocked damage
+    if (BlockedDamage > 0.0f)
     {
-        FVector ShieldLocation = CurrentShieldActor->GetActorLocation();
-        ShowDamageNumber(BlockedDamage, ShieldLocation, false);
+        FVector BlockEffectLocation = GetActorLocation() + FVector(0, 0, 100); // Above character
+        ShowDamageNumber(BlockedDamage, BlockEffectLocation, false);
     }
+}
+
+// ========== DASH DIRECTION HELPER FUNCTIONS IMPLEMENTATION ==========
+
+bool AAtlantisEonsCharacter::ShouldDashBackward() const
+{
+    // Dash backward if not pressing W (forward) or standing still
+    // Forward movement is positive Y in CurrentMovementInput
+    return CurrentMovementInput.Y <= 0.1f;
+}
+
+bool AAtlantisEonsCharacter::ShouldDashForward() const
+{
+    // Dash forward if pressing W (forward movement)
+    // Forward movement is positive Y in CurrentMovementInput
+    return CurrentMovementInput.Y > 0.1f;
 }
 
 

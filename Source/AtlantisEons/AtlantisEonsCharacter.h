@@ -28,7 +28,7 @@ class UWBP_CharacterInfo;
 
 #include "AtlantisEonsCharacter.generated.h"
 
-class UDodgeComponent;
+
 
 class USkeletalMeshComponent;
 class USceneComponent;
@@ -326,9 +326,7 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
     class UInputAction* DebugDamageAction;
 
-    /** Dash input action */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
-    class UInputAction* DashAction;
+
 
     /** Block input action */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
@@ -342,10 +340,7 @@ protected:
     bool bIsAttacking;
     bool bAttackNotifyInProgress = false;
 
-    // ========== DODGE SYSTEM ==========
-    /** Dodge component - handles all dodge functionality */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-    class UDodgeComponent* DodgeComponent;
+
     
     // ========== CAMERA STABILIZATION SYSTEM ==========
     UFUNCTION(BlueprintCallable, Category = "Camera")
@@ -480,10 +475,7 @@ public:
     float LastCombatActivity = 0.0f; // Track when combat last occurred
     bool bInCombatMode = false; // Are we in extended combat stabilization mode?
     
-    // Custom dodge input tracking for stabilization override
-    float LastCustomDodgeInputTime = 0.0f; // Track when custom dodge input was last detected
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "5.0"))
-    float CustomDodgeStabilizationDelay = 1.5f; // Time to wait after dodge input before re-enabling stabilization
+
     
 public:
     // BREAKABLE STABILIZATION: Track current movement input
@@ -542,13 +534,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     UAnimMontage* HitReactMontage;
 
-    /** Backward dash animation montage */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    UAnimMontage* BackwardDashMontage;
 
-    /** Forward dash animation montage */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
-    UAnimMontage* ForwardDashMontage;
 
     // ========== BLOCKING SYSTEM (Blueprint sets these) ==========
     
@@ -777,8 +763,7 @@ public:
     /** Called for melee attack input */
     void MeleeAttack(const FInputActionValue& Value);
 
-    /** Called for dodge input */
-    void PerformDodge(const FInputActionValue& Value);
+
 
     /** Called for block input */
     void PerformBlock(const FInputActionValue& Value);
@@ -786,6 +771,20 @@ public:
     /** Called when block input is released */
     void ReleaseBlock(const FInputActionValue& Value);
     
+    // ========== DASH DIRECTION HELPER FUNCTIONS FOR BLUEPRINT ==========
+    
+    /** Check if player should dash backward (not pressing W or standing still) */
+    UFUNCTION(BlueprintPure, Category = "Movement|Dash")
+    bool ShouldDashBackward() const;
+    
+    /** Check if player should dash forward (pressing W) */
+    UFUNCTION(BlueprintPure, Category = "Movement|Dash")
+    bool ShouldDashForward() const;
+    
+    /** Get the current movement input vector (for advanced dash logic) */
+    UFUNCTION(BlueprintPure, Category = "Movement|Dash")
+    FVector2D GetCurrentMovementInput() const { return CurrentMovementInput; }
+
     // ========== CAMERA STABILIZATION - ROOT MOTION CONTROL ==========
     
     /** Override to handle root motion extraction and filtering during attacks */

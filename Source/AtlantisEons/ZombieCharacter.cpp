@@ -119,7 +119,7 @@ AZombieCharacter::AZombieCharacter()
     bIsDead = false;
     
     // Initialize health
-    MaxHealth = 100.0f;
+    MaxHealth = 10000.0f;  // Set a higher max health for zombies
     CurrentHealth = MaxHealth;
     
     // Initialize damage tracking variables
@@ -132,6 +132,7 @@ AZombieCharacter::AZombieCharacter()
     Tags.Add(FName("AdvancedZombieEnemy"));
     
     UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter initialized with team ID %d"), TeamId.GetId());
+    UE_LOG(LogTemp, Warning, TEXT("ZombieCharacter initialized with %.6f health"), CurrentHealth);
 }
 
 void AZombieCharacter::BeginPlay()

@@ -71,14 +71,16 @@ void UWBP_ZombieHealthBar::UpdateHealthBarAppearance()
     // Update progress bar if available
     if (ZombieHealthBar)
     {
-        ZombieHealthBar->SetPercent(HealthPercentage);
+        // Ensure the percentage is properly clamped and calculated
+        float ClampedPercentage = FMath::Clamp(HealthPercentage, 0.0f, 1.0f);
+        ZombieHealthBar->SetPercent(ClampedPercentage);
         
         // Set color based on health percentage
         FLinearColor BarColor = GetHealthBarColor();
         ZombieHealthBar->SetFillColorAndOpacity(BarColor);
 
         UE_LOG(LogTemp, Warning, TEXT("WBP_ZombieHealthBar: Updated progress bar - Percentage: %.2f, Color: R=%.2f G=%.2f B=%.2f"), 
-               HealthPercentage, BarColor.R, BarColor.G, BarColor.B);
+               ClampedPercentage, BarColor.R, BarColor.G, BarColor.B);
     }
     else
     {

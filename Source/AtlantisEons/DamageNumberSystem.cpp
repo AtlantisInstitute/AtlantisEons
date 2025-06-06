@@ -68,14 +68,14 @@ void ADamageNumberSystem::BeginPlay()
 {
     Super::BeginPlay();
     
-    // Try to load the widget class now that initialization is complete
+    // Try multiple methods to load the widget class if it's not already set
     if (!DamageNumberWidgetClass)
     {
-        // FIXED: Use the correct path for the widget blueprint
-        const FString WidgetBlueprintPath = TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C");
+        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Widget class not set, attempting to load..."));
         
-        // Method 1: Try StaticLoadClass first
-        DamageNumberWidgetClass = StaticLoadClass(UUserWidget::StaticClass(), nullptr, *WidgetBlueprintPath);
+        // Method 1: Try loading via StaticLoadClass with the correct Blueprint path
+        const FString WidgetBlueprintPath = TEXT("/Game/AtlantisEons/Blueprints/WBP_DamageNumber.WBP_DamageNumber_C");
+        DamageNumberWidgetClass = StaticLoadClass(UDamageNumberWidget::StaticClass(), nullptr, *WidgetBlueprintPath);
         
         if (DamageNumberWidgetClass)
         {
@@ -84,12 +84,14 @@ void ADamageNumberSystem::BeginPlay()
         }
         else
         {
-            // Method 2: Try LoadClass as fallback
-            DamageNumberWidgetClass = LoadClass<UUserWidget>(nullptr, *WidgetBlueprintPath);
+            // Method 2: Try loading with TSoftClassPtr approach
+            FSoftObjectPath WidgetPath(WidgetBlueprintPath);
+            TSoftClassPtr<UDamageNumberWidget> WidgetClassPtr(WidgetPath);
+            DamageNumberWidgetClass = WidgetClassPtr.LoadSynchronous();
             
             if (DamageNumberWidgetClass)
             {
-                UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: ✅ Successfully loaded widget class via LoadClass: %s"), 
+                UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: ✅ Successfully loaded widget class via TSoftClassPtr: %s"), 
                        *DamageNumberWidgetClass->GetName());
             }
             else
@@ -106,8 +108,28 @@ void ADamageNumberSystem::BeginPlay()
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: ❌ FAILED to load widget class from any method! Blueprint path: %s"), 
-                           *BlueprintAssetPath);
+                    // Method 4: Try finding the class by name in global space
+                    for (TObjectIterator<UClass> ClassIterator; ClassIterator; ++ClassIterator)
+                    {
+                        UClass* Class = *ClassIterator;
+                        if (Class && Class->GetName() == TEXT("WBP_DamageNumber_C") && Class->IsChildOf(UUserWidget::StaticClass()))
+                        {
+                            DamageNumberWidgetClass = Class;
+                            UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: ✅ Successfully found widget class by iteration: %s"), 
+                                   *DamageNumberWidgetClass->GetName());
+                            break;
+                        }
+                    }
+                    
+                    if (!DamageNumberWidgetClass)
+                    {
+                        UE_LOG(LogTemp, Error, TEXT("DamageNumberSystem: ❌ FAILED to load widget class from any method! Blueprint path: %s"), 
+                               *BlueprintAssetPath);
+                        
+                        // As a last resort, try to use the base UUserWidget class
+                        DamageNumberWidgetClass = UUserWidget::StaticClass();
+                        UE_LOG(LogTemp, Warning, TEXT("DamageNumberSystem: Using fallback UUserWidget class"));
+                    }
                 }
             }
         }
