@@ -330,6 +330,10 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
     class UInputAction* DashAction;
 
+    /** Block input action */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
+    class UInputAction* BlockAction;
+
     // ========== COMBAT STATE (MUST STAY - Blueprint reads these) ==========
     
     /** Combat state flags - Blueprint checks these for UI and logic */
@@ -494,6 +498,7 @@ public:
     FTimerHandle CameraRotationLagTimer;
     FTimerHandle RespawnTimerHandle;
     FTimerHandle ComboResetTimer;
+    FTimerHandle BlockCooldownTimer;
 
     // ========== ANIMATION MONTAGES (MUST STAY - Blueprint sets these) ==========
     
@@ -544,6 +549,56 @@ public:
     /** Forward dash animation montage */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
     UAnimMontage* ForwardDashMontage;
+
+    // ========== BLOCKING SYSTEM (Blueprint sets these) ==========
+    
+    /** Shield blueprint class - set this to BP_Master_Shield_01 in Blueprint */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Blocking", meta = (AllowPrivateAccess = "true"))
+    TSubclassOf<AActor> ShieldBlueprintClass;
+
+    /** Block animation montage */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
+    UAnimMontage* BlockMontage;
+
+    /** Block start animation montage */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
+    UAnimMontage* BlockStartMontage;
+
+    /** Block end animation montage */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Animation", meta = (AllowPrivateAccess = "true"))
+    UAnimMontage* BlockEndMontage;
+
+    /** Current blocking state */
+    UPROPERTY(BlueprintReadOnly, Category = "Character|Blocking")
+    bool bIsBlocking = false;
+
+    /** Whether the player can block (not on cooldown, alive, etc.) */
+    UPROPERTY(BlueprintReadOnly, Category = "Character|Blocking")
+    bool bCanBlock = true;
+
+    /** Current spawned shield instance */
+    UPROPERTY(BlueprintReadOnly, Category = "Character|Blocking")
+    AActor* CurrentShieldActor = nullptr;
+
+    /** Block cooldown duration in seconds */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Blocking", meta = (ClampMin = "0.0"))
+    float BlockCooldownDuration = 0.0f;
+
+    /** Whether blocking is currently on cooldown */
+    UPROPERTY(BlueprintReadOnly, Category = "Character|Blocking")
+    bool bBlockOnCooldown = false;
+
+    /** Shield positioning offset from character center (for fine-tuning) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Blocking")
+    FVector ShieldPositionOffset = FVector(0.0f, 0.0f, 0.0f);
+
+    /** Shield scale multiplier to adjust size around character */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Blocking", meta = (ClampMin = "0.1", ClampMax = "3.0"))
+    float ShieldScale = 1.0f;
+
+    /** Shield height offset from character feet (positive = higher, negative = lower) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character|Blocking", meta = (ClampMin = "-200.0", ClampMax = "200.0"))
+    float ShieldHeightOffset = 50.0f;
 
     // ========== VFX AND MATERIALS (MUST STAY - Blueprint sets these) ==========
     
@@ -724,6 +779,12 @@ public:
 
     /** Called for dodge input */
     void PerformDodge(const FInputActionValue& Value);
+
+    /** Called for block input */
+    void PerformBlock(const FInputActionValue& Value);
+
+    /** Called when block input is released */
+    void ReleaseBlock(const FInputActionValue& Value);
     
     // ========== CAMERA STABILIZATION - ROOT MOTION CONTROL ==========
     
@@ -1115,6 +1176,40 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Character|Stats")
     int32 GetGold() const;
+
+    // ========== BLOCKING SYSTEM FUNCTIONS ==========
+    
+    /** Start blocking - spawns shield and plays animation */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Blocking")
+    void StartBlocking();
+
+    /** Stop blocking - destroys shield and ends animation */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Blocking")
+    void StopBlocking();
+
+    /** Check if character can currently block */
+    UFUNCTION(BlueprintPure, Category = "Combat|Blocking")
+    bool CanPerformBlock() const;
+
+    /** Get current blocking state */
+    UFUNCTION(BlueprintPure, Category = "Combat|Blocking")
+    bool IsBlocking() const { return bIsBlocking; }
+
+    /** Called when block cooldown expires */
+    UFUNCTION()
+    void OnBlockCooldownComplete();
+
+    /** Spawn the shield actor and attach to character */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Blocking")
+    void SpawnShield();
+
+    /** Destroy the current shield actor */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Blocking")
+    void DestroyShield();
+
+    /** Handle successful block (damage mitigation) */
+    UFUNCTION(BlueprintCallable, Category = "Combat|Blocking")
+    void OnSuccessfulBlock(float BlockedDamage);
 
     // ========== SWORD EFFECT NIAGARA SYSTEM MANAGEMENT ==========
     

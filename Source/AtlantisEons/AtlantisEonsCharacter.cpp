@@ -56,6 +56,7 @@
 #include "Components/VerticalBox.h"
 #include "WBP_StorePopup.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "BP_Item.h"
 #include "StoreSystemFix.h"
 #include "UniversalItemLoader.h"
@@ -613,6 +614,18 @@ void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
         else
         {
             UE_LOG(LogTemp, Error, TEXT("Character - DashAction is null! Dash functionality won't work"));
+        }
+
+        // Block
+        if (BlockAction)
+        {
+            EnhancedInputComponent->BindAction(BlockAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::PerformBlock);
+            EnhancedInputComponent->BindAction(BlockAction, ETriggerEvent::Completed, this, &AAtlantisEonsCharacter::ReleaseBlock);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Block action (Started + Completed)"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character - BlockAction is null! Block functionality won't work"));
         }
     }
     else
@@ -4025,6 +4038,276 @@ void AAtlantisEonsCharacter::PerformDodge(const FInputActionValue& Value)
     else
     {
         UE_LOG(LogTemp, Error, TEXT("Character: DodgeComponent is null! Cannot perform dodge"));
+    }
+}
+
+void AAtlantisEonsCharacter::PerformBlock(const FInputActionValue& Value)
+{
+    UE_LOG(LogTemp, Warning, TEXT("🛡️ Block action triggered"));
+    StartBlocking();
+}
+
+void AAtlantisEonsCharacter::ReleaseBlock(const FInputActionValue& Value)
+{
+    UE_LOG(LogTemp, Warning, TEXT("🛡️ Block released"));
+    StopBlocking();
+}
+
+// ========== BLOCKING SYSTEM IMPLEMENTATION ==========
+
+void AAtlantisEonsCharacter::StartBlocking()
+{
+    if (!CanPerformBlock())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🛡️ Cannot start blocking - conditions not met"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("🛡️ Starting block"));
+    
+    bIsBlocking = true;
+    bCanBlock = false; // Prevent multiple activations
+
+    // IMPORTANT: Clear any velocity to prevent movement issues when shield spawns
+    if (GetCharacterMovement())
+    {
+        GetCharacterMovement()->Velocity = FVector::ZeroVector;
+        GetCharacterMovement()->StopMovementImmediately();
+        UE_LOG(LogTemp, Warning, TEXT("🛡️ Cleared character velocity before spawning shield"));
+    }
+
+    // Spawn the shield
+    SpawnShield();
+
+    // Play block start animation if available
+    if (BlockStartMontage)
+    {
+        USkeletalMeshComponent* Mesh = GetMesh();
+        if (Mesh && Mesh->GetAnimInstance())
+        {
+            float MontageLength = Mesh->GetAnimInstance()->Montage_Play(BlockStartMontage);
+            UE_LOG(LogTemp, Warning, TEXT("🛡️ Playing block start montage (length: %.2f)"), MontageLength);
+        }
+    }
+    // If no start montage, play main block montage
+    else if (BlockMontage)
+    {
+        USkeletalMeshComponent* Mesh = GetMesh();
+        if (Mesh && Mesh->GetAnimInstance())
+        {
+            float MontageLength = Mesh->GetAnimInstance()->Montage_Play(BlockMontage);
+            UE_LOG(LogTemp, Warning, TEXT("🛡️ Playing block montage (length: %.2f)"), MontageLength);
+        }
+    }
+}
+
+void AAtlantisEonsCharacter::StopBlocking()
+{
+    if (!bIsBlocking)
+    {
+        return; // Not currently blocking
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("🛡️ Stopping block"));
+    
+    bIsBlocking = false;
+
+    // Destroy the shield
+    DestroyShield();
+
+    // Play block end animation if available
+    if (BlockEndMontage)
+    {
+        USkeletalMeshComponent* Mesh = GetMesh();
+        if (Mesh && Mesh->GetAnimInstance())
+        {
+            float MontageLength = Mesh->GetAnimInstance()->Montage_Play(BlockEndMontage);
+            UE_LOG(LogTemp, Warning, TEXT("🛡️ Playing block end montage (length: %.2f)"), MontageLength);
+        }
+    }
+
+    // Start cooldown if duration > 0
+    if (BlockCooldownDuration > 0.0f)
+    {
+        bBlockOnCooldown = true;
+        GetWorld()->GetTimerManager().SetTimer(
+            BlockCooldownTimer,
+            this,
+            &AAtlantisEonsCharacter::OnBlockCooldownComplete,
+            BlockCooldownDuration,
+            false
+        );
+        UE_LOG(LogTemp, Warning, TEXT("🛡️ Block cooldown started (%.2f seconds)"), BlockCooldownDuration);
+    }
+    else
+    {
+        bCanBlock = true; // No cooldown - immediately available
+    }
+}
+
+bool AAtlantisEonsCharacter::CanPerformBlock() const
+{
+    // Cannot block if already blocking
+    if (bIsBlocking)
+    {
+        return false;
+    }
+
+    // Cannot block if on cooldown
+    if (bBlockOnCooldown)
+    {
+        return false;
+    }
+
+    // Cannot block if dead
+    if (GetCurrentHealth() <= 0.0f)
+    {
+        return false;
+    }
+
+    // Cannot block if not available (internal state)
+    if (!bCanBlock)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void AAtlantisEonsCharacter::OnBlockCooldownComplete()
+{
+    bBlockOnCooldown = false;
+    bCanBlock = true;
+    UE_LOG(LogTemp, Warning, TEXT("🛡️ Block cooldown complete, blocking available"));
+}
+
+void AAtlantisEonsCharacter::SpawnShield()
+{
+    if (!ShieldBlueprintClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🛡️ ShieldBlueprintClass is not set! Set BP_Master_Shield_01 in Blueprint"));
+        return;
+    }
+
+    if (CurrentShieldActor)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🛡️ Shield already exists, destroying old one"));
+        DestroyShield();
+    }
+
+    // Spawn the shield actor at a safe location relative to the character
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.Instigator = GetInstigator();
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    // Spawn shield centered around the character to surround them completely
+    FVector SpawnLocation = GetActorLocation();
+    FRotator SpawnRotation = GetActorRotation();
+    
+    // Position shield at proper height around character with custom height offset
+    if (GetCapsuleComponent())
+    {
+        float CapsuleHalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+        // Start from character's feet position and add custom height offset
+        FVector CharacterFeetLocation = GetActorLocation() - FVector(0, 0, CapsuleHalfHeight);
+        SpawnLocation.Z = CharacterFeetLocation.Z + ShieldHeightOffset;
+    }
+    
+    // Apply custom offset for fine-tuning shield position
+    SpawnLocation += ShieldPositionOffset;
+    
+    UE_LOG(LogTemp, Warning, TEXT("🛡️ Spawning shield around character: %s (position offset: %s, height offset: %.1f)"), 
+           *SpawnLocation.ToString(), *ShieldPositionOffset.ToString(), ShieldHeightOffset);
+
+    CurrentShieldActor = GetWorld()->SpawnActor<AActor>(ShieldBlueprintClass, SpawnLocation, SpawnRotation, SpawnParams);
+    
+    if (CurrentShieldActor)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🛡️ Shield spawned successfully: %s"), *CurrentShieldActor->GetName());
+
+        // IMPORTANT: Disable physics on the shield to prevent movement interference
+        CurrentShieldActor->SetActorEnableCollision(true); // Keep collision for blocking
+        
+        // Disable physics simulation on all components
+        TArray<UActorComponent*> Components = CurrentShieldActor->GetComponents().Array();
+        for (UActorComponent* Component : Components)
+        {
+            if (UPrimitiveComponent* PrimComp = Cast<UPrimitiveComponent>(Component))
+            {
+                PrimComp->SetSimulatePhysics(false);
+                PrimComp->SetEnableGravity(false);
+                PrimComp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // Don't interfere with character movement
+                PrimComp->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Ignore); // Don't collide with world
+                PrimComp->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block); // Block attacks/projectiles
+                UE_LOG(LogTemp, Warning, TEXT("🛡️ Disabled physics on shield component: %s"), *Component->GetName());
+            }
+        }
+
+        // Apply scale to the shield to properly surround the character
+        if (ShieldScale != 1.0f)
+        {
+            CurrentShieldActor->SetActorScale3D(FVector(ShieldScale));
+            UE_LOG(LogTemp, Warning, TEXT("🛡️ Shield scaled to: %.2f"), ShieldScale);
+        }
+
+        // Attach shield to character's root component to surround the entire character
+        USceneComponent* RootComp = GetRootComponent();
+        if (RootComp)
+        {
+            // Use KeepWorldTransform to maintain the centered position around character
+            CurrentShieldActor->AttachToComponent(RootComp, FAttachmentTransformRules::KeepWorldTransform);
+            UE_LOG(LogTemp, Warning, TEXT("🛡️ Shield attached to character root component (surrounding character)"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("🛡️ Failed to get character root component for shield attachment"));
+        }
+
+        // Final safety check: ensure shield doesn't affect character movement
+        CurrentShieldActor->SetActorTickEnabled(false); // Disable tick to prevent any movement updates
+        
+        // Ensure no root motion or animation blueprint issues
+        if (USkeletalMeshComponent* ShieldMesh = CurrentShieldActor->FindComponentByClass<USkeletalMeshComponent>())
+        {
+            if (UAnimInstance* ShieldAnimInstance = ShieldMesh->GetAnimInstance())
+            {
+                // Disable root motion from shield animations
+                ShieldMesh->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+                UE_LOG(LogTemp, Warning, TEXT("🛡️ Shield animation configured to prevent root motion"));
+            }
+        }
+        
+        UE_LOG(LogTemp, Warning, TEXT("🛡️ Shield physics disabled and safely attached"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("🛡️ Failed to spawn shield actor"));
+    }
+}
+
+void AAtlantisEonsCharacter::DestroyShield()
+{
+    if (CurrentShieldActor)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🛡️ Destroying shield: %s"), *CurrentShieldActor->GetName());
+        CurrentShieldActor->Destroy();
+        CurrentShieldActor = nullptr;
+    }
+}
+
+void AAtlantisEonsCharacter::OnSuccessfulBlock(float BlockedDamage)
+{
+    UE_LOG(LogTemp, Warning, TEXT("🛡️ Successful block! Blocked %.2f damage"), BlockedDamage);
+    
+    // You can add visual/audio effects here for successful blocks
+    // For example: play block hit effect, show damage numbers, etc.
+    
+    // Example: Show damage number at shield location
+    if (CurrentShieldActor)
+    {
+        FVector ShieldLocation = CurrentShieldActor->GetActorLocation();
+        ShowDamageNumber(BlockedDamage, ShieldLocation, false);
     }
 }
 
