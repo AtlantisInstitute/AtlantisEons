@@ -209,6 +209,9 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     CurrentHealth = BaseHealth;
     BaseMP = 100;
     CurrentMP = BaseMP;
+    
+    // Initialize camera stabilization variables
+    LastCustomDodgeInputTime = 0.0f;
 
     // Initialize combat stats
     BaseSTR = 10;
@@ -3770,6 +3773,76 @@ void AAtlantisEonsCharacter::Tick(float DeltaSeconds)
         {
             UE_LOG(LogTemp, Warning, TEXT("🚀 DODGE OVERRIDE - Completely disabling camera stabilization during dodge to prevent teleport-back"));
             // Skip all stabilization while dodging - let the dodge movement happen freely
+            return;
+        }
+        
+        // CUSTOM DODGE OVERRIDE: Disable stabilization when dodge input or S key is pressed
+        float CurrentTime = GetWorld()->GetTimeSeconds();
+        bool bCustomDodgeInputActive = false;
+        bool bBackwardMovementActive = (CurrentMovementInput.Y < -0.1f);
+        bool bAnyMovementInput = (CurrentMovementInput.SizeSquared() > 0.01f);
+        bool bDodgeInProgress = false;
+        
+        // Check if our DodgeComponent indicates a dodge is currently happening
+        if (DodgeComponent)
+        {
+            bDodgeInProgress = DodgeComponent->IsDodging();
+        }
+        
+        // Also check for high velocity which might indicate a custom dash system is active
+        bool bHighVelocityMovement = false;
+        if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+        {
+            float CurrentSpeed = MovementComp->Velocity.Size2D();
+            bHighVelocityMovement = (CurrentSpeed > 800.0f); // Threshold for dash-like movement
+        }
+        
+        // Enhanced input detection
+        if (APlayerController* PC = Cast<APlayerController>(GetController()))
+        {
+            if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PC->InputComponent))
+            {
+                // Check if dodge action is currently being pressed
+                if (DashAction) // Note: Property still called DashAction but now used for dodge
+                {
+                    // Get current input value for dodge action
+                    FInputActionValue DodgeValue = EIC->GetBoundActionValue(DashAction);
+                    bCustomDodgeInputActive = DodgeValue.Get<bool>();
+                }
+            }
+        }
+        
+        // Update last dodge input time if any dodge-related input is detected
+        if (bCustomDodgeInputActive || bBackwardMovementActive || bAnyMovementInput || bDodgeInProgress || bHighVelocityMovement)
+        {
+            LastCustomDodgeInputTime = CurrentTime;
+            UE_LOG(LogTemp, Warning, TEXT("🎯 DODGE INPUT DETECTED - Updating LastCustomDodgeInputTime: %.2f (DodgeInProgress: %s, HighVelocity: %s)"), 
+                   CurrentTime, bDodgeInProgress ? TEXT("YES") : TEXT("NO"), bHighVelocityMovement ? TEXT("YES") : TEXT("NO"));
+        }
+        
+        // Check if we're within the dodge protection window
+        float TimeSinceLastDodgeInput = CurrentTime - LastCustomDodgeInputTime;
+        bool bInDodgeProtectionWindow = (TimeSinceLastDodgeInput < CustomDodgeStabilizationDelay);
+        
+        // PRIORITY CHECK: If DodgeComponent indicates an active dodge, IMMEDIATELY disable stabilization
+        if (bDodgeInProgress || bHighVelocityMovement || bCustomDodgeInputActive || bBackwardMovementActive || bInDodgeProtectionWindow)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🚀 CUSTOM DODGE OVERRIDE - Disabling camera stabilization (DodgeInProgress: %s, HighVelocity: %s, DodgeInput: %s, SKey: %s, AnyMovement: %s, TimeSince: %.2f)"), 
+                   bDodgeInProgress ? TEXT("YES") : TEXT("NO"),
+                   bHighVelocityMovement ? TEXT("YES") : TEXT("NO"),
+                   bCustomDodgeInputActive ? TEXT("YES") : TEXT("NO"),
+                   bBackwardMovementActive ? TEXT("YES") : TEXT("NO"),
+                   bAnyMovementInput ? TEXT("YES") : TEXT("NO"),
+                   TimeSinceLastDodgeInput);
+            
+            // CRITICAL: Clear any pending position refresh timers that could cause teleport-back
+            if (GetWorld())
+            {
+                GetWorld()->GetTimerManager().ClearTimer(PositionRefreshTimer);
+                UE_LOG(LogTemp, Warning, TEXT("🚀 DODGE PROTECTION - Cleared position refresh timer to prevent teleport"));
+            }
+            
+            // Skip all stabilization during custom dodge - let the dodge movement happen freely
             return;
         }
         

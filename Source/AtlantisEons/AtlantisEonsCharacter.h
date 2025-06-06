@@ -476,6 +476,11 @@ public:
     float LastCombatActivity = 0.0f; // Track when combat last occurred
     bool bInCombatMode = false; // Are we in extended combat stabilization mode?
     
+    // Custom dodge input tracking for stabilization override
+    float LastCustomDodgeInputTime = 0.0f; // Track when custom dodge input was last detected
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0", ClampMax = "5.0"))
+    float CustomDodgeStabilizationDelay = 1.5f; // Time to wait after dodge input before re-enabling stabilization
+    
 public:
     // BREAKABLE STABILIZATION: Track current movement input
     FVector2D CurrentMovementInput = FVector2D::ZeroVector; // Current movement input from player
