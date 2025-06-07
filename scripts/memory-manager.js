@@ -13,7 +13,7 @@ const crypto = require('crypto');
 class MemoryManager {
     constructor(projectRoot = process.cwd()) {
         this.projectRoot = projectRoot;
-        this.memoryDir = path.join(projectRoot, '.memory');
+        this.memoryDir = path.join(projectRoot, 'logs-and-data');
         this.memoryFile = path.join(this.memoryDir, 'project-memory.json');
         this.sessionsFile = path.join(this.memoryDir, 'sessions.json');
         this.insightsFile = path.join(this.memoryDir, 'insights.json');

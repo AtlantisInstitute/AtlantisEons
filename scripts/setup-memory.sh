@@ -26,7 +26,7 @@ chmod +x memory-cli.js memory-manager.js memory-mcp-server.js
 echo "✅ Made memory tools executable"
 
 # Initialize memory system if not already done
-if [ ! -d ".memory" ]; then
+if [ ! -d "logs-and-data" ]; then
     echo "📂 Initializing memory system..."
     node memory-cli.js init "Initial setup of AtlantisEons memory system"
 else

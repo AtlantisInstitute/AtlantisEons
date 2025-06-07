@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 
 const projectRoot = '/Users/danielvargas/Documents/Unreal Projects/AtlantisEons';
-const memoryFile = path.join(projectRoot, '.memory', 'project-memory.json');
+const memoryFile = path.join(projectRoot, 'logs-and-data', 'project-memory.json');
 
 function verifyIndexing() {
     console.log('🔍 Verifying codebase indexing results...');

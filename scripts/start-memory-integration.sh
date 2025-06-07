@@ -131,24 +131,24 @@ validate_environment() {
     fi
     
     # Ensure memory directory exists
-    mkdir -p "$PROJECT_ROOT/.memory"
+    mkdir -p "$PROJECT_ROOT/logs-and-data"
     
     print_success "Environment validation complete"
 }
 
 # Function to backup existing memory
 backup_memory() {
-    local backup_dir="$PROJECT_ROOT/.memory/backups"
+    local backup_dir="$PROJECT_ROOT/logs-and-data/backups"
     local timestamp=$(date +"%Y%m%d_%H%M%S")
     local backup_name="memory_backup_$timestamp"
     
-    if [ -f "$PROJECT_ROOT/.memory/project-memory.json" ]; then
+    if [ -f "$PROJECT_ROOT/logs-and-data/project-memory.json" ]; then
         print_status "Creating memory backup..."
         
         mkdir -p "$backup_dir"
         
         # Create backup archive
-        cd "$PROJECT_ROOT/.memory"
+        cd "$PROJECT_ROOT/logs-and-data"
         tar -czf "$backup_dir/$backup_name.tar.gz" *.json 2>/dev/null || true
         
         if [ -f "$backup_dir/$backup_name.tar.gz" ]; then
@@ -251,7 +251,7 @@ show_status() {
     print_info "🔧 Use CLI: ./scripts/memory-integration-cli.js [command]"
     print_info "📊 Server logs: $LOG_FILE"
     print_info "🔄 Auto-sync: Every 30 seconds"
-    print_info "📂 Memory dir: $PROJECT_ROOT/.memory"
+    print_info "📂 Memory dir: $PROJECT_ROOT/logs-and-data"
 }
 
 # Function to show usage

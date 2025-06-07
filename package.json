@@ -4,19 +4,19 @@
   "description": "Memory management and context preservation tools for AtlantisEons Unreal Engine project",
   "main": "memory-manager.js",
   "scripts": {
-    "memory": "node memory-cli.js",
-    "memory-server": "node memory-mcp-server.js",
-    "analyzer": "node unreal-code-analyzer.js",
-    "mcp": "node dynamic-mcp-server.js",
+    "memory": "node scripts/memory-cli.js",
+    "memory-server": "node scripts/memory-mcp-server.js",
+    "analyzer": "node scripts/unreal-code-analyzer.js",
+    "mcp": "node scripts/dynamic-mcp-server.js",
     "start": "npm run memory-server",
-    "init": "node memory-cli.js init",
-    "stats": "node memory-cli.js stats detail",
-    "export": "node memory-cli.js export",
-    "search": "node memory-cli.js search"
+    "init": "node scripts/memory-cli.js init",
+    "stats": "node scripts/memory-cli.js stats detail",
+    "export": "node scripts/memory-cli.js export",
+    "search": "node scripts/memory-cli.js search"
   },
   "bin": {
-    "atlantis-memory": "./memory-cli.js",
-    "atlantis-analyzer": "./unreal-code-analyzer.js"
+    "atlantis-memory": "./scripts/memory-cli.js",
+    "atlantis-analyzer": "./scripts/unreal-code-analyzer.js"
   },
   "engines": {
     "node": ">=14.0.0"

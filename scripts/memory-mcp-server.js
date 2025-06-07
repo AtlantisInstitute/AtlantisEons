@@ -393,7 +393,7 @@ class MemoryMCPServer {
 
     // Enhanced Memory Integration Methods
     setupMemoryWatchers() {
-        const memoryDir = path.join(projectRoot, '.memory');
+        const memoryDir = path.join(projectRoot, 'logs-and-data');
         const memoryFiles = [
             'project-memory.json',
             'sessions.json',

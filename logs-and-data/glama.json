@@ -1,0 +1,9 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": [
+    "abrahamrkj"
+  ],
+  "name": "Unreal Engine Code Analyzer",
+  "rootPath": "/Users/danielvargas/Documents/Unreal Projects/AtlantisEons",
+  "serverId": "z36022whws"
+}
