@@ -1,7 +1,7 @@
 {
   "projectName": "AtlantisEons",
   "created": "2025-05-23T09:50:24.246Z",
-  "lastUpdated": "2025-06-05T06:43:58.559Z",
+  "lastUpdated": "2025-06-07T01:00:38.637Z",
   "version": "1.0.0",
   "sessions": [
     {
@@ -71,6 +71,265 @@
       ],
       "problems": [],
       "solutions": []
+    },
+    {
+      "id": "9c101991-b5ca-4950-90ae-385c529a3ada",
+      "started": "2025-06-07T00:33:44.185Z",
+      "description": "MCP Memory-Enhanced Analysis Session with Auto-Sync",
+      "actions": [
+        {
+          "timestamp": "2025-06-07T00:34:04.040Z",
+          "action": "tool_call",
+          "details": {
+            "name": "memory_stats",
+            "args": {
+              "includeDetails": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:34:08.968Z",
+          "action": "tool_call",
+          "details": {
+            "name": "sync_project_knowledge",
+            "args": {
+              "force": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:34:13.776Z",
+          "action": "tool_call",
+          "details": {
+            "name": "get_project_overview",
+            "args": {
+              "includeArchitecture": true,
+              "includeRecentChanges": true,
+              "includeIssues": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:34:18.600Z",
+          "action": "tool_call",
+          "details": {
+            "name": "add_insight",
+            "args": {
+              "type": "integration",
+              "description": "Successfully integrated memory system with MCP server for real-time project knowledge",
+              "impact": "high",
+              "implementationStatus": "completed",
+              "context": {}
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:34:23.283Z",
+          "action": "tool_call",
+          "details": {
+            "name": "search_memory",
+            "args": {
+              "query": "integration",
+              "categories": [
+                "insights"
+              ],
+              "timeRange": "all",
+              "relevanceThreshold": 0.3
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:34:29.327Z",
+          "action": "tool_call",
+          "details": {
+            "name": "memory_stats",
+            "args": {
+              "includeDetails": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:34:29.368Z",
+          "action": "tool_call",
+          "details": {
+            "name": "memory_stats",
+            "args": {
+              "includeDetails": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:40:26.526Z",
+          "action": "tool_call",
+          "details": {
+            "name": "sync_project_knowledge",
+            "args": {
+              "force": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:40:30.824Z",
+          "action": "tool_call",
+          "details": {
+            "name": "get_project_overview",
+            "args": {
+              "includeArchitecture": true,
+              "includeRecentChanges": true,
+              "includeIssues": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:40:36.454Z",
+          "action": "tool_call",
+          "details": {
+            "name": "memory_stats",
+            "args": {
+              "includeDetails": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:40:40.727Z",
+          "action": "tool_call",
+          "details": {
+            "name": "search_memory",
+            "args": {
+              "query": "AtlantisEonsCharacter",
+              "categories": [
+                "insights"
+              ],
+              "timeRange": "all",
+              "relevanceThreshold": 0.3
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:43:30.196Z",
+          "action": "tool_call",
+          "details": {
+            "name": "sync_project_knowledge",
+            "args": {
+              "force": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:43:35.369Z",
+          "action": "tool_call",
+          "details": {
+            "name": "get_project_overview",
+            "args": {
+              "includeArchitecture": true,
+              "includeRecentChanges": true,
+              "includeIssues": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:43:40.958Z",
+          "action": "tool_call",
+          "details": {
+            "name": "search_memory",
+            "args": {
+              "query": "AAtlantisEonsCharacter",
+              "categories": [
+                "insights",
+                "files",
+                "classes"
+              ],
+              "timeRange": "all",
+              "relevanceThreshold": 0.3
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:45:15.316Z",
+          "action": "tool_call",
+          "details": {
+            "name": "sync_project_knowledge",
+            "args": {
+              "force": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:52:09.707Z",
+          "action": "tool_call",
+          "details": {
+            "name": "memory_stats",
+            "args": {
+              "includeDetails": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:52:09.749Z",
+          "action": "tool_call",
+          "details": {
+            "name": "memory_stats",
+            "args": {
+              "includeDetails": true
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:59:27.778Z",
+          "action": "tool_call",
+          "details": {
+            "name": "search_memory",
+            "args": {
+              "query": "inventory",
+              "categories": [
+                "insights",
+                "files",
+                "classes"
+              ],
+              "timeRange": "all",
+              "relevanceThreshold": 0.3
+            }
+          }
+        },
+        {
+          "timestamp": "2025-06-07T00:59:32.961Z",
+          "action": "tool_call",
+          "details": {
+            "name": "get_project_overview",
+            "args": {
+              "includeArchitecture": true,
+              "includeRecentChanges": true,
+              "includeIssues": true
+            }
+          }
+        }
+      ],
+      "filesModified": [],
+      "insights": [
+        "b3b2f8eb-ce18-46f0-9577-8ab4f5b296c6",
+        "bcd9407a-20fa-4206-a9a0-c085cec1c3f5",
+        "8e7fa68d-a40c-438a-88cf-0eafd943d1c6",
+        "d5572a65-a01f-4aab-8b51-338c981997e3",
+        "ede7fa9b-bfec-4143-9b28-d2d1affd0973",
+        "cd3eb84c-37ac-4901-9a75-4663ef9b4d44"
+      ],
+      "problems": [],
+      "solutions": []
+    },
+    {
+      "id": "df15256d-aca8-4be6-9662-6f5ce6215146",
+      "started": "2025-06-07T01:00:38.616Z",
+      "description": "Simple Codebase Indexing - Key Classes and Files",
+      "actions": [],
+      "filesModified": [],
+      "insights": [
+        "faf18d30-cf6e-4901-b45f-674d3ef7c916",
+        "3235965c-22f9-4654-81b0-558db8dfa6c6"
+      ],
+      "problems": [],
+      "solutions": [],
+      "ended": "2025-06-07T01:00:38.637Z",
+      "summary": "Simple indexing completed: 40 files, 40 classes"
     }
   ],
   "insights": [
@@ -310,6 +569,159 @@
       "description": "Successfully implemented breakable camera stabilization system that allows player movement during attacks while maintaining camera lock for precision. MovementInputStabilizationStrength=0.0f completely disables stabilization when movement input detected, providing tactical combat positioning while preventing camera clipping.",
       "context": {},
       "relevance": 0.14285714285714285
+    },
+    {
+      "id": "b3b2f8eb-ce18-46f0-9577-8ab4f5b296c6",
+      "timestamp": "2025-06-07T00:33:44.216Z",
+      "sessionId": "9c101991-b5ca-4950-90ae-385c529a3ada",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
+    },
+    {
+      "id": "bcd9407a-20fa-4206-a9a0-c085cec1c3f5",
+      "timestamp": "2025-06-07T00:34:08.999Z",
+      "sessionId": "9c101991-b5ca-4950-90ae-385c529a3ada",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
+    },
+    {
+      "id": "8e7fa68d-a40c-438a-88cf-0eafd943d1c6",
+      "timestamp": "2025-06-07T00:34:18.601Z",
+      "sessionId": "9c101991-b5ca-4950-90ae-385c529a3ada",
+      "type": "integration",
+      "description": "Successfully integrated memory system with MCP server for real-time project knowledge",
+      "context": {
+        "type": "integration",
+        "description": "Successfully integrated memory system with MCP server for real-time project knowledge",
+        "context": {},
+        "impact": "high",
+        "implementationStatus": "completed"
+      },
+      "relevance": 0.14285714285714285
+    },
+    {
+      "id": "d5572a65-a01f-4aab-8b51-338c981997e3",
+      "timestamp": "2025-06-07T00:40:26.558Z",
+      "sessionId": "9c101991-b5ca-4950-90ae-385c529a3ada",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
+    },
+    {
+      "id": "ede7fa9b-bfec-4143-9b28-d2d1affd0973",
+      "timestamp": "2025-06-07T00:43:30.229Z",
+      "sessionId": "9c101991-b5ca-4950-90ae-385c529a3ada",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
+    },
+    {
+      "id": "cd3eb84c-37ac-4901-9a75-4663ef9b4d44",
+      "timestamp": "2025-06-07T00:45:15.347Z",
+      "sessionId": "9c101991-b5ca-4950-90ae-385c529a3ada",
+      "type": "project-structure",
+      "description": "AtlantisEons is an Unreal Engine 5.5 action RPG with character progression, inventory management, and combat systems",
+      "context": {
+        "engine": "UE 5.5",
+        "genre": "Action RPG",
+        "keyFeatures": [
+          "character progression",
+          "inventory",
+          "combat",
+          "UI systems"
+        ]
+      },
+      "relevance": 0.42857142857142855
+    },
+    {
+      "id": "faf18d30-cf6e-4901-b45f-674d3ef7c916",
+      "timestamp": "2025-06-07T01:00:38.637Z",
+      "sessionId": "df15256d-aca8-4be6-9662-6f5ce6215146",
+      "type": "simple-indexing-complete",
+      "description": "Simple codebase indexing completed: 40 files, 40 classes indexed",
+      "context": {
+        "filesProcessed": 40,
+        "classesIndexed": 40,
+        "patterns": [
+          "Character_Class_Pattern",
+          "GameMode_Pattern",
+          "HUD_Pattern",
+          "GameInstance_Pattern",
+          "Enemy_AI_Pattern",
+          "AI_Controller_Pattern",
+          "Inventory_System_Pattern",
+          "Equipment_System_Pattern",
+          "Stats_System_Pattern",
+          "UE_Widget_Pattern",
+          "Store_System_Pattern",
+          "Item_System_Pattern",
+          "Damage_System_Pattern",
+          "Data_System_Pattern"
+        ],
+        "timestamp": "2025-06-07T01:00:38.636Z"
+      },
+      "relevance": 0.5714285714285714
+    },
+    {
+      "id": "3235965c-22f9-4654-81b0-558db8dfa6c6",
+      "timestamp": "2025-06-07T01:00:38.637Z",
+      "sessionId": "df15256d-aca8-4be6-9662-6f5ce6215146",
+      "type": "architecture-overview",
+      "description": "AtlantisEons architecture indexed: Character system, UI widgets, AI controllers, component systems, and data management",
+      "context": {
+        "mainSystems": [
+          "Character Movement and Combat",
+          "Inventory and Equipment",
+          "Store and Commerce",
+          "Damage Display System",
+          "Enemy AI and Behavior Trees",
+          "UI Widget Framework",
+          "Data Loading and Management"
+        ]
+      },
+      "relevance": 0.5714285714285714
     }
   ],
   "patterns": [
@@ -423,6 +835,76 @@
       "firstSeen": "2025-06-05T06:43:35.943Z",
       "lastSeen": "2025-06-05T06:43:35.944Z",
       "confidence": 0.1
+    },
+    {
+      "id": "32f60377-95eb-4276-af4c-e69d488db547",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-06-07T00:33:44.216Z",
+      "lastSeen": "2025-06-07T00:33:44.216Z",
+      "confidence": 0.5
+    },
+    {
+      "id": "bfb756f2-b1c6-411f-adf9-961f9a5515c4",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-06-07T00:34:08.999Z",
+      "lastSeen": "2025-06-07T00:34:08.999Z",
+      "confidence": 0.5
+    },
+    {
+      "id": "f1ff8d7e-6dd6-4d40-96cd-8fc4ecee4bc0",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-06-07T00:40:26.558Z",
+      "lastSeen": "2025-06-07T00:40:26.558Z",
+      "confidence": 0.5
+    },
+    {
+      "id": "dbedd1af-a59f-477a-b05e-a51499173175",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-06-07T00:43:30.229Z",
+      "lastSeen": "2025-06-07T00:43:30.229Z",
+      "confidence": 0.5
+    },
+    {
+      "id": "708167a7-32be-40a3-b4cc-0a5008ebba00",
+      "name": "unreal-widget-pattern",
+      "description": "Widgets prefixed with WBP_ follow Blueprint widget naming convention",
+      "examples": [
+        "WBP_Main",
+        "WBP_Inventory",
+        "WBP_CharacterInfo"
+      ],
+      "frequency": 5,
+      "firstSeen": "2025-06-07T00:45:15.348Z",
+      "lastSeen": "2025-06-07T00:45:15.348Z",
+      "confidence": 0.5
     }
   ],
   "contextWindows": [
@@ -559,8 +1041,730 @@
       ]
     }
   ],
-  "keyClasses": {},
-  "importantFiles": {},
+  "keyClasses": {
+    "AAtlantisEonsCharacter": {
+      "file": "Source/AtlantisEons/AtlantisEonsCharacter.h",
+      "lineCount": 1249,
+      "fileType": "Header",
+      "pattern": "Character_Class_Pattern",
+      "purpose": "Character behavior and movement",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.619Z",
+      "lastUpdated": "2025-06-07T01:00:38.619Z"
+    },
+    "AAtlantisEonsGameMode": {
+      "file": "Source/AtlantisEons/AtlantisEonsGameMode.h",
+      "lineCount": 27,
+      "fileType": "Header",
+      "pattern": "GameMode_Pattern",
+      "purpose": "Game rules and management",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.620Z",
+      "lastUpdated": "2025-06-07T01:00:38.620Z"
+    },
+    "AAtlantisEonsHUD": {
+      "file": "Source/AtlantisEons/AtlantisEonsHUD.h",
+      "lineCount": 137,
+      "fileType": "Header",
+      "pattern": "HUD_Pattern",
+      "purpose": "Head-up display and UI management",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.621Z",
+      "lastUpdated": "2025-06-07T01:00:38.621Z"
+    },
+    "UAtlantisEonsGameInstance": {
+      "file": "Source/AtlantisEons/AtlantisEonsGameInstance.h",
+      "lineCount": 75,
+      "fileType": "Header",
+      "pattern": "GameInstance_Pattern",
+      "purpose": "Game state persistence",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.622Z",
+      "lastUpdated": "2025-06-07T01:00:38.622Z"
+    },
+    "AZombieCharacter": {
+      "file": "Source/AtlantisEons/ZombieCharacter.h",
+      "lineCount": 159,
+      "fileType": "Header",
+      "pattern": "Enemy_AI_Pattern",
+      "purpose": "Character behavior and movement",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.623Z",
+      "lastUpdated": "2025-06-07T01:00:38.623Z"
+    },
+    "AZombieAIController": {
+      "file": "Source/AtlantisEons/ZombieAIController.h",
+      "lineCount": 105,
+      "fileType": "Header",
+      "pattern": "AI_Controller_Pattern",
+      "purpose": "Enemy AI and behavior",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.624Z",
+      "lastUpdated": "2025-06-07T01:00:38.624Z"
+    },
+    "UInventoryComponent": {
+      "file": "Source/AtlantisEons/InventoryComponent.h",
+      "lineCount": 184,
+      "fileType": "Header",
+      "pattern": "Inventory_System_Pattern",
+      "purpose": "Inventory management system",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.624Z",
+      "lastUpdated": "2025-06-07T01:00:38.624Z"
+    },
+    "UEquipmentComponent": {
+      "file": "Source/AtlantisEons/EquipmentComponent.h",
+      "lineCount": 204,
+      "fileType": "Header",
+      "pattern": "Equipment_System_Pattern",
+      "purpose": "Equipment and gear system",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.625Z",
+      "lastUpdated": "2025-06-07T01:00:38.625Z"
+    },
+    "UCharacterStatsComponent": {
+      "file": "Source/AtlantisEons/CharacterStatsComponent.h",
+      "lineCount": 203,
+      "fileType": "Header",
+      "pattern": "Stats_System_Pattern",
+      "purpose": "Character behavior and movement",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.626Z",
+      "lastUpdated": "2025-06-07T01:00:38.626Z"
+    },
+    "UWBP_Main": {
+      "file": "Source/AtlantisEons/WBP_Main.h",
+      "lineCount": 123,
+      "fileType": "Header",
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "UI widget implementation",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.627Z",
+      "lastUpdated": "2025-06-07T01:00:38.627Z"
+    },
+    "UWBP_CharacterInfo": {
+      "file": "Source/AtlantisEons/WBP_CharacterInfo.h",
+      "lineCount": 253,
+      "fileType": "Header",
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Character behavior and movement",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.627Z",
+      "lastUpdated": "2025-06-07T01:00:38.627Z"
+    },
+    "UWBP_Inventory": {
+      "file": "Source/AtlantisEons/WBP_Inventory.h",
+      "lineCount": 146,
+      "fileType": "Header",
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Inventory management system",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.628Z",
+      "lastUpdated": "2025-06-07T01:00:38.628Z"
+    },
+    "UWBP_InventorySlot": {
+      "file": "Source/AtlantisEons/WBP_InventorySlot.h",
+      "lineCount": 263,
+      "fileType": "Header",
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Inventory management system",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.629Z",
+      "lastUpdated": "2025-06-07T01:00:38.629Z"
+    },
+    "UWBP_Store": {
+      "file": "Source/AtlantisEons/WBP_Store.h",
+      "lineCount": 178,
+      "fileType": "Header",
+      "pattern": "Store_System_Pattern",
+      "purpose": "UI widget implementation",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.631Z",
+      "lastUpdated": "2025-06-07T01:00:38.631Z"
+    },
+    "ABP_Item": {
+      "file": "Source/AtlantisEons/BP_Item.h",
+      "lineCount": 109,
+      "fileType": "Header",
+      "pattern": "Item_System_Pattern",
+      "purpose": "Item data and management",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.632Z",
+      "lastUpdated": "2025-06-07T01:00:38.632Z"
+    },
+    "UBP_ItemInfo": {
+      "file": "Source/AtlantisEons/BP_ItemInfo.h",
+      "lineCount": 200,
+      "fileType": "Header",
+      "pattern": "Item_System_Pattern",
+      "purpose": "Item data and management",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.632Z",
+      "lastUpdated": "2025-06-07T01:00:38.632Z"
+    },
+    "UDamageNumberSystem": {
+      "file": "Source/AtlantisEons/DamageNumberSystem.h",
+      "lineCount": 115,
+      "fileType": "Header",
+      "pattern": "Damage_System_Pattern",
+      "purpose": "Damage calculation and display",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.633Z",
+      "lastUpdated": "2025-06-07T01:00:38.633Z"
+    },
+    "UDamageNumberWidget": {
+      "file": "Source/AtlantisEons/DamageNumberWidget.h",
+      "lineCount": 59,
+      "fileType": "Header",
+      "pattern": "Damage_System_Pattern",
+      "purpose": "Damage calculation and display",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.634Z",
+      "lastUpdated": "2025-06-07T01:00:38.634Z"
+    },
+    "UUniversalItemLoader": {
+      "file": "Source/AtlantisEons/UniversalItemLoader.h",
+      "lineCount": 126,
+      "fileType": "Header",
+      "pattern": "Data_System_Pattern",
+      "purpose": "Item data and management",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.635Z",
+      "lastUpdated": "2025-06-07T01:00:38.635Z"
+    },
+    "UStoreSystemFix": {
+      "file": "Source/AtlantisEons/StoreSystemFix.h",
+      "lineCount": 99,
+      "fileType": "Header",
+      "pattern": "Store_System_Pattern",
+      "purpose": "Store and commerce functionality",
+      "isUEClass": true,
+      "indexed": "2025-06-07T01:00:38.636Z",
+      "lastUpdated": "2025-06-07T01:00:38.636Z"
+    }
+  },
+  "importantFiles": {
+    "Source/AtlantisEons/AtlantisEonsCharacter.cpp": {
+      "fileName": "AtlantisEonsCharacter.cpp",
+      "fileType": "Implementation",
+      "lineCount": 4043,
+      "size": 155386,
+      "classes": [
+        "AAtlantisEonsCharacter"
+      ],
+      "pattern": "Character_Class_Pattern",
+      "purpose": "Character behavior and movement",
+      "indexed": "2025-06-07T01:00:38.618Z",
+      "lastUpdated": "2025-06-07T01:00:38.618Z"
+    },
+    "Source/AtlantisEons/AtlantisEonsCharacter.h": {
+      "fileName": "AtlantisEonsCharacter.h",
+      "fileType": "Header",
+      "lineCount": 1249,
+      "size": 51717,
+      "classes": [
+        "AAtlantisEonsCharacter"
+      ],
+      "pattern": "Character_Class_Pattern",
+      "purpose": "Character behavior and movement",
+      "indexed": "2025-06-07T01:00:38.619Z",
+      "lastUpdated": "2025-06-07T01:00:38.619Z"
+    },
+    "Source/AtlantisEons/AtlantisEonsGameMode.cpp": {
+      "fileName": "AtlantisEonsGameMode.cpp",
+      "fileType": "Implementation",
+      "lineCount": 175,
+      "size": 6345,
+      "classes": [
+        "AAtlantisEonsGameMode"
+      ],
+      "pattern": "GameMode_Pattern",
+      "purpose": "Game rules and management",
+      "indexed": "2025-06-07T01:00:38.619Z",
+      "lastUpdated": "2025-06-07T01:00:38.619Z"
+    },
+    "Source/AtlantisEons/AtlantisEonsGameMode.h": {
+      "fileName": "AtlantisEonsGameMode.h",
+      "fileType": "Header",
+      "lineCount": 27,
+      "size": 627,
+      "classes": [
+        "AAtlantisEonsGameMode"
+      ],
+      "pattern": "GameMode_Pattern",
+      "purpose": "Game rules and management",
+      "indexed": "2025-06-07T01:00:38.620Z",
+      "lastUpdated": "2025-06-07T01:00:38.620Z"
+    },
+    "Source/AtlantisEons/AtlantisEonsHUD.cpp": {
+      "fileName": "AtlantisEonsHUD.cpp",
+      "fileType": "Implementation",
+      "lineCount": 909,
+      "size": 33067,
+      "classes": [
+        "AAtlantisEonsHUD"
+      ],
+      "pattern": "HUD_Pattern",
+      "purpose": "Head-up display and UI management",
+      "indexed": "2025-06-07T01:00:38.620Z",
+      "lastUpdated": "2025-06-07T01:00:38.620Z"
+    },
+    "Source/AtlantisEons/AtlantisEonsHUD.h": {
+      "fileName": "AtlantisEonsHUD.h",
+      "fileType": "Header",
+      "lineCount": 137,
+      "size": 4486,
+      "classes": [
+        "AAtlantisEonsHUD"
+      ],
+      "pattern": "HUD_Pattern",
+      "purpose": "Head-up display and UI management",
+      "indexed": "2025-06-07T01:00:38.621Z",
+      "lastUpdated": "2025-06-07T01:00:38.621Z"
+    },
+    "Source/AtlantisEons/AtlantisEonsGameInstance.cpp": {
+      "fileName": "AtlantisEonsGameInstance.cpp",
+      "fileType": "Implementation",
+      "lineCount": 241,
+      "size": 8419,
+      "classes": [
+        "UAtlantisEonsGameInstance"
+      ],
+      "pattern": "GameInstance_Pattern",
+      "purpose": "Game state persistence",
+      "indexed": "2025-06-07T01:00:38.622Z",
+      "lastUpdated": "2025-06-07T01:00:38.622Z"
+    },
+    "Source/AtlantisEons/AtlantisEonsGameInstance.h": {
+      "fileName": "AtlantisEonsGameInstance.h",
+      "fileType": "Header",
+      "lineCount": 75,
+      "size": 2272,
+      "classes": [
+        "UAtlantisEonsGameInstance"
+      ],
+      "pattern": "GameInstance_Pattern",
+      "purpose": "Game state persistence",
+      "indexed": "2025-06-07T01:00:38.622Z",
+      "lastUpdated": "2025-06-07T01:00:38.622Z"
+    },
+    "Source/AtlantisEons/ZombieCharacter.cpp": {
+      "fileName": "ZombieCharacter.cpp",
+      "fileType": "Implementation",
+      "lineCount": 1000,
+      "size": 46269,
+      "classes": [
+        "AZombieCharacter"
+      ],
+      "pattern": "Enemy_AI_Pattern",
+      "purpose": "Character behavior and movement",
+      "indexed": "2025-06-07T01:00:38.623Z",
+      "lastUpdated": "2025-06-07T01:00:38.623Z"
+    },
+    "Source/AtlantisEons/ZombieCharacter.h": {
+      "fileName": "ZombieCharacter.h",
+      "fileType": "Header",
+      "lineCount": 159,
+      "size": 5162,
+      "classes": [
+        "AZombieCharacter"
+      ],
+      "pattern": "Enemy_AI_Pattern",
+      "purpose": "Character behavior and movement",
+      "indexed": "2025-06-07T01:00:38.623Z",
+      "lastUpdated": "2025-06-07T01:00:38.623Z"
+    },
+    "Source/AtlantisEons/ZombieAIController.cpp": {
+      "fileName": "ZombieAIController.cpp",
+      "fileType": "Implementation",
+      "lineCount": 424,
+      "size": 17746,
+      "classes": [
+        "AZombieAIController"
+      ],
+      "pattern": "AI_Controller_Pattern",
+      "purpose": "Enemy AI and behavior",
+      "indexed": "2025-06-07T01:00:38.623Z",
+      "lastUpdated": "2025-06-07T01:00:38.623Z"
+    },
+    "Source/AtlantisEons/ZombieAIController.h": {
+      "fileName": "ZombieAIController.h",
+      "fileType": "Header",
+      "lineCount": 105,
+      "size": 3053,
+      "classes": [
+        "AZombieAIController"
+      ],
+      "pattern": "AI_Controller_Pattern",
+      "purpose": "Enemy AI and behavior",
+      "indexed": "2025-06-07T01:00:38.624Z",
+      "lastUpdated": "2025-06-07T01:00:38.624Z"
+    },
+    "Source/AtlantisEons/InventoryComponent.cpp": {
+      "fileName": "InventoryComponent.cpp",
+      "fileType": "Implementation",
+      "lineCount": 926,
+      "size": 27684,
+      "classes": [
+        "UInventoryComponent"
+      ],
+      "pattern": "Inventory_System_Pattern",
+      "purpose": "Inventory management system",
+      "indexed": "2025-06-07T01:00:38.624Z",
+      "lastUpdated": "2025-06-07T01:00:38.624Z"
+    },
+    "Source/AtlantisEons/InventoryComponent.h": {
+      "fileName": "InventoryComponent.h",
+      "fileType": "Header",
+      "lineCount": 184,
+      "size": 6728,
+      "classes": [
+        "UInventoryComponent"
+      ],
+      "pattern": "Inventory_System_Pattern",
+      "purpose": "Inventory management system",
+      "indexed": "2025-06-07T01:00:38.624Z",
+      "lastUpdated": "2025-06-07T01:00:38.624Z"
+    },
+    "Source/AtlantisEons/EquipmentComponent.cpp": {
+      "fileName": "EquipmentComponent.cpp",
+      "fileType": "Implementation",
+      "lineCount": 1498,
+      "size": 56306,
+      "classes": [
+        "UEquipmentComponent"
+      ],
+      "pattern": "Equipment_System_Pattern",
+      "purpose": "Equipment and gear system",
+      "indexed": "2025-06-07T01:00:38.625Z",
+      "lastUpdated": "2025-06-07T01:00:38.625Z"
+    },
+    "Source/AtlantisEons/EquipmentComponent.h": {
+      "fileName": "EquipmentComponent.h",
+      "fileType": "Header",
+      "lineCount": 204,
+      "size": 7039,
+      "classes": [
+        "UEquipmentComponent"
+      ],
+      "pattern": "Equipment_System_Pattern",
+      "purpose": "Equipment and gear system",
+      "indexed": "2025-06-07T01:00:38.625Z",
+      "lastUpdated": "2025-06-07T01:00:38.625Z"
+    },
+    "Source/AtlantisEons/CharacterStatsComponent.cpp": {
+      "fileName": "CharacterStatsComponent.cpp",
+      "fileType": "Implementation",
+      "lineCount": 321,
+      "size": 9894,
+      "classes": [
+        "UCharacterStatsComponent"
+      ],
+      "pattern": "Stats_System_Pattern",
+      "purpose": "Character behavior and movement",
+      "indexed": "2025-06-07T01:00:38.625Z",
+      "lastUpdated": "2025-06-07T01:00:38.625Z"
+    },
+    "Source/AtlantisEons/CharacterStatsComponent.h": {
+      "fileName": "CharacterStatsComponent.h",
+      "fileType": "Header",
+      "lineCount": 203,
+      "size": 6662,
+      "classes": [
+        "UCharacterStatsComponent"
+      ],
+      "pattern": "Stats_System_Pattern",
+      "purpose": "Character behavior and movement",
+      "indexed": "2025-06-07T01:00:38.626Z",
+      "lastUpdated": "2025-06-07T01:00:38.626Z"
+    },
+    "Source/AtlantisEons/WBP_Main.cpp": {
+      "fileName": "WBP_Main.cpp",
+      "fileType": "Implementation",
+      "lineCount": 468,
+      "size": 16018,
+      "classes": [
+        "UWBP_Main"
+      ],
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "UI widget implementation",
+      "indexed": "2025-06-07T01:00:38.626Z",
+      "lastUpdated": "2025-06-07T01:00:38.626Z"
+    },
+    "Source/AtlantisEons/WBP_Main.h": {
+      "fileName": "WBP_Main.h",
+      "fileType": "Header",
+      "lineCount": 123,
+      "size": 3547,
+      "classes": [
+        "UWBP_Main"
+      ],
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "UI widget implementation",
+      "indexed": "2025-06-07T01:00:38.626Z",
+      "lastUpdated": "2025-06-07T01:00:38.626Z"
+    },
+    "Source/AtlantisEons/WBP_CharacterInfo.cpp": {
+      "fileName": "WBP_CharacterInfo.cpp",
+      "fileType": "Implementation",
+      "lineCount": 922,
+      "size": 30492,
+      "classes": [
+        "UWBP_CharacterInfo"
+      ],
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Character behavior and movement",
+      "indexed": "2025-06-07T01:00:38.627Z",
+      "lastUpdated": "2025-06-07T01:00:38.627Z"
+    },
+    "Source/AtlantisEons/WBP_CharacterInfo.h": {
+      "fileName": "WBP_CharacterInfo.h",
+      "fileType": "Header",
+      "lineCount": 253,
+      "size": 6786,
+      "classes": [
+        "UWBP_CharacterInfo"
+      ],
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Character behavior and movement",
+      "indexed": "2025-06-07T01:00:38.627Z",
+      "lastUpdated": "2025-06-07T01:00:38.627Z"
+    },
+    "Source/AtlantisEons/WBP_Inventory.cpp": {
+      "fileName": "WBP_Inventory.cpp",
+      "fileType": "Implementation",
+      "lineCount": 430,
+      "size": 12251,
+      "classes": [
+        "UWBP_Inventory"
+      ],
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Inventory management system",
+      "indexed": "2025-06-07T01:00:38.628Z",
+      "lastUpdated": "2025-06-07T01:00:38.628Z"
+    },
+    "Source/AtlantisEons/WBP_Inventory.h": {
+      "fileName": "WBP_Inventory.h",
+      "fileType": "Header",
+      "lineCount": 146,
+      "size": 4481,
+      "classes": [
+        "UWBP_Inventory"
+      ],
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Inventory management system",
+      "indexed": "2025-06-07T01:00:38.628Z",
+      "lastUpdated": "2025-06-07T01:00:38.628Z"
+    },
+    "Source/AtlantisEons/WBP_InventorySlot.cpp": {
+      "fileName": "WBP_InventorySlot.cpp",
+      "fileType": "Implementation",
+      "lineCount": 1437,
+      "size": 49891,
+      "classes": [
+        "UWBP_InventorySlot"
+      ],
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Inventory management system",
+      "indexed": "2025-06-07T01:00:38.628Z",
+      "lastUpdated": "2025-06-07T01:00:38.628Z"
+    },
+    "Source/AtlantisEons/WBP_InventorySlot.h": {
+      "fileName": "WBP_InventorySlot.h",
+      "fileType": "Header",
+      "lineCount": 263,
+      "size": 8530,
+      "classes": [
+        "UWBP_InventorySlot"
+      ],
+      "pattern": "UE_Widget_Pattern",
+      "purpose": "Inventory management system",
+      "indexed": "2025-06-07T01:00:38.629Z",
+      "lastUpdated": "2025-06-07T01:00:38.629Z"
+    },
+    "Source/AtlantisEons/WBP_Store.cpp": {
+      "fileName": "WBP_Store.cpp",
+      "fileType": "Implementation",
+      "lineCount": 721,
+      "size": 26681,
+      "classes": [
+        "UWBP_Store"
+      ],
+      "pattern": "Store_System_Pattern",
+      "purpose": "UI widget implementation",
+      "indexed": "2025-06-07T01:00:38.630Z",
+      "lastUpdated": "2025-06-07T01:00:38.630Z"
+    },
+    "Source/AtlantisEons/WBP_Store.h": {
+      "fileName": "WBP_Store.h",
+      "fileType": "Header",
+      "lineCount": 178,
+      "size": 5172,
+      "classes": [
+        "UWBP_Store"
+      ],
+      "pattern": "Store_System_Pattern",
+      "purpose": "UI widget implementation",
+      "indexed": "2025-06-07T01:00:38.630Z",
+      "lastUpdated": "2025-06-07T01:00:38.630Z"
+    },
+    "Source/AtlantisEons/BP_Item.cpp": {
+      "fileName": "BP_Item.cpp",
+      "fileType": "Implementation",
+      "lineCount": 461,
+      "size": 17038,
+      "classes": [
+        "ABP_Item"
+      ],
+      "pattern": "Item_System_Pattern",
+      "purpose": "Item data and management",
+      "indexed": "2025-06-07T01:00:38.631Z",
+      "lastUpdated": "2025-06-07T01:00:38.631Z"
+    },
+    "Source/AtlantisEons/BP_Item.h": {
+      "fileName": "BP_Item.h",
+      "fileType": "Header",
+      "lineCount": 109,
+      "size": 3110,
+      "classes": [
+        "ABP_Item"
+      ],
+      "pattern": "Item_System_Pattern",
+      "purpose": "Item data and management",
+      "indexed": "2025-06-07T01:00:38.631Z",
+      "lastUpdated": "2025-06-07T01:00:38.631Z"
+    },
+    "Source/AtlantisEons/BP_ItemInfo.cpp": {
+      "fileName": "BP_ItemInfo.cpp",
+      "fileType": "Implementation",
+      "lineCount": 198,
+      "size": 7268,
+      "classes": [
+        "UBP_ItemInfo"
+      ],
+      "pattern": "Item_System_Pattern",
+      "purpose": "Item data and management",
+      "indexed": "2025-06-07T01:00:38.632Z",
+      "lastUpdated": "2025-06-07T01:00:38.632Z"
+    },
+    "Source/AtlantisEons/BP_ItemInfo.h": {
+      "fileName": "BP_ItemInfo.h",
+      "fileType": "Header",
+      "lineCount": 200,
+      "size": 6887,
+      "classes": [
+        "UBP_ItemInfo"
+      ],
+      "pattern": "Item_System_Pattern",
+      "purpose": "Item data and management",
+      "indexed": "2025-06-07T01:00:38.632Z",
+      "lastUpdated": "2025-06-07T01:00:38.632Z"
+    },
+    "Source/AtlantisEons/DamageNumberSystem.cpp": {
+      "fileName": "DamageNumberSystem.cpp",
+      "fileType": "Implementation",
+      "lineCount": 785,
+      "size": 31172,
+      "classes": [
+        "UDamageNumberSystem"
+      ],
+      "pattern": "Damage_System_Pattern",
+      "purpose": "Damage calculation and display",
+      "indexed": "2025-06-07T01:00:38.633Z",
+      "lastUpdated": "2025-06-07T01:00:38.633Z"
+    },
+    "Source/AtlantisEons/DamageNumberSystem.h": {
+      "fileName": "DamageNumberSystem.h",
+      "fileType": "Header",
+      "lineCount": 115,
+      "size": 4174,
+      "classes": [
+        "UDamageNumberSystem"
+      ],
+      "pattern": "Damage_System_Pattern",
+      "purpose": "Damage calculation and display",
+      "indexed": "2025-06-07T01:00:38.633Z",
+      "lastUpdated": "2025-06-07T01:00:38.633Z"
+    },
+    "Source/AtlantisEons/DamageNumberWidget.cpp": {
+      "fileName": "DamageNumberWidget.cpp",
+      "fileType": "Implementation",
+      "lineCount": 130,
+      "size": 3664,
+      "classes": [
+        "UDamageNumberWidget"
+      ],
+      "pattern": "Damage_System_Pattern",
+      "purpose": "Damage calculation and display",
+      "indexed": "2025-06-07T01:00:38.634Z",
+      "lastUpdated": "2025-06-07T01:00:38.634Z"
+    },
+    "Source/AtlantisEons/DamageNumberWidget.h": {
+      "fileName": "DamageNumberWidget.h",
+      "fileType": "Header",
+      "lineCount": 59,
+      "size": 1593,
+      "classes": [
+        "UDamageNumberWidget"
+      ],
+      "pattern": "Damage_System_Pattern",
+      "purpose": "Damage calculation and display",
+      "indexed": "2025-06-07T01:00:38.634Z",
+      "lastUpdated": "2025-06-07T01:00:38.634Z"
+    },
+    "Source/AtlantisEons/UniversalItemLoader.cpp": {
+      "fileName": "UniversalItemLoader.cpp",
+      "fileType": "Implementation",
+      "lineCount": 411,
+      "size": 15890,
+      "classes": [
+        "UUniversalItemLoader"
+      ],
+      "pattern": "Data_System_Pattern",
+      "purpose": "Item data and management",
+      "indexed": "2025-06-07T01:00:38.634Z",
+      "lastUpdated": "2025-06-07T01:00:38.634Z"
+    },
+    "Source/AtlantisEons/UniversalItemLoader.h": {
+      "fileName": "UniversalItemLoader.h",
+      "fileType": "Header",
+      "lineCount": 126,
+      "size": 4174,
+      "classes": [
+        "UUniversalItemLoader"
+      ],
+      "pattern": "Data_System_Pattern",
+      "purpose": "Item data and management",
+      "indexed": "2025-06-07T01:00:38.635Z",
+      "lastUpdated": "2025-06-07T01:00:38.635Z"
+    },
+    "Source/AtlantisEons/StoreSystemFix.cpp": {
+      "fileName": "StoreSystemFix.cpp",
+      "fileType": "Implementation",
+      "lineCount": 908,
+      "size": 34283,
+      "classes": [
+        "UStoreSystemFix"
+      ],
+      "pattern": "Store_System_Pattern",
+      "purpose": "Store and commerce functionality",
+      "indexed": "2025-06-07T01:00:38.636Z",
+      "lastUpdated": "2025-06-07T01:00:38.636Z"
+    },
+    "Source/AtlantisEons/StoreSystemFix.h": {
+      "fileName": "StoreSystemFix.h",
+      "fileType": "Header",
+      "lineCount": 99,
+      "size": 3480,
+      "classes": [
+        "UStoreSystemFix"
+      ],
+      "pattern": "Store_System_Pattern",
+      "purpose": "Store and commerce functionality",
+      "indexed": "2025-06-07T01:00:38.636Z",
+      "lastUpdated": "2025-06-07T01:00:38.636Z"
+    }
+  },
   "developmentHistory": [
     {
       "id": "b6557c7a-0854-4331-8608-7706648ab865",
@@ -599,6 +1803,17 @@
       "id": "704debfa-e534-4f92-a628-8071a541b860",
       "timestamp": "2025-06-05T03:07:24.441Z",
       "sessionId": "ebd35c0b-684a-4a07-9cfc-1c80fad5b548",
+      "type": "server-start",
+      "description": "Memory-Enhanced MCP Server started",
+      "files": [
+        "memory-mcp-server.js"
+      ],
+      "impact": "low"
+    },
+    {
+      "id": "9154b6ee-468b-4edd-a8fa-6649641d8c1d",
+      "timestamp": "2025-06-07T00:33:44.190Z",
+      "sessionId": "9c101991-b5ca-4950-90ae-385c529a3ada",
       "type": "server-start",
       "description": "Memory-Enhanced MCP Server started",
       "files": [

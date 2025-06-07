@@ -30,5 +30,8 @@
     "game-development"
   ],
   "author": "AtlantisEons Development Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^14.0.0"
+  }
 }

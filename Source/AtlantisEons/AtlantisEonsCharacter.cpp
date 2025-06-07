@@ -66,6 +66,8 @@
 #include "InventoryComponent.h"
 #include "CharacterStatsComponent.h"
 #include "EquipmentComponent.h"
+#include "CharacterUIManager.h"
+#include "CameraStabilizationComponent.h"
 
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -254,6 +256,8 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     StatsComponent = CreateDefaultSubobject<UCharacterStatsComponent>(TEXT("CharacterStatsComponent"));
     InventoryComp = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
     EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
+    UIManager = CreateDefaultSubobject<UCharacterUIManager>(TEXT("UIManager"));
+    CameraStabilizationComp = CreateDefaultSubobject<UCameraStabilizationComponent>(TEXT("CameraStabilizationComp"));
 
     
     // Create SwordBloom widget component (restored to original approach)
@@ -632,16 +636,10 @@ void AAtlantisEonsCharacter::Move(const FInputActionValue& Value)
     // BREAKABLE STABILIZATION: Track movement input for camera stabilization override
     CurrentMovementInput = MovementVector;
     bool bWasTryingToMove = bIsPlayerTryingToMove;
+    const float MovementInputThreshold = 0.1f; // Minimum input magnitude to trigger movement
     bIsPlayerTryingToMove = MovementVector.Size() > MovementInputThreshold;
     
-    // DEBUG: Log when movement state changes during stabilization
-    if (bStabilizationActive && bWasTryingToMove != bIsPlayerTryingToMove)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🎮 MOVEMENT INPUT CHANGE: Size=%.3f, Threshold=%.3f, Trying to move: %s -> %s"), 
-               MovementVector.Size(), MovementInputThreshold, 
-               bWasTryingToMove ? TEXT("YES") : TEXT("NO"),
-               bIsPlayerTryingToMove ? TEXT("YES") : TEXT("NO"));
-    }
+    // Movement input tracking is now handled by CameraStabilizationComponent
 
     if (Controller != nullptr)
     {
@@ -666,6 +664,26 @@ void AAtlantisEonsCharacter::StopMoving(const FInputActionValue& Value)
     bIsPlayerTryingToMove = false;
     
     UE_LOG(LogTemp, Warning, TEXT("🎮 MOVEMENT STOPPED: CurrentMovementInput cleared to (0,0)"));
+}
+
+bool AAtlantisEonsCharacter::IsAnyMovementKeyPressed() const
+{
+    return bWKeyPressed || bAKeyPressed || bSKeyPressed || bDKeyPressed || bDashKeyPressed;
+}
+
+void AAtlantisEonsCharacter::UpdateInputState(bool bW, bool bA, bool bS, bool bD, bool bDash)
+{
+    bWKeyPressed = bW;
+    bAKeyPressed = bA;
+    bSKeyPressed = bS;
+    bDKeyPressed = bD;
+    bDashKeyPressed = bDash;
+    
+    // Update the legacy tracking variable for backwards compatibility
+    bIsPlayerTryingToMove = IsAnyMovementKeyPressed();
+    
+    UE_LOG(LogTemp, Verbose, TEXT("🎮 Input State Updated: W=%d A=%d S=%d D=%d Dash=%d"), 
+           bW ? 1 : 0, bA ? 1 : 0, bS ? 1 : 0, bD ? 1 : 0, bDash ? 1 : 0);
 }
 
 void AAtlantisEonsCharacter::Look(const FInputActionValue& Value)
@@ -693,94 +711,25 @@ void AAtlantisEonsCharacter::StopJumping()
 
 void AAtlantisEonsCharacter::InitializeUI()
 {
-    // DISABLED: Don't create any UI widgets at startup to ensure gameplay works first
-    UE_LOG(LogTemplateCharacter, Warning, TEXT("%s: InitializeUI disabled to focus on gameplay first"), *GetName());
-    
-    // Connect inventory component to HUD when MainWidget is available
-    ConnectInventoryToMainWidget();
-    
-    // Don't create the WBP_Main widget as it's causing cursor issues and blocking input
-    /*
-    // First check if an instance of WBP_Main already exists in the viewport
-    if (!Main)
+    if (UIManager)
     {
-        // Look for an existing instance of WBP_Main before creating a new one
-        UWorld* World = GetWorld();
-        if (World)
-        {
-            bool bFoundExistingWidget = false;
-            for (TObjectIterator<UWBP_Main> Itr; Itr; ++Itr)
-            {
-                UWBP_Main* FoundWidget = *Itr;
-                if (FoundWidget && FoundWidget->IsInViewport())
-                {
-                    UE_LOG(LogTemplateCharacter, Warning, TEXT("%s: Found existing WBP_Main widget in viewport, using it"), *GetName());
-                    Main = FoundWidget;
-                    bFoundExistingWidget = true;
-                    break;
-                }
-            }
-            
-            // Create a new widget only if no existing widget was found
-            if (!bFoundExistingWidget)
-            {
-                Main = CreateWidget<UWBP_Main>(World, UWBP_Main::StaticClass());
-                if (Main)
-                {
-                    Main->AddToViewport();
-                    UE_LOG(LogTemplateCharacter, Log, TEXT("%s: Successfully created and added Main widget to viewport"), *GetName());
-                }
-                else
-                {
-                    UE_LOG(LogTemplateCharacter, Error, TEXT("%s: Failed to create Main widget"), *GetName());
-                    return;
-                }
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemplateCharacter, Error, TEXT("%s: Failed to get World reference for widget creation"), *GetName());
-            return;
-        }
+        UIManager->InitializeUI();
     }
-
-    // The CharacterInfo widget is now created and managed by WBP_Main
-    // Setup circular bars if Main widget exists
-    if (Main)
-    {
-        SetupCircularBars();
-    }
-    */
 }
 
 void AAtlantisEonsCharacter::ConnectInventoryToMainWidget()
 {
-    // Try to get the HUD and its MainWidget
-    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    if (UIManager)
     {
-        if (AAtlantisEonsHUD* HUD = Cast<AAtlantisEonsHUD>(PC->GetHUD()))
-        {
-            UWBP_Main* MainWidget = HUD->GetMainWidget();
-            if (MainWidget && InventoryComp)
-            {
-                InventoryComp->SetMainWidget(MainWidget);
-                UE_LOG(LogTemp, Warning, TEXT("✅ Connected InventoryComponent to MainWidget"));
-            }
-            else if (!MainWidget)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("⏳ MainWidget not yet available, will connect later"));
-            }
-        }
+        UIManager->ConnectInventoryToMainWidget();
     }
 }
 
 void AAtlantisEonsCharacter::SetupCircularBars()
 {
-    if (Main)
+    if (UIManager)
     {
-        // Initialize HP and MP bars
-        SettingCircularBar_HP();
-        SettingCircularBar_MP();
+        UIManager->SetupCircularBars();
     }
 }
 
@@ -917,82 +866,17 @@ void AAtlantisEonsCharacter::ApplyDamage(float InDamageAmount)
 
 void AAtlantisEonsCharacter::SettingCircularBar_HP()
 {
-    // Early exit if we don't have a valid controller (prevents crashes during thumbnail generation)
-    APlayerController* PC = Cast<APlayerController>(GetController());
-    if (!PC)
+    if (UIManager)
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_HP: No valid PlayerController"));
-        return;
-    }
-    
-    // Try multiple approaches to update the HP bar
-    bool bUpdated = false;
-    
-    // Method 1: Use WBP_CharacterInfo if available
-    if (WBP_CharacterInfo)
-    {
-        WBP_CharacterInfo->UpdateHPBar();
-        bUpdated = true;
-        UE_LOG(LogTemp, Log, TEXT("Updated HP bar via WBP_CharacterInfo"));
-    }
-    
-    // Method 2: Use Main widget if available
-    if (Main)
-    {
-        // Update HP bar progress
-        float HPPercentage = MaxHealth > 0 ? CurrentHealth / MaxHealth : 0.0f;
-        if (HPBar)
-        {
-            HPBar->SetPercent(HPPercentage);
-            bUpdated = true;
-            UE_LOG(LogTemp, Log, TEXT("Updated HP bar via Main widget: %.2f%%"), HPPercentage * 100.0f);
-        }
-    }
-    
-    if (!bUpdated)
-    {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_HP: Could not update HP bar - no valid UI references"));
+        UIManager->SettingCircularBar_HP();
     }
 }
 
 void AAtlantisEonsCharacter::SettingCircularBar_MP()
 {
-    // Early exit if we don't have a valid controller (prevents crashes during thumbnail generation)
-    APlayerController* PC = Cast<APlayerController>(GetController());
-    if (!PC)
+    if (UIManager)
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_MP: No valid PlayerController"));
-        return;
-    }
-    
-    // Try multiple approaches to update the MP bar
-    bool bUpdated = false;
-    
-    // Method 1: Use WBP_CharacterInfo if available
-    if (WBP_CharacterInfo)
-    {
-        float MPPercentage = MaxMP > 0 ? CurrentMP / (float)MaxMP : 0.0f;
-        WBP_CharacterInfo->UpdateMPBar(MPPercentage);
-        bUpdated = true;
-        UE_LOG(LogTemp, Log, TEXT("Updated MP bar via WBP_CharacterInfo"));
-    }
-    
-    // Method 2: Use Main widget if available
-    if (Main)
-    {
-        // Update MP bar progress
-        float MPPercentage = MaxMP > 0 ? CurrentMP / (float)MaxMP : 0.0f;
-        if (MPBar)
-        {
-            MPBar->SetPercent(MPPercentage);
-            bUpdated = true;
-            UE_LOG(LogTemp, Log, TEXT("Updated MP bar via Main widget: %.2f%%"), MPPercentage * 100.0f);
-        }
-    }
-    
-    if (!bUpdated)
-    {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_MP: Could not update MP bar - no valid UI references"));
+        UIManager->SettingCircularBar_MP();
     }
 }
 
@@ -1100,31 +984,26 @@ void AAtlantisEonsCharacter::UpdateAllStats()
 
 void AAtlantisEonsCharacter::RefreshStatsDisplay()
 {
-    // Force update the character info widget display
-    if (WBP_CharacterInfo)
+    if (UIManager)
     {
-        WBP_CharacterInfo->UpdateAllStats();
+        UIManager->RefreshStatsDisplay();
     }
-    
-    // Update circular bars
-    SettingCircularBar_HP();
-    SettingCircularBar_MP();
-    
-    UE_LOG(LogTemp, Log, TEXT("Stats display refreshed"));
 }
 
 void AAtlantisEonsCharacter::SettingStore()
 {
-    // Initialize store UI and data
-    // TODO: Load store items and prices
+    if (UIManager)
+    {
+        UIManager->SettingStore();
+    }
 }
 
 void AAtlantisEonsCharacter::SetInventorySlot(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotWidgetRef)
 {
-    if (!ItemInfoRef || !InventorySlotWidgetRef) return;
-    
-    // Update the inventory slot widget with the item info
-    InventorySlotWidgetRef->UpdateSlot(ItemInfoRef);
+    if (UIManager)
+    {
+        UIManager->SetInventorySlot(ItemInfoRef, InventorySlotWidgetRef);
+    }
 }
 
 void AAtlantisEonsCharacter::OnPickupPressed()
@@ -1443,12 +1322,7 @@ void AAtlantisEonsCharacter::MeleeAttack(const FInputActionValue& Value)
     // Face the nearest enemy before attacking
     FaceNearestEnemy();
     
-    // COMBAT MODE: Update combat activity timestamp
-    if (bCombatModeStabilization)
-    {
-        LastCombatActivity = GetWorld()->GetTimeSeconds();
-        UE_LOG(LogTemp, VeryVerbose, TEXT("🥊 Combat activity updated - attack initiated"));
-    }
+    // Combat activity tracking is now handled by CameraStabilizationComponent
     
     // CAMERA STABILIZATION: Enable attack camera stabilization to prevent camera shake
     EnableAttackCameraStabilization();
@@ -1645,69 +1519,9 @@ void AAtlantisEonsCharacter::CloseInventoryImpl()
 
 void AAtlantisEonsCharacter::ClearAllInventoryPopups()
 {
-    // Clear all item info popups from inventory slots to prevent them from staying visible
-    // when the inventory is closed while hovering over items
-    
-    UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: Starting comprehensive popup clearing"));
-    
-    if (!MainWidget)
+    if (UIManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: MainWidget is null"));
-        return;
-    }
-    
-    // Get the inventory widget
-    UWBP_Inventory* InventoryWidget = MainWidget->GetInventoryWidget();
-    if (!InventoryWidget)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: InventoryWidget is null"));
-        return;
-    }
-    
-    // Get all inventory slot widgets and clear their popups
-    const TArray<UWBP_InventorySlot*>& InventorySlots = InventoryWidget->GetInventorySlotWidgets();
-    
-    int32 ClearedPopups = 0;
-    for (UWBP_InventorySlot* Slot : InventorySlots)
-    {
-        if (Slot)
-        {
-            // Call the slot's RemoveItemDescription function to clear any active popups
-            Slot->RemoveItemDescription();
-            ClearedPopups++;
-        }
-    }
-    
-    // ENHANCED CLEARING: Also clear any ItemDescription widgets directly from each slot's reference
-    // This ensures complete cleanup even if some widgets weren't properly removed
-    for (UWBP_InventorySlot* Slot : InventorySlots)
-    {
-        if (Slot)
-        {
-            // Also clear the ItemDescription widget directly if it exists
-            if (Slot->ItemDescription && Slot->ItemDescription->IsInViewport())
-            {
-                Slot->ItemDescription->RemoveFromParent();
-                UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: Force-removed slot %d ItemDescription widget"), Slot->SlotIndex);
-            }
-            
-            // Clear the WidgetItemDescriptionRef too
-            if (Slot->WidgetItemDescriptionRef && Slot->WidgetItemDescriptionRef->IsInViewport())
-            {
-                Slot->WidgetItemDescriptionRef->RemoveFromParent();
-                UE_LOG(LogTemp, Warning, TEXT("ClearAllInventoryPopups: Force-removed slot %d WidgetItemDescriptionRef"), Slot->SlotIndex);
-            }
-        }
-    }
-    
-    UE_LOG(LogTemp, Log, TEXT("ClearAllInventoryPopups: Cleared popups from %d inventory slots with enhanced cleanup"), ClearedPopups);
-    
-    // ADDITIONAL SAFETY: Clear any focus from widgets that might be keeping tooltips alive
-    if (GEngine && GEngine->GameViewport)
-    {
-        FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
-        FSlateApplication::Get().SetAllUserFocus(GEngine->GameViewport->GetGameViewportWidget());
-        UE_LOG(LogTemp, Log, TEXT("ClearAllInventoryPopups: Cleared widget focus to ensure tooltip cleanup"));
+        UIManager->ClearAllInventoryPopups();
     }
 }
 
@@ -1800,35 +1614,26 @@ void AAtlantisEonsCharacter::OpenInventory()
 
 void AAtlantisEonsCharacter::UpdateInventorySlots()
 {
-    if (InventoryComp)
+    if (UIManager)
     {
-        InventoryComp->UpdateInventorySlots();
+        UIManager->UpdateInventorySlots();
     }
 }
 
 void AAtlantisEonsCharacter::DelayedUpdateInventorySlots()
 {
-    UpdateInventorySlots();
+    if (UIManager)
+    {
+        UIManager->DelayedUpdateInventorySlots();
+    }
 }
 
 void AAtlantisEonsCharacter::ForceUpdateInventorySlotsAfterDelay()
 {
-    if (!bIsInventoryOpen)
+    if (UIManager)
     {
-        return;
+        UIManager->ForceUpdateInventorySlotsAfterDelay();
     }
-    
-    // Clear any existing timer
-    GetWorldTimerManager().ClearTimer(InventoryUpdateTimer);
-    
-    // Set a small delay to ensure Blueprint logic completes first
-    GetWorldTimerManager().SetTimer(
-        InventoryUpdateTimer,
-        this,
-        &AAtlantisEonsCharacter::DelayedUpdateInventorySlots,
-        0.1f,
-        false
-    );
 }
 
 void AAtlantisEonsCharacter::CloseInventory()
@@ -1880,32 +1685,22 @@ bool AAtlantisEonsCharacter::AddItemToInventory(UBP_ItemInfo* ItemInfo)
 
 void AAtlantisEonsCharacter::SetMainWidget(UWBP_Main* NewWidget)
 {
+    if (UIManager)
+    {
+        UIManager->SetMainWidget(NewWidget);
+    }
+    
+    // Also set the legacy reference for backward compatibility
     if (NewWidget)
     {
         MainWidget = NewWidget;
-        UE_LOG(LogTemp, Display, TEXT("%s: Main widget set successfully"), *GetName());
+        Main = NewWidget;
         
         // Get the character info widget from the main widget
         if (MainWidget->GetCharacterInfoWidget())
         {
             WBP_CharacterInfo = MainWidget->GetCharacterInfoWidget();
-            UE_LOG(LogTemp, Display, TEXT("%s: Character info widget set from main widget"), *GetName());
         }
-        
-        // If inventory is currently open, update the slots immediately and with delay
-        if (bIsInventoryOpen)
-        {
-            UE_LOG(LogTemp, Display, TEXT("%s: Inventory is open, updating slots immediately and with delay"), *GetName());
-            UpdateInventorySlots();
-            ForceUpdateInventorySlotsAfterDelay();
-        }
-        
-        // Initialize equipment slot references and update UI
-        InitializeEquipmentSlotReferences();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Attempted to set null Main widget"), *GetName());
     }
 }
 
@@ -1927,100 +1722,17 @@ void AAtlantisEonsCharacter::ClearEquipmentSlotUI(EItemEquipSlot EquipSlot)
 
 void AAtlantisEonsCharacter::UpdateAllEquipmentSlotsUI()
 {
-    // Update all equipment slots based on currently equipped items
-    for (int32 i = 0; i < EquipmentSlots.Num(); ++i)
+    if (UIManager)
     {
-        EItemEquipSlot SlotType = EItemEquipSlot::None;
-        
-        // Map array index to equipment slot type
-        switch (i)
-        {
-            case 0:
-                SlotType = EItemEquipSlot::Head;
-                break;
-            case 1:
-                SlotType = EItemEquipSlot::Body;
-                break;
-            case 2:
-                SlotType = EItemEquipSlot::Weapon;
-                break;
-            case 3:
-                SlotType = EItemEquipSlot::Accessory;
-                break;
-            default:
-                continue;
-        }
-        
-        // Update the UI slot with the equipped item (or clear if none)
-        UpdateEquipmentSlotUI(SlotType, EquipmentSlots[i]);
+        UIManager->UpdateAllEquipmentSlotsUI();
     }
-    
-    UE_LOG(LogTemp, Log, TEXT("🔄 Updated all equipment slot UIs"));
 }
 
 void AAtlantisEonsCharacter::InitializeEquipmentSlotReferences()
 {
-    // Get equipment slot references from the character info widget
-    if (WBP_CharacterInfo)
+    if (UIManager)
     {
-        HeadSlot = WBP_CharacterInfo->HeadSlot;
-        WeaponSlot = WBP_CharacterInfo->WeaponSlot;
-        SuitSlot = WBP_CharacterInfo->SuitSlot;
-        CollectableSlot = WBP_CharacterInfo->CollectableSlot;
-        
-        UE_LOG(LogTemp, Warning, TEXT("✅ Initialized equipment slot references from CharacterInfo widget"));
-        UE_LOG(LogTemp, Warning, TEXT("   HeadSlot: %s"), HeadSlot ? TEXT("Valid") : TEXT("NULL"));
-        UE_LOG(LogTemp, Warning, TEXT("   WeaponSlot: %s"), WeaponSlot ? TEXT("Valid") : TEXT("NULL"));
-        UE_LOG(LogTemp, Warning, TEXT("   SuitSlot: %s"), SuitSlot ? TEXT("Valid") : TEXT("NULL"));
-        UE_LOG(LogTemp, Warning, TEXT("   CollectableSlot: %s"), CollectableSlot ? TEXT("Valid") : TEXT("NULL"));
-        
-        // Set up slot indices for equipment slots (different from inventory slots)
-        if (HeadSlot) 
-        {
-            HeadSlot->SetSlotIndex(100); // Use high numbers to distinguish from inventory
-            // Set slot type to Equipment to disable context menu
-            HeadSlot->SetInventorySlotType(EInventorySlotType::Equipment);
-            // Bind click event for unequipping
-            HeadSlot->OnSlotClicked.AddDynamic(this, &AAtlantisEonsCharacter::OnHeadSlotClicked);
-            UE_LOG(LogTemp, Warning, TEXT("   HeadSlot configured as Equipment slot"));
-        }
-        if (WeaponSlot) 
-        {
-            WeaponSlot->SetSlotIndex(101);
-            // Set slot type to Equipment to disable context menu
-            WeaponSlot->SetInventorySlotType(EInventorySlotType::Equipment);
-            WeaponSlot->OnSlotClicked.AddDynamic(this, &AAtlantisEonsCharacter::OnWeaponSlotClicked);
-            UE_LOG(LogTemp, Warning, TEXT("   WeaponSlot configured as Equipment slot"));
-        }
-        if (SuitSlot) 
-        {
-            SuitSlot->SetSlotIndex(102);
-            // Set slot type to Equipment to disable context menu
-            SuitSlot->SetInventorySlotType(EInventorySlotType::Equipment);
-            SuitSlot->OnSlotClicked.AddDynamic(this, &AAtlantisEonsCharacter::OnSuitSlotClicked);
-            UE_LOG(LogTemp, Warning, TEXT("   SuitSlot configured as Equipment slot"));
-        }
-        if (CollectableSlot) 
-        {
-            CollectableSlot->SetSlotIndex(103);
-            // Set slot type to Equipment to disable context menu
-            CollectableSlot->SetInventorySlotType(EInventorySlotType::Equipment);
-            CollectableSlot->OnSlotClicked.AddDynamic(this, &AAtlantisEonsCharacter::OnCollectableSlotClicked);
-            UE_LOG(LogTemp, Warning, TEXT("   CollectableSlot configured as Equipment slot"));
-        }
-        
-        // Update all equipment slots after initialization
-        UpdateAllEquipmentSlotsUI();
-        
-        // Update stats to ensure they reflect current equipment
-        UpdateAllStats();
-        
-        // Force refresh the stats display
-        RefreshStatsDisplay();
-    }
-    else
-    {
-        // UE_LOG(LogTemp, Warning, TEXT("InitializeEquipmentSlotReferences: WBP_CharacterInfo is null"));
+        UIManager->InitializeEquipmentSlotReferences();
     }
 }
 
@@ -2634,13 +2346,7 @@ void AAtlantisEonsCharacter::FaceNearestEnemy()
         // INSTANT ROTATION for testing - no interpolation
         SetActorRotation(TargetRotation);
         
-        // IMMEDIATE CAMERA STABILIZATION: Prevent any frame distortion after character rotation
-        if (bSuppressAttackRootMotion && bCameraRotationLocked && CameraBoom && !bAllowRotationDuringAttacks)
-        {
-            // Instantly restore camera boom to locked rotation to prevent visual distortions
-            CameraBoom->SetWorldRotation(LockedCameraRotation);
-            UE_LOG(LogTemp, Warning, TEXT("📷 INSTANT camera rotation correction after character rotation"));
-        }
+        // Camera stabilization is now handled by CameraStabilizationComponent
         
         // Verify the rotation was applied
         FRotator NewRotation = GetActorRotation();
@@ -3503,171 +3209,26 @@ bool AAtlantisEonsCharacter::ShouldDragonsBeVisible() const
 
 void AAtlantisEonsCharacter::EnableAttackCameraStabilization()
 {
-    if (!bSuppressAttackRootMotion)
+    if (CameraStabilizationComp)
     {
-        bSuppressAttackRootMotion = true;
-        
-        // Start stabilization with a slight delay to allow initial attack movement
-        if (StabilizationStartDelay > 0.0f)
-        {
-            GetWorld()->GetTimerManager().SetTimer(
-                StabilizationDelayTimer,
-                [this]()
-                {
-                    bStabilizationActive = true;
-                    // NOTE: Position locking disabled to prevent teleporting
-                    bPositionLocked = false; // DISABLED - no position locking
-                    
-                    // Store initial positions for logging only
-                    StabilizationStartTime = GetWorld()->GetTimeSeconds();
-                    
-                    // COMBAT MODE: Activate extended stabilization mode for camera only
-                    if (bCombatModeStabilization)
-                    {
-                        LastCombatActivity = GetWorld()->GetTimeSeconds();
-                        if (!bInCombatMode)
-                        {
-                            bInCombatMode = true;
-                            UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE ACTIVATED - Camera stabilization only (no position locking)"));
-                        }
-                        else
-                        {
-                            UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXTENDED - Camera activity refreshed"));
-                        }
-                    }
-                    
-                    // Lock camera rotation to prevent shake and clipping
-                    if (!bAllowRotationDuringAttacks && CameraBoom)
-                    {
-                        LockedCameraRotation = CameraBoom->GetComponentTransform().Rotator();
-                        InitialLockedCameraRotation = LockedCameraRotation;
-                        bCameraRotationLocked = true;
-                    }
-                    
-                    UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION ACTIVATED (delayed) - Camera rotation locked, position free"));
-                },
-                StabilizationStartDelay,
-                false
-            );
-            UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION ENABLED - Activating in %.1fs"), StabilizationStartDelay);
-        }
-        else
-        {
-            // Immediate activation
-            bStabilizationActive = true;
-            // NOTE: Position locking disabled to prevent teleporting
-            bPositionLocked = false; // DISABLED - no position locking
-            
-            // Store initial positions for logging only
-            StabilizationStartTime = GetWorld()->GetTimeSeconds();
-            
-            // COMBAT MODE: Activate extended stabilization mode for camera only
-            if (bCombatModeStabilization)
-            {
-                LastCombatActivity = GetWorld()->GetTimeSeconds();
-                if (!bInCombatMode)
-                {
-                    bInCombatMode = true;
-                    UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE ACTIVATED - Camera stabilization only (no position locking)"));
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXTENDED - Camera activity refreshed"));
-                }
-            }
-            
-            // Lock camera rotation to prevent shake and clipping
-            if (!bAllowRotationDuringAttacks && CameraBoom)
-            {
-                LockedCameraRotation = CameraBoom->GetComponentTransform().Rotator();
-                InitialLockedCameraRotation = LockedCameraRotation;
-                bCameraRotationLocked = true;
-            }
-            
-            UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION ENABLED IMMEDIATELY - Camera rotation locked, position free"));
-        }
+        CameraStabilizationComp->EnableAttackCameraStabilization();
     }
 }
 
 void AAtlantisEonsCharacter::DisableAttackCameraStabilization()
 {
-    if (bSuppressAttackRootMotion)
+    if (CameraStabilizationComp)
     {
-        // Check if we should respect minimum stabilization duration for camera stability
-        float StabilizationDuration = GetWorld()->GetTimeSeconds() - StabilizationStartTime;
-        
-        if (bPersistentStabilizationMode && StabilizationDuration < MinimumStabilizationDuration)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION - Ignoring disable request, duration %.1fs < minimum %.1fs for camera stability"), 
-                   StabilizationDuration, MinimumStabilizationDuration);
-            return; // Keep camera stabilization active for smooth combat
-        }
-        
-        // COMBAT MODE: Check if we're still in combat mode (camera stabilization only)
-        if (bCombatModeStabilization && bInCombatMode)
-        {
-            float TimeSinceLastCombat = GetWorld()->GetTimeSeconds() - LastCombatActivity;
-            if (TimeSinceLastCombat < CombatModeStabilizationDuration)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE CAMERA - Keeping camera stabilization active, %.1fs since last combat < %.1fs threshold"), 
-                       TimeSinceLastCombat, CombatModeStabilizationDuration);
-                return; // Keep camera stabilization for combat stability
-            }
-            else
-            {
-                bInCombatMode = false;
-                UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE EXPIRED - Allowing camera stabilization to disable"));
-            }
-        }
-        
-        bSuppressAttackRootMotion = false;
-        bStabilizationActive = false;
-        bPositionLocked = false; // This was already disabled anyway
-        bCameraRotationLocked = false;
-        
-        // Clear any pending timers
-        GetWorld()->GetTimerManager().ClearTimer(StabilizationDelayTimer);
-        GetWorld()->GetTimerManager().ClearTimer(PositionRefreshTimer);
-        
-        UE_LOG(LogTemp, Warning, TEXT("📷 CAMERA STABILIZATION DISABLED - Duration: %.1fs, Normal camera movement restored"), 
-               StabilizationDuration);
+        CameraStabilizationComp->DisableAttackCameraStabilization();
     }
 }
 
 bool AAtlantisEonsCharacter::IsNearEnemies() const
 {
-    if (!bUseProximityStabilization)
+    if (CameraStabilizationComp)
     {
-        return false;
+        return CameraStabilizationComp->IsNearEnemies();
     }
-    
-    // Find nearby enemies using sphere overlap
-    TArray<FOverlapResult> Overlaps;
-    FCollisionShape SphereShape = FCollisionShape::MakeSphere(ProximityStabilizationDistance);
-    FCollisionQueryParams QueryParams;
-    QueryParams.AddIgnoredActor(this);
-    
-    bool bFoundEnemies = GetWorld()->OverlapMultiByObjectType(
-        Overlaps,
-        GetActorLocation(),
-        FQuat::Identity,
-        FCollisionObjectQueryParams(ECC_Pawn),
-        SphereShape,
-        QueryParams
-    );
-    
-    if (bFoundEnemies)
-    {
-        // Check if any of the overlapping actors are zombies
-        for (const FOverlapResult& Overlap : Overlaps)
-        {
-            if (Overlap.GetActor() && Overlap.GetActor()->ActorHasTag("AdvancedZombieEnemy"))
-            {
-                return true;
-            }
-        }
-    }
-    
     return false;
 }
 
@@ -3675,71 +3236,15 @@ void AAtlantisEonsCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     
-    // DEBUG: Periodic logging of movement input state during stabilization
-    static float LastLogTime = 0.0f;
-    float CurrentTime = GetWorld()->GetTimeSeconds();
-    if (bStabilizationActive && CurrentTime - LastLogTime > 2.0f) // Log every 2 seconds
+    // Apply camera stabilization component (single-layer, stable approach)
+    if (CameraStabilizationComp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🎮 MOVEMENT STATE DEBUG: Input=%.3f,%.3f, Size=%.3f, Threshold=%.3f, Trying to move=%s, Breakable enabled=%s"), 
-               CurrentMovementInput.X, CurrentMovementInput.Y, CurrentMovementInput.Size(), MovementInputThreshold,
-               bIsPlayerTryingToMove ? TEXT("YES") : TEXT("NO"),
-               bAllowBreakableStabilization ? TEXT("YES") : TEXT("NO"));
-        LastLogTime = CurrentTime;
-    }
-    
-    // COMBAT MODE: Check if combat mode should be automatically disabled (camera only)
-    if (bCombatModeStabilization && bInCombatMode)
-    {
-        float TimeSinceLastCombat = GetWorld()->GetTimeSeconds() - LastCombatActivity;
-        if (TimeSinceLastCombat >= CombatModeStabilizationDuration)
-        {
-            bInCombatMode = false;
-            UE_LOG(LogTemp, Warning, TEXT("🥊 COMBAT MODE AUTO-EXPIRED - %.1fs since last combat activity"), TimeSinceLastCombat);
-            
-            // If we're not actively attacking, also disable camera stabilization
-            if (!bSuppressAttackRootMotion)
-            {
-                bStabilizationActive = false;
-                bCameraRotationLocked = false;
-                UE_LOG(LogTemp, Warning, TEXT("📷 COMBAT MODE CAMERA STABILIZATION AUTO-DISABLED - No active attacks"));
-            }
-        }
-    }
-    
-    // CAMERA ROTATION STABILIZATION: Prevent camera shake and clipping during attacks
-    // Position movement is free, but camera rotation is stabilized for smooth combat
-    if (bSuppressAttackRootMotion && bStabilizationActive && bCameraRotationLocked && CameraBoom)
-    {
-
-        
-        // CAMERA ROTATION STABILIZATION ONLY - prevents shake and clipping
-        FRotator CurrentCameraRotation = CameraBoom->GetComponentTransform().Rotator();
-        float SequenceDuration = GetWorld()->GetTimeSeconds() - StabilizationStartTime;
-        
-        // Apply rotation stabilization with tolerance
-        if (!CurrentCameraRotation.Equals(LockedCameraRotation, RotationTolerance))
-        {
-            // Calculate rotation correction speed
-            float RotationSpeed = StabilizationLerpSpeed * CameraRotationStabilizationStrength;
-            if (SequenceDuration > 1.5f)
-            {
-                RotationSpeed *= 2.0f; // Increase strength for extended sequences
-            }
-            
-            FRotator StabilizedRotation = FMath::RInterpTo(
-                CurrentCameraRotation,
-                LockedCameraRotation,
-                DeltaSeconds,
-                RotationSpeed
-            );
-            
-            CameraBoom->SetWorldRotation(StabilizedRotation);
-            
-            UE_LOG(LogTemp, VeryVerbose, TEXT("📷 Camera rotation stabilized: %s -> %s (Duration: %.1fs)"), 
-                   *CurrentCameraRotation.ToString(), *StabilizedRotation.ToString(), SequenceDuration);
-        }
+        CameraStabilizationComp->UpdateCameraStabilization(DeltaSeconds);
+        CameraStabilizationComp->SetMovementInput(CurrentMovementInput);
     }
 }
+
+// Removed dangerous direct stabilization functions that were causing crashes
 
 
 
