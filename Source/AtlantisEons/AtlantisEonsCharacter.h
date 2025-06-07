@@ -31,6 +31,7 @@ class UWBP_CharacterInfo;
 #include "ItemDataCreationComponent.h"
 #include "InventoryManagerComponent.h"
 #include "CombatEffectsManagerComponent.h"
+#include "WBP_SecondaryHUD.h"
 
 #include "AtlantisEonsCharacter.generated.h"
 
@@ -602,6 +603,28 @@ public:
     UPROPERTY()
     class UWBP_Main* MainWidget;
 
+    // ========== SECONDARY HUD SYSTEM ==========
+    
+    /** Secondary HUD widget class - set this in Blueprint to the WBP_SecondaryHUD class */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|SecondaryHUD", meta = (AllowPrivateAccess = "true"))
+    TSubclassOf<class UWBP_SecondaryHUD> SecondaryHUDClass;
+
+    /** Secondary HUD widget instance - automatically created and managed */
+    UPROPERTY(BlueprintReadOnly, Category = "UI|SecondaryHUD", meta = (AllowPrivateAccess = "true"))
+    class UWBP_SecondaryHUD* SecondaryHUDWidget;
+
+    /** Create and initialize the secondary HUD widget */
+    UFUNCTION(BlueprintCallable, Category = "UI|SecondaryHUD")
+    void CreateSecondaryHUD();
+
+    /** Destroy the secondary HUD widget */
+    UFUNCTION(BlueprintCallable, Category = "UI|SecondaryHUD")
+    void DestroySecondaryHUD();
+
+    /** Check if secondary HUD is active */
+    UFUNCTION(BlueprintPure, Category = "UI|SecondaryHUD")
+    bool IsSecondaryHUDActive() const { return SecondaryHUDWidget != nullptr; }
+
 private:
     bool bHealthDelegateBound = false;
 
@@ -616,6 +639,9 @@ private:
 
     /** Called when the game starts or when spawned */
     virtual void BeginPlay() override;
+
+    /** Called when the character is removed from the world */
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
     UPROPERTY()
     class UWBP_GuideText* GuideTextWidget;
@@ -867,6 +893,32 @@ public:
     /** Get max MP from stats component */
     UFUNCTION(BlueprintPure, Category = "Stats")
     int32 GetMaxMP() const;
+
+    // ========== EXPERIENCE SYSTEM FUNCTIONS ==========
+    
+    /** Add experience points to the character */
+    UFUNCTION(BlueprintCallable, Category = "Experience")
+    void AddExperience(int32 ExpAmount);
+
+    /** Get current player level */
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    int32 GetPlayerLevel() const;
+
+    /** Get current experience points */
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    int32 GetCurrentExp() const;
+
+    /** Get experience needed for next level */
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    int32 GetExpForNextLevel() const;
+
+    /** Get experience percentage for current level */
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    float GetExpPercentage() const;
+
+    /** Get the stats component */
+    UFUNCTION(BlueprintPure, Category = "Components")
+    UCharacterStatsComponent* GetStatsComponent() const { return StatsComponent; }
 
     UFUNCTION(BlueprintCallable, Category = "Character|Stats")
     void UpdateAllStats();

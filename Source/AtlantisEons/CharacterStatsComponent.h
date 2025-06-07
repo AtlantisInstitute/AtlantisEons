@@ -9,6 +9,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthChangedSignature, float, Ne
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnManaChangedSignature, float, NewManaPercent);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnDamageTakenSignature, float, DamageAmount, bool, bIsAlive);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCharacterDeathSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerLevelUpSignature, int32, NewLevel);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnExperienceChangedSignature, int32, CurrentExp, int32, MaxExp);
 
 /**
  * Component responsible for managing character stats like Health, Mana, STR, DEX, INT, etc.
@@ -38,6 +40,13 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Damage")
     FOnCharacterDeathSignature OnCharacterDeath;
+
+    // Experience system events
+    UPROPERTY(BlueprintAssignable, Category = "Experience")
+    FOnPlayerLevelUpSignature OnPlayerLevelUp;
+
+    UPROPERTY(BlueprintAssignable, Category = "Experience")
+    FOnExperienceChangedSignature OnExperienceChanged;
 
     // Base stats (set in editor/defaults)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Base Stats")
@@ -92,6 +101,25 @@ public:
     // Gold and currency
     UPROPERTY(BlueprintReadOnly, Category = "Currency")
     int32 Gold = 0;
+
+    // Experience and leveling system
+    UPROPERTY(BlueprintReadOnly, Category = "Experience")
+    int32 PlayerLevel = 1;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Experience")
+    int32 CurrentExp = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Experience")
+    int32 ExpForNextLevel = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience")
+    int32 BaseExpRequirement = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience")
+    float ExpGrowthMultiplier = 1.5f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience")
+    int32 MaxLevel = 100;
 
     // Stat modification functions
     UFUNCTION(BlueprintCallable, Category = "Stats")
@@ -153,6 +181,25 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Stats")
     int32 GetGold() const { return Gold; }
+
+    // Experience functions
+    UFUNCTION(BlueprintCallable, Category = "Experience")
+    void AddExperience(int32 ExpAmount);
+
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    int32 GetPlayerLevel() const { return PlayerLevel; }
+
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    int32 GetCurrentExp() const { return CurrentExp; }
+
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    int32 GetExpForNextLevel() const { return ExpForNextLevel; }
+
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    int32 CalculateExpRequiredForLevel(int32 Level) const;
+
+    UFUNCTION(BlueprintPure, Category = "Experience")
+    float GetExpPercentage() const;
 
     // Stat modification (for equipment bonuses)
     UFUNCTION(BlueprintCallable, Category = "Stats")

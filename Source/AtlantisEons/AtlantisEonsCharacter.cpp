@@ -486,6 +486,16 @@ void AAtlantisEonsCharacter::BeginPlay()
     UE_LOG(LogTemp, Warning, TEXT("Player BeginPlay: Character setup complete"));
 }
 
+void AAtlantisEonsCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    // Clean up SecondaryHUD widget
+    DestroySecondaryHUD();
+    
+    Super::EndPlay(EndPlayReason);
+    
+    UE_LOG(LogTemp, Warning, TEXT("Player EndPlay: Character cleanup complete"));
+}
+
 // BeginPlay is now BlueprintImplementableEvent
 void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -685,6 +695,9 @@ void AAtlantisEonsCharacter::InitializeUI()
     {
         UIManager->InitializeUI();
     }
+    
+    // Create Secondary HUD if class is assigned
+    CreateSecondaryHUD();
 }
 
 void AAtlantisEonsCharacter::ConnectInventoryToMainWidget()
@@ -2391,6 +2404,55 @@ int32 AAtlantisEonsCharacter::GetMaxMP() const
     return MaxMP;
 }
 
+// ========== EXPERIENCE SYSTEM FUNCTIONS ==========
+
+void AAtlantisEonsCharacter::AddExperience(int32 ExpAmount)
+{
+    if (StatsComponent)
+    {
+        StatsComponent->AddExperience(ExpAmount);
+        
+        // Also award experience for killing enemies - this could be called when enemies die
+        UE_LOG(LogTemp, Log, TEXT("AtlantisEonsCharacter: Added %d experience"), ExpAmount);
+    }
+}
+
+int32 AAtlantisEonsCharacter::GetPlayerLevel() const
+{
+    if (StatsComponent)
+    {
+        return StatsComponent->GetPlayerLevel();
+    }
+    return 1;
+}
+
+int32 AAtlantisEonsCharacter::GetCurrentExp() const
+{
+    if (StatsComponent)
+    {
+        return StatsComponent->GetCurrentExp();
+    }
+    return 0;
+}
+
+int32 AAtlantisEonsCharacter::GetExpForNextLevel() const
+{
+    if (StatsComponent)
+    {
+        return StatsComponent->GetExpForNextLevel();
+    }
+    return 100;
+}
+
+float AAtlantisEonsCharacter::GetExpPercentage() const
+{
+    if (StatsComponent)
+    {
+        return StatsComponent->GetExpPercentage();
+    }
+    return 0.0f;
+}
+
 void AAtlantisEonsCharacter::UnequipInventoryItem(UBP_ItemInfo* ItemInfoRef)
 {
     if (EquipmentComponent)
@@ -2952,4 +3014,90 @@ bool AAtlantisEonsCharacter::ShouldDashForward() const
     // Dash forward if pressing W (forward movement)
     // Forward movement is positive Y in CurrentMovementInput
     return CurrentMovementInput.Y > 0.1f;
+}
+
+// ========== SECONDARY HUD SYSTEM IMPLEMENTATION ==========
+
+void AAtlantisEonsCharacter::CreateSecondaryHUD()
+{
+    UE_LOG(LogTemp, Warning, TEXT("🔧 CreateSecondaryHUD called"));
+    UE_LOG(LogTemp, Warning, TEXT("🔧   SecondaryHUDClass: %s"), SecondaryHUDClass ? *SecondaryHUDClass->GetName() : TEXT("NULL"));
+    UE_LOG(LogTemp, Warning, TEXT("🔧   SecondaryHUDWidget: %s"), SecondaryHUDWidget ? TEXT("EXISTS") : TEXT("NULL"));
+    
+    // Only create if we have a valid class assigned and no existing widget
+    if (!SecondaryHUDClass || SecondaryHUDWidget)
+    {
+        if (!SecondaryHUDClass)
+        {
+            UE_LOG(LogTemp, Error, TEXT("🔧 ❌ SecondaryHUD: No SecondaryHUDClass assigned! You need to set this in your BP_Character Blueprint!"));
+            UE_LOG(LogTemp, Error, TEXT("🔧 ❌ Open BP_Character Blueprint → Details Panel → UI | SecondaryHUD → Set Secondary HUD Class to WBP_SecondaryHUD"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Widget already exists, checking if it's still in viewport"));
+            
+            // FIXED: Check if existing widget is still in viewport, re-add if needed
+            if (SecondaryHUDWidget && !SecondaryHUDWidget->IsInViewport())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Widget exists but not in viewport, re-adding"));
+                SecondaryHUDWidget->AddToViewport(1000); // High Z-order to stay on top
+                SecondaryHUDWidget->InitializeHUD(this);
+                UE_LOG(LogTemp, Warning, TEXT("✅ SecondaryHUD: Widget re-added to viewport"));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Widget already exists and is in viewport, skipping creation"));
+            }
+        }
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Creating widget with class: %s"), *SecondaryHUDClass->GetName());
+    
+    if (UWorld* World = GetWorld())
+    {
+        if (APlayerController* PC = Cast<APlayerController>(GetController()))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Creating widget..."));
+            
+            SecondaryHUDWidget = CreateWidget<UWBP_SecondaryHUD>(PC, SecondaryHUDClass);
+            
+            if (SecondaryHUDWidget)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Widget created successfully"));
+                
+                // Add to viewport with very high Z-order to ensure it stays on top
+                SecondaryHUDWidget->AddToViewport(10000); // INCREASED Z-order to ensure it stays above other UI
+                
+                UE_LOG(LogTemp, Warning, TEXT("✅ SecondaryHUD: Widget created and added to viewport successfully!"));
+                UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Widget should now be visible with health and experience bars"));
+                
+                // Force immediate initialization
+                SecondaryHUDWidget->InitializeHUD(this);
+                UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Manual initialization completed"));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("❌ SecondaryHUD: Failed to create widget from class: %s"), *SecondaryHUDClass->GetName());
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("❌ SecondaryHUD: No player controller found"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ SecondaryHUD: No world found"));
+    }
+}
+
+void AAtlantisEonsCharacter::DestroySecondaryHUD()
+{
+    if (SecondaryHUDWidget)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🗑️ SecondaryHUD: Destroying widget"));
+        SecondaryHUDWidget->RemoveFromParent();
+        SecondaryHUDWidget = nullptr;
+    }
 }

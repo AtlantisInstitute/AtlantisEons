@@ -118,9 +118,9 @@ AZombieCharacter::AZombieCharacter()
     bIsAttacking = false;
     bIsDead = false;
     
-    // Initialize health
-    MaxHealth = 10000.0f;  // Set a higher max health for zombies
-    CurrentHealth = MaxHealth;
+    // Health will be initialized in BeginPlay()
+    MaxHealth = 0.0f;  // Default value, will be set in BeginPlay()
+    CurrentHealth = 0.0f;
     
     // Initialize damage tracking variables
     LastDamageFrame = 0;
@@ -139,8 +139,8 @@ void AZombieCharacter::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Initialize zombie stats - INCREASED for better combat testing
-    MaxHealth = 10000.0f;  // Increased to 10,000 for combat system testing
+    // Initialize zombie stats - REDUCED for quick testing
+    MaxHealth = 100.0f;  // Reduced to 100 for quick testing
     CurrentHealth = MaxHealth;
     BaseDamage = 25.0f;
     
@@ -760,6 +760,20 @@ void AZombieCharacter::HandleDeath()
     }
     
     bIsDead = true;
+
+    // Award experience to the player
+    if (UWorld* World = GetWorld())
+    {
+        if (APlayerController* PC = World->GetFirstPlayerController())
+        {
+            if (AAtlantisEonsCharacter* Player = Cast<AAtlantisEonsCharacter>(PC->GetPawn()))
+            {
+                int32 ExpReward = 120; // TEMPORARY: Increased for testing level up animation
+                Player->AddExperience(ExpReward);
+                UE_LOG(LogTemp, Log, TEXT("💰 Player awarded %d experience for killing zombie"), ExpReward);
+            }
+        }
+    }
 
     // Disable movement
     GetCharacterMovement()->DisableMovement();

@@ -13,6 +13,11 @@ UCharacterStatsComponent::UCharacterStatsComponent()
     CurrentINT = BaseINT;
     CurrentDefence = BaseDefence;
     CurrentDamage = BaseDamage;
+    
+    // Initialize experience system
+    PlayerLevel = 1;
+    CurrentExp = 0;
+    ExpForNextLevel = BaseExpRequirement;
 }
 
 void UCharacterStatsComponent::BeginPlay()
@@ -32,6 +37,11 @@ void UCharacterStatsComponent::InitializeStats()
     CurrentINT = BaseINT;
     CurrentDefence = BaseDefence;
     CurrentDamage = BaseDamage;
+    
+    // Initialize experience system
+    PlayerLevel = 1;
+    CurrentExp = 0;
+    ExpForNextLevel = BaseExpRequirement;
     
     ClampHealthMana();
     BroadcastStatChanges();
@@ -318,4 +328,77 @@ void UCharacterStatsComponent::NotifyUIUpdate()
     OnHealthChanged.Broadcast(GetHealthPercent());
     OnManaChanged.Broadcast(GetManaPercent());
     OnStatsChanged.Broadcast();
+}
+
+// ========== EXPERIENCE SYSTEM FUNCTIONS ==========
+
+void UCharacterStatsComponent::AddExperience(int32 ExpAmount)
+{
+    if (ExpAmount <= 0 || PlayerLevel >= MaxLevel)
+    {
+        return;
+    }
+    
+    // Add experience
+    CurrentExp += ExpAmount;
+    
+    UE_LOG(LogTemp, Log, TEXT("CharacterStatsComponent: Added %d experience (%d total)"), ExpAmount, CurrentExp);
+    
+    // Check for level ups
+    bool bLeveledUp = false;
+    while (CurrentExp >= ExpForNextLevel && PlayerLevel < MaxLevel)
+    {
+        // Level up!
+        CurrentExp -= ExpForNextLevel;
+        PlayerLevel++;
+        bLeveledUp = true;
+        
+        // Calculate new exp requirement for next level
+        ExpForNextLevel = CalculateExpRequiredForLevel(PlayerLevel + 1) - CalculateExpRequiredForLevel(PlayerLevel);
+        
+        UE_LOG(LogTemp, Warning, TEXT("CharacterStatsComponent: LEVEL UP! Player is now level %d"), PlayerLevel);
+        
+        // Broadcast level up event
+        OnPlayerLevelUp.Broadcast(PlayerLevel);
+        
+        // Level up could increase stats
+        UpdateAllStats();
+    }
+    
+    // Broadcast experience changed event
+    OnExperienceChanged.Broadcast(CurrentExp, ExpForNextLevel);
+    
+    if (bLeveledUp)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("CharacterStatsComponent: Player leveled up to %d! Next level requires %d exp"), 
+               PlayerLevel, ExpForNextLevel);
+    }
+}
+
+int32 UCharacterStatsComponent::CalculateExpRequiredForLevel(int32 Level) const
+{
+    if (Level <= 1)
+    {
+        return 0;
+    }
+    
+    // Calculate total experience needed to reach this level using exponential growth
+    int32 TotalExp = 0;
+    for (int32 i = 2; i <= Level; ++i)
+    {
+        int32 ExpForThisLevel = FMath::RoundToInt(BaseExpRequirement * FMath::Pow(ExpGrowthMultiplier, i - 2));
+        TotalExp += ExpForThisLevel;
+    }
+    
+    return TotalExp;
+}
+
+float UCharacterStatsComponent::GetExpPercentage() const
+{
+    if (ExpForNextLevel <= 0)
+    {
+        return 1.0f; // Max level
+    }
+    
+    return static_cast<float>(CurrentExp) / static_cast<float>(ExpForNextLevel);
 } 
