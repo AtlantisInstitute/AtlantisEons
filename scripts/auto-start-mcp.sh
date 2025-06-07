@@ -23,7 +23,7 @@ check_and_start() {
     log_message "🔍 Checking MCP server status..."
     
     # Check if server is running
-    if ./start-memory-integration.sh status > /dev/null 2>&1; then
+    if ./scripts/start-memory-integration.sh status > /dev/null 2>&1; then
         log_message "✅ MCP server is already running"
         echo -e "${GREEN}✅ MCP server is already running${NC}"
         return 0
@@ -32,12 +32,12 @@ check_and_start() {
         echo -e "${YELLOW}🚀 Starting MCP server...${NC}"
         
         # Start the server
-        ./start-memory-integration.sh start
+        ./scripts/start-memory-integration.sh start
         
         # Wait a moment and verify it started
         sleep 3
         
-        if ./start-memory-integration.sh status > /dev/null 2>&1; then
+        if ./scripts/start-memory-integration.sh status > /dev/null 2>&1; then
             log_message "✅ MCP server started successfully"
             echo -e "${GREEN}✅ MCP server started successfully${NC}"
             return 0
@@ -130,7 +130,7 @@ case "${1:-start}" in
         ;;
     "status")
         cd "$PROJECT_DIR" || exit 1
-        ./start-memory-integration.sh status
+        ./scripts/start-memory-integration.sh status
         ;;
     "help"|"-h"|"--help")
         show_help

@@ -1,495 +1,550 @@
-Started new session: 9c101991-b5ca-4950-90ae-385c529a3ada
+Started new session: d3c7d214-4c0d-40d7-8144-3d091998e271
 Memory-Enhanced MCP Server running on port 9011
-Session ID: 9c101991-b5ca-4950-90ae-385c529a3ada
+Session ID: d3c7d214-4c0d-40d7-8144-3d091998e271
 Available at: http://localhost:9011
 Memory cache synced - undefined items
 Memory file changed: project-memory.json
 Memory cache synced - undefined items
+Memory cache synced - undefined items
+Memory cache synced - undefined items
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Server error: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.handleToolCall (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:929:48)
+    at IncomingMessage.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1247:53)
+    at IncomingMessage.emit (node:events:507:28)
+    at endReadableNT (node:internal/streams/readable:1696:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Server error: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.handleToolCall (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:929:48)
+    at IncomingMessage.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1247:53)
+    at IncomingMessage.emit (node:events:507:28)
+    at endReadableNT (node:internal/streams/readable:1696:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
 Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory file changed: project-memory.json
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
-Memory cache synced - undefined items
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:410:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:427:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:420:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)

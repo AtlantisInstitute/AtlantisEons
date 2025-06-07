@@ -27,6 +27,10 @@ class UWBP_CharacterInfo;
 #include "InventoryComponent.h"
 #include "CharacterUIManager.h"
 #include "CameraStabilizationComponent.h"
+#include "EquipmentVisualsComponent.h"
+#include "ItemDataCreationComponent.h"
+#include "InventoryManagerComponent.h"
+#include "CombatEffectsManagerComponent.h"
 
 #include "AtlantisEonsCharacter.generated.h"
 
@@ -134,6 +138,22 @@ public:
     /** Camera Stabilization component - handles ultra-aggressive camera stabilization during attacks */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     class UCameraStabilizationComponent* CameraStabilizationComp;
+
+    /** Equipment Visuals component - handles all equipment mesh swapping and visual updates */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UEquipmentVisualsComponent* EquipmentVisualsComp;
+
+    /** Item Data Creation component - handles all item data creation, validation, and asset loading */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UItemDataCreationComponent* ItemDataCreationComp;
+
+    /** Inventory Manager component - handles all high-level inventory operations, UI management, and input handling */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UInventoryManagerComponent* InventoryManagerComp;
+
+    /** Combat Effects Manager component - handles all combat systems, attack chains, visual effects, and damage management */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UCombatEffectsManagerComponent* CombatEffectsManagerComp;
 
     // ========== BLUEPRINT-VISIBLE STATS (MUST STAY - Blueprint reads/writes) ==========
     
@@ -643,6 +663,10 @@ private:
     UFUNCTION()
     void OnInventoryChangedEvent();
 
+    /** Event handler for damage dealt by player from CombatEffectsManagerComponent */
+    UFUNCTION()
+    void OnDamageDealtFromCombat(float DealtDamage, AActor* Target);
+
 public:
     UFUNCTION(BlueprintCallable, Category = "Character|Input")
     UInputMappingContext* GetDefaultMappingContext() const { return DefaultMappingContext; }
@@ -1111,6 +1135,10 @@ public:
     /** Get current blocking state */
     UFUNCTION(BlueprintPure, Category = "Combat|Blocking")
     bool IsBlocking() const { return bIsBlocking; }
+    
+    /** Check if character is dead */
+    UFUNCTION(BlueprintPure, Category = "Character|State")
+    bool IsDead() const { return bIsDead; }
 
     /** Called when block cooldown expires */
     UFUNCTION()

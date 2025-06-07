@@ -107,19 +107,19 @@ validate_environment() {
     fi
     
     # Check for required files
-    if [ ! -f "$PROJECT_ROOT/memory-mcp-server.js" ]; then
-        print_error "memory-mcp-server.js not found. Please ensure the integrated memory system is properly set up."
+    if [ ! -f "$PROJECT_ROOT/scripts/memory-mcp-server.js" ]; then
+        print_error "scripts/memory-mcp-server.js not found. Please ensure the integrated memory system is properly set up."
         exit 1
     fi
     
-    if [ ! -f "$PROJECT_ROOT/memory-integration-cli.js" ]; then
-        print_error "memory-integration-cli.js not found. Please ensure the CLI tool is available."
+    if [ ! -f "$PROJECT_ROOT/scripts/memory-integration-cli.js" ]; then
+        print_error "scripts/memory-integration-cli.js not found. Please ensure the CLI tool is available."
         exit 1
     fi
     
     # Check for memory manager
-    if [ ! -f "$PROJECT_ROOT/memory-manager.js" ]; then
-        print_error "memory-manager.js not found. Please ensure the memory system is properly installed."
+    if [ ! -f "$PROJECT_ROOT/scripts/memory-manager.js" ]; then
+        print_error "scripts/memory-manager.js not found. Please ensure the memory system is properly installed."
         exit 1
     fi
     
@@ -170,7 +170,7 @@ start_mcp_server() {
     cd "$PROJECT_ROOT"
     
     # Start server in background
-    MCP_PORT=$MCP_PORT nohup node memory-mcp-server.js > "$LOG_FILE" 2>&1 &
+    MCP_PORT=$MCP_PORT nohup node scripts/memory-mcp-server.js > "$LOG_FILE" 2>&1 &
     local server_pid=$!
     
     echo $server_pid > "$PROJECT_ROOT/.mcp-server.pid"
@@ -202,7 +202,7 @@ initial_sync() {
     cd "$PROJECT_ROOT"
     
     # Force sync to ensure everything is up to date
-    if node memory-integration-cli.js sync --force; then
+    if node scripts/memory-integration-cli.js sync --force; then
         print_success "Initial sync completed successfully"
     else
         print_warning "Initial sync encountered issues, but server is running"
@@ -211,7 +211,7 @@ initial_sync() {
     
     # Create initial snapshot
     print_status "Creating initial memory snapshot..."
-    if node memory-integration-cli.js snapshot --description "System startup snapshot - $(date)"; then
+    if node scripts/memory-integration-cli.js snapshot --description "System startup snapshot - $(date)"; then
         print_success "Initial snapshot created"
     else
         print_warning "Snapshot creation failed, but system is operational"
@@ -233,7 +233,7 @@ show_status() {
     # Memory stats
     print_status "Getting memory statistics..."
     cd "$PROJECT_ROOT"
-    if node memory-integration-cli.js stats --details 2>/dev/null; then
+    if node scripts/memory-integration-cli.js stats --details 2>/dev/null; then
         print_success "Memory system operational"
     else
         print_warning "Memory system status unclear"
@@ -241,14 +241,14 @@ show_status() {
     
     # Health check
     print_status "Performing health check..."
-    if node memory-integration-cli.js health 2>/dev/null; then
+    if node scripts/memory-integration-cli.js health 2>/dev/null; then
         print_success "System health check passed"
     else
         print_warning "Health check issues detected"
     fi
     
     print_info "=== INTEGRATION READY ==="
-    print_info "🔧 Use CLI: ./memory-integration-cli.js [command]"
+    print_info "🔧 Use CLI: ./scripts/memory-integration-cli.js [command]"
     print_info "📊 Server logs: $LOG_FILE"
     print_info "🔄 Auto-sync: Every 30 seconds"
     print_info "📂 Memory dir: $PROJECT_ROOT/.memory"

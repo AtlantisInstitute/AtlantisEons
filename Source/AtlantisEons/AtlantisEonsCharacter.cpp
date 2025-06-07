@@ -68,6 +68,7 @@
 #include "EquipmentComponent.h"
 #include "CharacterUIManager.h"
 #include "CameraStabilizationComponent.h"
+#include "CombatEffectsManagerComponent.h"
 
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -258,6 +259,10 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
     UIManager = CreateDefaultSubobject<UCharacterUIManager>(TEXT("UIManager"));
     CameraStabilizationComp = CreateDefaultSubobject<UCameraStabilizationComponent>(TEXT("CameraStabilizationComp"));
+    EquipmentVisualsComp = CreateDefaultSubobject<UEquipmentVisualsComponent>(TEXT("EquipmentVisualsComp"));
+    ItemDataCreationComp = CreateDefaultSubobject<UItemDataCreationComponent>(TEXT("ItemDataCreationComp"));
+    InventoryManagerComp = CreateDefaultSubobject<UInventoryManagerComponent>(TEXT("InventoryManagerComp"));
+    CombatEffectsManagerComp = CreateDefaultSubobject<UCombatEffectsManagerComponent>(TEXT("CombatEffectsManagerComp"));
 
     
     // Create SwordBloom widget component (restored to original approach)
@@ -287,64 +292,24 @@ void AAtlantisEonsCharacter::PostInitProperties()
 
 void AAtlantisEonsCharacter::SetInventoryToggleLock(bool bLock, float UnlockDelay)
 {
-    // UE_LOG(LogTemp, Warning, TEXT("SetInventoryToggleLock called with bLock: %s, UnlockDelay: %f"),
-    //     bLock ? TEXT("true") : TEXT("false"), UnlockDelay);
-
-    bool bPrevLocked = bInventoryToggleLocked;
+    if (InventoryManagerComp)
+    {
+        InventoryManagerComp->SetInventoryToggleLock(bLock, UnlockDelay);
+    }
+    
+    // Keep legacy support for direct access
     bInventoryToggleLocked = bLock;
-
-    // UE_LOG(LogTemp, Warning, TEXT("Inventory toggle lock changed from %s to %s"),
-    //     bPrevLocked ? TEXT("Locked") : TEXT("Unlocked"),
-    //     bInventoryToggleLocked ? TEXT("Locked") : TEXT("Unlocked"));
-
-    if (UnlockDelay > 0.0f)
-    {
-        // UE_LOG(LogTemp, Warning, TEXT("Setting up unlock timer for %f seconds"), UnlockDelay);
-        GetWorld()->GetTimerManager().ClearTimer(InventoryToggleLockTimer);
-        GetWorld()->GetTimerManager().SetTimer(
-            InventoryToggleLockTimer,
-            FTimerDelegate::CreateWeakLambda(this, [this]() {
-                if (IsValid(this) && !IsActorBeingDestroyed()) {
-                    SetInventoryToggleLock(false, 0.0f);
-                }
-            }),
-            UnlockDelay,
-            false
-        );
-    }
-    else
-    {
-        // UE_LOG(LogTemp, Warning, TEXT("No unlock delay, state will remain: %s"),
-        //     bInventoryToggleLocked ? TEXT("Locked") : TEXT("Unlocked"));
-    }
-
-    // Log current inventory state
-    // UE_LOG(LogTemp, Warning, TEXT("Current inventory state - Open: %s, ToggleLocked: %s"),
-    //     bIsInventoryOpen ? TEXT("true") : TEXT("false"),
-    //     bInventoryToggleLocked ? TEXT("true") : TEXT("false"));
 }
 
 void AAtlantisEonsCharacter::ForceSetInventoryState(bool bNewIsOpen)
 {
-    // UE_LOG(LogTemp, Warning, TEXT("ForceSetInventoryState called with bNewIsOpen: %s"), bNewIsOpen ? TEXT("true") : TEXT("false"));
+    if (InventoryManagerComp)
+    {
+        InventoryManagerComp->ForceSetInventoryState(bNewIsOpen);
+    }
     
-    bool bPrevState = bIsInventoryOpen;
+    // Keep legacy support for direct access
     bIsInventoryOpen = bNewIsOpen;
-    
-    // UE_LOG(LogTemp, Warning, TEXT("Character inventory state changed from %s to %s"), 
-    //     bPrevState ? TEXT("Open") : TEXT("Closed"),
-    //     bIsInventoryOpen ? TEXT("Open") : TEXT("Closed"));
-
-    // Log widget state
-    if (InventoryWidget)
-    {
-        // UE_LOG(LogTemp, Warning, TEXT("InventoryWidget exists, visibility: %s"), 
-        //     InventoryWidget->IsVisible() ? TEXT("Visible") : TEXT("Hidden"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("InventoryWidget is null!"));
-    }
 }
 
 void AAtlantisEonsCharacter::BeginPlay()
@@ -573,6 +538,11 @@ void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
             EnhancedInputComponent->BindAction(MeleeAttackAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::MeleeAttack);
             UE_LOG(LogTemp, Warning, TEXT("Character - Bound MeleeAttack action"));
         }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character - MeleeAttackAction is null! Combat won't work"));
+            GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red, TEXT("WARNING: MeleeAttackAction not set in BP_Character!"));
+        }
 
         // Pickup
         if (PickupAction)
@@ -749,6 +719,28 @@ void AAtlantisEonsCharacter::PostInitializeComponents()
     
     // Find the Dragon skeletal mesh components from Blueprint
     FindDragonComponents();
+    
+    // Initialize Equipment Visuals Component with mesh references
+    if (EquipmentVisualsComp)
+    {
+        EquipmentVisualsComp->InitializeEquipmentMeshes(Helmet, Weapon, Shield);
+        UE_LOG(LogTemp, Warning, TEXT("🔧 EquipmentVisualsComponent: Initialized with equipment meshes"));
+    }
+    
+    // CRITICAL: Initialize CombatEffectsManagerComponent with character reference
+    if (CombatEffectsManagerComp)
+    {
+        CombatEffectsManagerComp->InitializeWithCharacter(this);
+        
+        // Bind to damage dealt events for damage numbers
+        CombatEffectsManagerComp->OnDamageDealt.AddDynamic(this, &AAtlantisEonsCharacter::OnDamageDealtFromCombat);
+        
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ CombatEffectsManagerComponent: Initialized with character reference and damage delegate"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ CombatEffectsManagerComponent is null! Combat will not work!"));
+    }
     
     // SwordBloom widget is now handled entirely in Blueprint
 }
@@ -1091,68 +1083,81 @@ void AAtlantisEonsCharacter::OnPickupPressed()
 
 bool AAtlantisEonsCharacter::PickingItem(int32 ItemIndex, int32 ItemStackNumber)
 {
-    if (InventoryComp)
+    if (InventoryManagerComp)
     {
-        return InventoryComp->AddItem(ItemIndex, ItemStackNumber);
+        return InventoryManagerComp->PickingItem(ItemIndex, ItemStackNumber);
     }
-    UE_LOG(LogTemp, Warning, TEXT("PickingItem: InventoryComponent is null, functionality disabled"));
     return false;
 }
 
 void AAtlantisEonsCharacter::ContextMenuUse(UWBP_InventorySlot* InventorySlot)
 {
-    if (InventoryComp)
+    if (InventoryManagerComp)
     {
-        InventoryComp->ContextMenuUse(InventorySlot);
+        InventoryManagerComp->ContextMenuUse(InventorySlot);
     }
 }
 
 void AAtlantisEonsCharacter::ContextMenuThrow(UWBP_InventorySlot* InventorySlot)
 {
-    if (InventoryComp)
+    if (InventoryManagerComp)
     {
-        InventoryComp->ContextMenuThrow(InventorySlot);
+        InventoryManagerComp->ContextMenuThrow(InventorySlot);
     }
 }
 
 void AAtlantisEonsCharacter::ContextMenuUse_EquipItem(UBP_ItemInfo* ItemInfoRef)
 {
-    if (InventoryComp)
+    if (InventoryManagerComp)
     {
-        InventoryComp->ContextMenuUse_EquipItem(ItemInfoRef);
+        InventoryManagerComp->ContextMenuUse_EquipItem(ItemInfoRef);
     }
 }
 
 void AAtlantisEonsCharacter::ContextMenuUse_ConsumeItem(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlotRef, int32 RecoverHP, int32 RecoverMP, EItemType ItemType)
 {
-    if (InventoryComp)
+    if (InventoryManagerComp)
     {
-        InventoryComp->ContextMenuUse_ConsumeItem(ItemInfoRef, InventorySlotRef, RecoverHP, RecoverMP, ItemType);
+        InventoryManagerComp->ContextMenuUse_ConsumeItem(ItemInfoRef, InventorySlotRef, RecoverHP, RecoverMP, ItemType);
     }
 }
 
 bool AAtlantisEonsCharacter::BuyingItem(int32 ItemIndex, int32 ItemStackNumber, int32 ItemPrice)
 {
-    if (InventoryComp)
+    if (InventoryManagerComp)
     {
-        return InventoryComp->BuyItem(ItemIndex, ItemStackNumber, ItemPrice);
+        return InventoryManagerComp->BuyingItem(ItemIndex, ItemStackNumber, ItemPrice);
     }
     return false;
 }
 
 void AAtlantisEonsCharacter::EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, const TSoftObjectPtr<UTexture2D>& Texture2D, int32 ItemIndex, UMaterialInterface* MaterialInterface, UMaterialInterface* MaterialInterface2)
 {
+    // Delegate to Equipment Component for logic and data management
     if (EquipmentComponent)
     {
         EquipmentComponent->EquipItemInSlot(ItemEquipSlot, StaticMeshID, Texture2D, ItemIndex, MaterialInterface, MaterialInterface2);
+    }
+    
+    // Delegate to Equipment Visuals Component for visual updates
+    if (EquipmentVisualsComp)
+    {
+        EquipmentVisualsComp->EquipItemToSlot(ItemEquipSlot, StaticMeshID, Texture2D, ItemIndex, MaterialInterface, MaterialInterface2);
     }
 }
 
 void AAtlantisEonsCharacter::ProcessEquipItem(UBP_ItemInfo* ItemInfoRef)
 {
+    // Delegate to Equipment Component for logic and data management
     if (EquipmentComponent)
     {
         EquipmentComponent->ProcessEquipItem(ItemInfoRef);
+    }
+    
+    // Delegate to Equipment Visuals Component for visual updates
+    if (EquipmentVisualsComp)
+    {
+        EquipmentVisualsComp->ProcessEquipmentChange(ItemInfoRef);
     }
 }
 
@@ -1281,156 +1286,50 @@ void AAtlantisEonsCharacter::ResetCharacterInput()
 
 void AAtlantisEonsCharacter::MeleeAttack(const FInputActionValue& Value)
 {
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ MeleeAttack called. Can attack: %s, CurrentAttackIndex: %d, BloomWindowActive: %s"), 
-           bCanAttack ? TEXT("Yes") : TEXT("No"), CurrentAttackIndex, bBloomWindowActive ? TEXT("Yes") : TEXT("No"));
-
-    // CRITICAL FIX: Safety check for stuck bloom window state
-    if (bBloomWindowActive)
-    {
-        // Check if the widget's bloom window is actually active
-        if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget())
-        {
-            // If character says bloom is active but widget says it's not, reset the character flag
-            if (!SwordBloom->IsBloomWindowActive())
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🔧 SAFETY FIX: Character bloom flag stuck, widget says inactive - resetting"));
-                bBloomWindowActive = false;
-            }
-        }
-    }
-
-    // Check if we can trigger the conditional spark effect during critical window
-    bool bTriggeredSpark = TryTriggerSparkEffect();
-    if (bTriggeredSpark)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ✨ Critical window hit! Setting flag for combo continuation"));
-        bHitCriticalWindow = true;
-        return; // Don't start a new attack, the critical window hit will handle chaining
-    }
-    else if (bBloomWindowActive)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚠️ Attack input during bloom window but outside critical timing"));
-        return; // Don't interrupt current attack if bloom is active
-    }
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ CHARACTER: MeleeAttack input received at %.3f seconds!"), GetWorld()->GetTimeSeconds());
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ CHARACTER: Input value magnitude: %.3f"), Value.GetMagnitude());
     
-    if (!bCanAttack)
+    if (CombatEffectsManagerComp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ Cannot attack - on cooldown"));
-        return;
-    }
-
-    // Face the nearest enemy before attacking
-    FaceNearestEnemy();
-    
-    // Combat activity tracking is now handled by CameraStabilizationComponent
-    
-    // CAMERA STABILIZATION: Enable attack camera stabilization to prevent camera shake
-    EnableAttackCameraStabilization();
-
-    // Get the appropriate attack montage based on current attack index
-    UAnimMontage* CurrentMontage = GetCurrentAttackMontage();
-    
-    if (CurrentMontage)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ Playing attack montage %d: %s"), 
-               CurrentAttackIndex + 1, *CurrentMontage->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ CHARACTER: CombatEffectsManagerComp found - checking bloom state"));
+        bool bComponentBloomActive = CombatEffectsManagerComp->IsBloomWindowActive();
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ CHARACTER: Component bloom window active = %s"), bComponentBloomActive ? TEXT("TRUE") : TEXT("FALSE"));
         
-        // Reset critical window flag at start of new attack sequence
-        bHitCriticalWindow = false;
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ CHARACTER: Delegating to CombatEffectsManagerComp->MeleeAttack()"));
+        CombatEffectsManagerComp->MeleeAttack(Value);
         
-        // Try to play the montage
-        float MontageLength = PlayAnimMontage(CurrentMontage);
+        // Sync legacy state variables for Blueprint compatibility
+        bCanAttack = CombatEffectsManagerComp->CanAttack();
+        bIsAttacking = CombatEffectsManagerComp->IsAttacking();
+        CurrentAttackIndex = CombatEffectsManagerComp->GetCurrentAttackIndex();
+        bIsInCombo = CombatEffectsManagerComp->IsInCombo();
+        bBloomWindowActive = CombatEffectsManagerComp->IsBloomWindowActive();
         
-        if (MontageLength > 0.0f)
-        {
-            // Store the montage length for bloom effect timing
-            CurrentMontageLength = MontageLength;
-            
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ Montage duration: %f"), MontageLength);
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ Successfully playing attack montage with duration: %f"), MontageLength);
-            
-            // Check animation state
-            if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ Current animation state: IsPlaying=%d"), AnimInstance->IsAnyMontagePlaying());
-            }
-            
-            // Start the bloom circle immediately when attack begins
-            UE_LOG(LogTemp, Warning, TEXT("🔵 ⚡ BLOOM WINDOW ACTIVATED - Starting immediately with attack"));
-            
-            // CRITICAL FIX: Clear any existing bloom hide timers to prevent conflicts
-            GetWorld()->GetTimerManager().ClearTimer(SwordBloomHideTimer);
-            UE_LOG(LogTemp, Warning, TEXT("🔧 Cleared existing bloom hide timers for new attack"));
-            
-            bBloomWindowActive = true;
-            if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) 
-            { 
-                SwordBloom->StartBloomCircle(); 
-                UE_LOG(LogTemp, Warning, TEXT("🔵 ✅ SwordBloom widget found - StartBloomCircle() called at attack start")); 
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("🔵 ❌ SwordBloom widget NOT found - no visual effects will show")); 
-            }
-            
-            // Start the combo window after this attack
-            StartComboWindow();
-            
-            // CRITICAL FIX: Add a backup timer to call OnMeleeAttackNotify since animation notify may not be set up
-            // This ensures damage application happens even without animation notify setup
-            float NotifyTiming = MontageLength * 0.6f; // Call at 60% through the animation
-            FTimerHandle AttackNotifyTimer;
-            GetWorld()->GetTimerManager().SetTimer(
-                AttackNotifyTimer,
-                FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::OnMeleeAttackNotify),
-                NotifyTiming,
-                false
-            );
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ Set backup timer to call OnMeleeAttackNotify in %.2f seconds"), NotifyTiming);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("🗡️ Failed to play attack montage. Current anim mode: %d"), GetMesh()->GetAnimationMode());
-            ResetAttack();
-        }
+        UE_LOG(LogTemp, Warning, TEXT("🗡️ CHARACTER: State synced - CanAttack=%s, IsAttacking=%s, AttackIndex=%d"), 
+               bCanAttack ? TEXT("Yes") : TEXT("No"),
+               bIsAttacking ? TEXT("Yes") : TEXT("No"),
+               CurrentAttackIndex);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("🗡️ No attack montage available for index %d!"), CurrentAttackIndex);
-        ResetAttack();
+        UE_LOG(LogTemp, Error, TEXT("🗡️ CHARACTER: CombatEffectsManagerComp is null! Combat won't work"));
+        GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, TEXT("ERROR: CombatEffectsManagerComp is null!"));
     }
-    
-    // Set timer for cooldown reset
-    GetWorld()->GetTimerManager().SetTimer(
-        AttackCooldownTimer,
-        FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::ResetAttack),
-        AttackCooldown,
-        false
-    );
 }
 
 void AAtlantisEonsCharacter::ResetAttack()
 {
-    bCanAttack = true;
-    bIsAttacking = false;
-    
-    // CAMERA STABILIZATION: Disable attack camera stabilization when attack ends
-    DisableAttackCameraStabilization();
-    
-    // Always reset critical window flag after processing
-    if (bHitCriticalWindow)
+    if (CombatEffectsManagerComp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ Resetting critical window flag after combo processing"));
-        bHitCriticalWindow = false;
+        CombatEffectsManagerComp->ResetAttack();
+        
+        // Sync legacy state variables for Blueprint compatibility
+        bCanAttack = CombatEffectsManagerComp->CanAttack();
+        bIsAttacking = CombatEffectsManagerComp->IsAttacking();
+        CurrentAttackIndex = CombatEffectsManagerComp->GetCurrentAttackIndex();
+        bIsInCombo = CombatEffectsManagerComp->IsInCombo();
+        bBloomWindowActive = CombatEffectsManagerComp->IsBloomWindowActive();
     }
-    else
-    {
-        // If we're not continuing a combo, reset the chain
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack finished without critical window hit - resetting combo"));
-        ResetComboChain();
-    }
-    
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack cooldown reset. Can attack again."));
 }
 
 void AAtlantisEonsCharacter::CloseInventoryImpl()
@@ -1527,149 +1426,90 @@ void AAtlantisEonsCharacter::ClearAllInventoryPopups()
 
 void AAtlantisEonsCharacter::ToggleInventory(const FInputActionValue& Value)
 {
-    // Check if toggle is locked (but allow closing even if locked for emergency situations)
-    if (bInventoryToggleLocked && !bIsInventoryOpen)
+    if (InventoryManagerComp)
     {
-        // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory called but ignored due to toggle lock (opening blocked)"));
-        return;
-    }
-    
-    // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory called. Current state: %s"), bIsInventoryOpen ? TEXT("Open") : TEXT("Closed"));
-    
-    // Get the HUD first
-    AAtlantisEonsHUD* HUD = Cast<AAtlantisEonsHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
-    if (!HUD)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get HUD in ToggleInventory"));
-        return;
-    }
-    
-    // Lock toggle to prevent rapid switching (but shorter duration)
-    bInventoryToggleLocked = true;
-    GetWorldTimerManager().SetTimer(InventoryToggleLockTimer, this, &AAtlantisEonsCharacter::UnlockInventoryToggle, 0.1f, false);
-    
-    // If inventory is open, close it
-    if (bIsInventoryOpen)
-    {
-        // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Closing inventory"));
-        CloseInventory();
-    }
-    else
-    {
-        // Only try to open if it's not already visible
-        if (!HUD->IsInventoryWidgetVisible())
-        {
-            // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Opening inventory"));
-            OpenInventory();
-        }
-        else
-        {
-            // UE_LOG(LogTemp, Warning, TEXT("ToggleInventory: Widget already visible, syncing state"));
-            bIsInventoryOpen = true;
-        }
+        InventoryManagerComp->ToggleInventory(Value);
+        
+        // Sync legacy state
+        bIsInventoryOpen = InventoryManagerComp->IsInventoryOpen();
+        bInventoryToggleLocked = InventoryManagerComp->IsInventoryToggleLocked();
     }
 }
 
 void AAtlantisEonsCharacter::UnlockInventoryToggle()
 {
+    if (InventoryManagerComp)
+    {
+        InventoryManagerComp->UnlockInventoryToggle();
+    }
     bInventoryToggleLocked = false;
 }
 
 void AAtlantisEonsCharacter::OpenInventory()
 {
-    // Get the HUD
-    AAtlantisEonsHUD* HUD = Cast<AAtlantisEonsHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
-    if (!HUD)
+    if (InventoryManagerComp)
     {
-        UE_LOG(LogTemp, Error, TEXT("%s: Cannot open inventory - HUD is null"), *GetName());
-        return;
+        InventoryManagerComp->OpenInventory();
+        
+        // Sync legacy state
+        bIsInventoryOpen = InventoryManagerComp->IsInventoryOpen();
+        if (InventoryManagerComp->GetMainWidget())
+        {
+            MainWidget = InventoryManagerComp->GetMainWidget();
+        }
     }
-
-    // Show the inventory widget
-    if (!HUD->ShowInventoryWidget())
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Failed to show inventory widget"), *GetName());
-        return;
-    }
-
-    // Get the main widget reference
-    MainWidget = HUD->GetMainWidget();
-    if (!MainWidget)
-    {
-        UE_LOG(LogTemp, Error, TEXT("%s: Failed to get Main widget from HUD"), *GetName());
-        return;
-    }
-
-    // Update the inventory state
-    bIsInventoryOpen = true;
-    
-    // Force update all inventory slots immediately
-    UpdateInventorySlots();
-    
-    // Also set up a delayed update to ensure it runs after any Blueprint logic
-    ForceUpdateInventorySlotsAfterDelay();
-    
-    // UE_LOG(LogTemp, Display, TEXT("%s: Inventory opened successfully"), *GetName());
 }
 
 void AAtlantisEonsCharacter::UpdateInventorySlots()
 {
-    if (UIManager)
+    if (InventoryManagerComp)
     {
-        UIManager->UpdateInventorySlots();
+        InventoryManagerComp->UpdateInventorySlots();
     }
 }
 
 void AAtlantisEonsCharacter::DelayedUpdateInventorySlots()
 {
-    if (UIManager)
+    if (InventoryManagerComp)
     {
-        UIManager->DelayedUpdateInventorySlots();
+        InventoryManagerComp->DelayedUpdateInventorySlots();
     }
 }
 
 void AAtlantisEonsCharacter::ForceUpdateInventorySlotsAfterDelay()
 {
-    if (UIManager)
+    if (InventoryManagerComp)
     {
-        UIManager->ForceUpdateInventorySlotsAfterDelay();
+        InventoryManagerComp->ForceUpdateInventorySlotsAfterDelay();
     }
 }
 
 void AAtlantisEonsCharacter::CloseInventory()
 {
-    // Use the existing implementation
-    CloseInventoryImpl();
+    if (InventoryManagerComp)
+    {
+        InventoryManagerComp->CloseInventory();
+        
+        // Sync legacy state
+        bIsInventoryOpen = InventoryManagerComp->IsInventoryOpen();
+    }
 }
 
 FStructure_ItemInfo AAtlantisEonsCharacter::CreateHardcodedItemData(int32 ItemIndex)
 {
-    FStructure_ItemInfo ItemInfo;
-    
-    switch (ItemIndex)
+    // Delegate to Item Data Creation Component for comprehensive item database
+    if (ItemDataCreationComp)
     {
-        case 1: // Basic HP Potion
-            ItemInfo.ItemIndex = 1;
-            ItemInfo.ItemName = TEXT("Basic HP Potion");
-            ItemInfo.ItemDescription = TEXT("Restores a small amount of HP.");
-            ItemInfo.bIsValid = true;
-            ItemInfo.bIsStackable = true;
-            ItemInfo.StackNumber = 1;
-            ItemInfo.ItemType = EItemType::Consume_HP;
-            ItemInfo.ItemEquipSlot = EItemEquipSlot::None;
-            ItemInfo.RecoveryHP = 30;
-            ItemInfo.RecoveryMP = 0;
-            ItemInfo.ItemThumbnail = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicHealingPotion")));
-            break;
-            
-        // Add more cases for other items as needed
-            
-        default:
-            UE_LOG(LogTemp, Warning, TEXT("%s: Unknown item index %d, creating empty item"), *GetName(), ItemIndex);
-            ItemInfo.bIsValid = false;
-            break;
+        return ItemDataCreationComp->CreateItemData(ItemIndex);
     }
     
+    // Fallback if component is not available
+    UE_LOG(LogTemp, Warning, TEXT("ItemDataCreationComp is null, creating basic fallback item"));
+    FStructure_ItemInfo ItemInfo;
+    ItemInfo.ItemIndex = ItemIndex;
+    ItemInfo.ItemName = FString::Printf(TEXT("Fallback Item %d"), ItemIndex);
+    ItemInfo.ItemDescription = TEXT("Basic fallback item data.");
+    ItemInfo.bIsValid = false;
     return ItemInfo;
 }
 
@@ -1706,25 +1546,35 @@ void AAtlantisEonsCharacter::SetMainWidget(UWBP_Main* NewWidget)
 
 void AAtlantisEonsCharacter::UpdateEquipmentSlotUI(EItemEquipSlot EquipSlot, UBP_ItemInfo* ItemInfo)
 {
-    if (EquipmentComponent)
+    // Delegate to Equipment Component for logic
+    // Only delegate to Equipment Visuals Component for UI updates to avoid duplication
+    if (EquipmentVisualsComp)
     {
-        EquipmentComponent->UpdateEquipmentSlotUI(EquipSlot, ItemInfo);
+        EquipmentVisualsComp->UpdateEquipmentSlotUI(EquipSlot, ItemInfo);
     }
 }
 
 void AAtlantisEonsCharacter::ClearEquipmentSlotUI(EItemEquipSlot EquipSlot)
 {
-    if (EquipmentComponent)
+    // Only delegate to Equipment Visuals Component for UI updates to avoid duplication
+    if (EquipmentVisualsComp)
     {
-        EquipmentComponent->ClearEquipmentSlotUI(EquipSlot);
+        EquipmentVisualsComp->ClearEquipmentSlotUI(EquipSlot);
     }
 }
 
 void AAtlantisEonsCharacter::UpdateAllEquipmentSlotsUI()
 {
+    // Delegate to UI Manager for main UI updates
     if (UIManager)
     {
         UIManager->UpdateAllEquipmentSlotsUI();
+    }
+    
+    // Delegate to Equipment Visuals Component for visual updates
+    if (EquipmentVisualsComp)
+    {
+        EquipmentVisualsComp->UpdateAllEquipmentSlotsUI();
     }
 }
 
@@ -1738,9 +1588,16 @@ void AAtlantisEonsCharacter::InitializeEquipmentSlotReferences()
 
 void AAtlantisEonsCharacter::OnEquipmentSlotClicked(EItemEquipSlot EquipSlot)
 {
+    // Delegate to Equipment Component for logic
     if (EquipmentComponent)
     {
         EquipmentComponent->OnEquipmentSlotClicked(EquipSlot);
+    }
+    
+    // Delegate to Equipment Visuals Component for visual feedback
+    if (EquipmentVisualsComp)
+    {
+        EquipmentVisualsComp->HandleEquipmentSlotClicked(EquipSlot);
     }
 }
 
@@ -1787,215 +1644,14 @@ void AAtlantisEonsCharacter::EquipInventoryItem(UBP_ItemInfo* ItemInfoRef)
 
 void AAtlantisEonsCharacter::OnMeleeAttackNotify()
 {
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ OnMeleeAttackNotify called - Player attacking"));
-    
-    // Note: Bloom circle activation now happens immediately when attack starts
-    // This function now only handles damage application
-    
-    if (bIsDead) 
+    if (CombatEffectsManagerComp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ Character is dead, skipping attack"));
-        return;
-    }
-    
-    // Prevent multiple calls in the same attack sequence
-    if (bAttackNotifyInProgress)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack notify already in progress, skipping duplicate call"));
-        return;
-    }
-    
-    bAttackNotifyInProgress = true;
-    
-    // Reset the flag after a short delay to allow for the next attack
-    FTimerHandle ResetNotifyTimer;
-    GetWorld()->GetTimerManager().SetTimer(
-        ResetNotifyTimer,
-        [this]() { 
-            bAttackNotifyInProgress = false; // Reset the flag
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ Attack notify flag reset - ready for next attack"));
-        },
-        0.5f, // Reset after 0.5 seconds
-        false
-    );
-    
-    // Calculate damage based on character stats and equipped weapon
-    float BaseDamage = static_cast<float>(CurrentDamage); // Use character's current damage stat
-    float WeaponDamage = 0.0f;
-    
-    // Check if we have a weapon equipped and get its damage bonus
-    if (EquipmentSlots.Num() > 2 && EquipmentSlots[2]) // Weapon slot is index 2
-    {
-        UBP_ItemInfo* WeaponItem = EquipmentSlots[2];
-        if (WeaponItem)
-        {
-            // Get weapon data from store system
-            FStructure_ItemInfo WeaponData;
-            if (UStoreSystemFix::GetItemData(WeaponItem->GetItemIndex(), WeaponData))
-            {
-                WeaponDamage = static_cast<float>(WeaponData.Damage);
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ Equipped weapon '%s' adds %f damage"), 
-                       *WeaponData.ItemName, WeaponDamage);
-            }
-        }
-    }
-    
-    float TotalDamage = BaseDamage + WeaponDamage;
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ Total calculated damage: %f (Base: %f + Weapon: %f)"), 
-           TotalDamage, BaseDamage, WeaponDamage);
-    
-    // IMPROVED ATTACK DETECTION: Use multiple detection methods for maximum reliability
-    FVector StartLocation = GetActorLocation();
-    FVector ForwardVector = GetActorForwardVector();
-    float AttackRange = 300.0f; // Reasonable attack range
-    float AttackRadius = 200.0f; // Larger radius for better detection
-    
-    // Track which actors we've already hit to prevent multiple hits
-    TSet<AActor*> AlreadyHitActors;
-    bool bSuccessfulHit = false;
-    
-    // METHOD 1: Direct sphere overlap at player location (most reliable)
-    TArray<FOverlapResult> OverlapResults;
-    FCollisionShape SphereShape = FCollisionShape::MakeSphere(AttackRadius);
-    
-    bool bHitDetected = GetWorld()->OverlapMultiByChannel(
-        OverlapResults,
-        StartLocation, // Use player location directly instead of calculated center
-        FQuat::Identity,
-        ECollisionChannel::ECC_Pawn,
-        SphereShape
-    );
-    
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ Sphere overlap found %d results"), OverlapResults.Num());
-    
-    if (bHitDetected)
-    {
-        for (const FOverlapResult& Result : OverlapResults)
-        {
-            AActor* HitActor = Result.GetActor();
-            if (!HitActor || HitActor == this)
-                continue;
-                
-            // Skip if we already hit this actor
-            if (AlreadyHitActors.Contains(HitActor))
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ Skipping already hit actor: %s"), *HitActor->GetName());
-                continue;
-            }
-            
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ Checking actor: %s (Class: %s)"), 
-                   *HitActor->GetName(), *HitActor->GetClass()->GetName());
-            
-            // Check if it's a zombie by class name (most reliable method)
-            bool bIsZombie = HitActor->GetClass()->GetName().Contains(TEXT("ZombieCharacter"));
-            
-            if (bIsZombie)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ ✓ Found zombie by class name: %s"), 
-                       *HitActor->GetClass()->GetName());
-                
-                // Calculate distance and direction for additional validation
-                FVector ToTarget = HitActor->GetActorLocation() - GetActorLocation();
-                float DistanceToTarget = ToTarget.Size();
-                float DotProduct = FVector::DotProduct(ForwardVector, ToTarget.GetSafeNormal());
-                
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ Zombie %s - Distance: %.1f, Dot: %.2f"), 
-                       *HitActor->GetName(), DistanceToTarget, DotProduct);
-                
-                // More lenient distance and direction check for better hit detection
-                if (DistanceToTarget <= AttackRange && DotProduct > -0.5f) // Allow hits from wider angles
-                {
-                    // Mark this actor as hit
-                    AlreadyHitActors.Add(HitActor);
-                    
-                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ ATTACKING zombie %s with %.1f damage!"), 
-                           *HitActor->GetName(), TotalDamage);
-                    
-                    // Apply damage to the zombie
-                    float ActualDamage = HitActor->TakeDamage(TotalDamage, FDamageEvent(), GetController(), this);
-                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ TakeDamage returned: %.1f"), ActualDamage);
-                    
-                    bSuccessfulHit = true;
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("🗡️ Zombie %s out of range or wrong direction (Distance: %.1f, Dot: %.2f)"), 
-                           *HitActor->GetName(), DistanceToTarget, DotProduct);
-                }
-            }
-        }
-    }
-    
-    // METHOD 2: If no hits found, try a forward sweep as backup
-    if (!bSuccessfulHit)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ No hits from sphere overlap, trying forward sweep backup"));
+        CombatEffectsManagerComp->OnMeleeAttackNotify();
         
-        TArray<FHitResult> HitResults;
-        FVector EndLocation = StartLocation + (ForwardVector * AttackRange);
-        
-        bool bSweepHit = GetWorld()->SweepMultiByChannel(
-            HitResults,
-            StartLocation,
-            EndLocation,
-            FQuat::Identity,
-            ECollisionChannel::ECC_Pawn,
-            FCollisionShape::MakeSphere(AttackRadius * 0.8f) // Slightly smaller for sweep
-        );
-        
-        if (bSweepHit)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ Forward sweep found %d results"), HitResults.Num());
-            
-            for (const FHitResult& Hit : HitResults)
-            {
-                AActor* HitActor = Hit.GetActor();
-                if (!HitActor || HitActor == this || AlreadyHitActors.Contains(HitActor))
-                    continue;
-                
-                bool bIsZombie = HitActor->GetClass()->GetName().Contains(TEXT("ZombieCharacter"));
-                if (bIsZombie)
-                {
-                    AlreadyHitActors.Add(HitActor);
-                    
-                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚔️ SWEEP ATTACKING zombie %s with %.1f damage!"), 
-                           *HitActor->GetName(), TotalDamage);
-                    
-                    float ActualDamage = HitActor->TakeDamage(TotalDamage, FDamageEvent(), GetController(), this);
-                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Sweep TakeDamage returned: %.1f"), ActualDamage);
-                    
-                    bSuccessfulHit = true;
-                    break; // Only hit one enemy per attack
-                }
-            }
-        }
+        // Sync legacy state variables for Blueprint compatibility
+        bAttackNotifyInProgress = CombatEffectsManagerComp->IsAttackNotifyInProgress();
+        CurrentMontageLength = CombatEffectsManagerComp->GetCurrentMontageLength();
     }
-    
-    if (bSuccessfulHit)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ✅ Successfully hit at least one enemy!"));
-        
-        // 🎯 DON'T trigger spark here - spark should only show during critical timing window
-        // BloomSparkNotify(); // REMOVED - this was causing spark to show on every hit
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🗡️ ❌ No valid enemies found in attack range"));
-    }
-    
-    // 🎯 SCHEDULE HIDING BLOOM EFFECTS AFTER A SHORT DELAY
-    float BloomDuration = FMath::Max(CurrentMontageLength - 0.2f, 0.5f);
-    UE_LOG(LogTemp, Warning, TEXT("🗡️ 🔵 Bloom effects will last for %.2f seconds (montage: %.2f)"), BloomDuration, CurrentMontageLength);
-    
-    GetWorld()->GetTimerManager().SetTimer(
-        SwordBloomHideTimer, // Use the class member timer handle instead of local variable
-        [this]() { 
-            HideBloomEffectsNotify(); // This will call HideBloomEffectsNotify() and set bBloomWindowActive = false
-            UE_LOG(LogTemp, Warning, TEXT("🗡️ 🔒 SwordBloom effects hidden after attack"));
-        },
-        BloomDuration,
-        false
-    );
 }
 
 void AAtlantisEonsCharacter::StoreOriginalMaterials()
@@ -2247,117 +1903,9 @@ void AAtlantisEonsCharacter::RespawnCharacter()
 
 void AAtlantisEonsCharacter::FaceNearestEnemy()
 {
-    // SAFETY CHECKS: Prevent crashes during shutdown or invalid states
-    if (!IsValid(this) || IsActorBeingDestroyed())
+    if (CombatEffectsManagerComp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: Character is being destroyed, skipping"));
-        return;
-    }
-    
-    UWorld* World = GetWorld();
-    if (!World || !IsValid(World))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: World is null or invalid, skipping"));
-        return;
-    }
-    
-    if (!Controller || !IsValid(Controller))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: Controller is null or invalid, skipping"));
-        return;
-    }
-    
-    // Find the nearest enemy within a reasonable range
-    const float SearchRadius = 500.0f; // 5 meter search radius
-    AActor* NearestEnemy = nullptr;
-    float NearestDistance = SearchRadius;
-    
-    // Get all actors in the world
-    TArray<AActor*> AllActors;
-    UGameplayStatics::GetAllActorsOfClass(World, AActor::StaticClass(), AllActors);
-    
-    FGenericTeamId MyTeamId = GetGenericTeamId();
-    FVector MyLocation = GetActorLocation();
-    
-    for (AActor* Actor : AllActors)
-    {
-        if (!Actor || Actor == this || !IsValid(Actor)) continue;
-        
-        // Additional safety check for actor state
-        if (Actor->IsActorBeingDestroyed()) continue;
-        
-        // Check if this is an enemy
-        bool bIsEnemy = false;
-        
-        // Check if actor has IGenericTeamAgentInterface
-        if (Actor->GetClass() && Actor->GetClass()->ImplementsInterface(UGenericTeamAgentInterface::StaticClass()))
-        {
-            IGenericTeamAgentInterface* TeamAgent = Cast<IGenericTeamAgentInterface>(Actor);
-            if (TeamAgent)
-            {
-                FGenericTeamId ActorTeamId = TeamAgent->GetGenericTeamId();
-                if (ActorTeamId != MyTeamId && ActorTeamId.GetId() != 255) // 255 is usually neutral
-                {
-                    bIsEnemy = true;
-                }
-            }
-        }
-        
-        // Also check by class name for ZombieCharacter
-        if (!bIsEnemy && Actor->GetClass())
-        {
-            FString ClassName = Actor->GetClass()->GetName();
-            if (ClassName.Contains(TEXT("Zombie")) || ClassName.Contains(TEXT("Enemy")))
-            {
-                bIsEnemy = true;
-            }
-        }
-        
-        if (bIsEnemy)
-        {
-            float Distance = FVector::Dist(MyLocation, Actor->GetActorLocation());
-            if (Distance < NearestDistance)
-            {
-                NearestDistance = Distance;
-                NearestEnemy = Actor;
-            }
-        }
-    }
-    
-    if (NearestEnemy && IsValid(NearestEnemy))
-    {
-        // Calculate direction to enemy
-        FVector DirectionToEnemy = (NearestEnemy->GetActorLocation() - MyLocation).GetSafeNormal();
-        
-        // Calculate target rotation (only yaw, keep character upright)
-        FRotator TargetRotation = DirectionToEnemy.Rotation();
-        TargetRotation.Pitch = 0.0f; // Keep character upright
-        TargetRotation.Roll = 0.0f;  // Keep character upright
-        
-        // Get current rotation for logging
-        FRotator CurrentRotation = GetActorRotation();
-        
-        // DEBUG: Log rotation details
-        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy DEBUG:"));
-        UE_LOG(LogTemp, Warning, TEXT("  Current Rotation: P=%.2f Y=%.2f R=%.2f"), CurrentRotation.Pitch, CurrentRotation.Yaw, CurrentRotation.Roll);
-        UE_LOG(LogTemp, Warning, TEXT("  Target Rotation: P=%.2f Y=%.2f R=%.2f"), TargetRotation.Pitch, TargetRotation.Yaw, TargetRotation.Roll);
-        UE_LOG(LogTemp, Warning, TEXT("  Direction to Enemy: X=%.2f Y=%.2f Z=%.2f"), DirectionToEnemy.X, DirectionToEnemy.Y, DirectionToEnemy.Z);
-        
-        // INSTANT ROTATION for testing - no interpolation
-        SetActorRotation(TargetRotation);
-        
-        // Camera stabilization is now handled by CameraStabilizationComponent
-        
-        // Verify the rotation was applied
-        FRotator NewRotation = GetActorRotation();
-        UE_LOG(LogTemp, Warning, TEXT("  Applied Rotation: P=%.2f Y=%.2f R=%.2f"), NewRotation.Pitch, NewRotation.Yaw, NewRotation.Roll);
-        
-        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: INSTANTLY rotated character to face enemy %s at distance %.1f"), 
-               *NearestEnemy->GetName(), NearestDistance);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("FaceNearestEnemy: No valid enemies found within %.1f units"), SearchRadius);
+        CombatEffectsManagerComp->FaceNearestEnemy();
     }
 }
 
@@ -2512,12 +2060,18 @@ int32 AAtlantisEonsCharacter::GetCurrentMP() const
 // Context Menu Event Handlers - called by inventory slots via events
 void AAtlantisEonsCharacter::OnContextMenuUse(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot)
 {
-    ContextMenuUse(InventorySlot);
+    if (InventoryManagerComp)
+    {
+        InventoryManagerComp->OnContextMenuUse(ItemInfoRef, InventorySlot);
+    }
 }
 
 void AAtlantisEonsCharacter::OnContextMenuThrow(UBP_ItemInfo* ItemInfoRef, UWBP_InventorySlot* InventorySlot)
 {
-    ContextMenuThrow(InventorySlot);
+    if (InventoryManagerComp)
+    {
+        InventoryManagerComp->OnContextMenuThrow(ItemInfoRef, InventorySlot);
+    }
 }
 
 // SwordBloom Widget Functions - disabled due to type confusion
@@ -2539,151 +2093,16 @@ void AAtlantisEonsCharacter::BloomSparkNotify()
 
 void AAtlantisEonsCharacter::HideBloomEffectsNotify()
 {
-    bBloomWindowActive = false;
     if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) { SwordBloom->HideAllEffects(); }
     UE_LOG(LogTemp, Warning, TEXT("🔒 Hide bloom effects notify called - Blueprint should handle visual effects"));
 }
 
 bool AAtlantisEonsCharacter::TryTriggerSparkEffect()
 {
-    // Check if we're currently in a bloom window (this is the main requirement)
-    if (!bBloomWindowActive)
+    // DELEGATE to CombatEffectsManagerComponent for bloom window management
+    if (CombatEffectsManagerComp)
     {
-        return false;
-    }
-    
-    // Get the SwordBloom widget and check if we hit the critical window
-    if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget())
-    {
-        bool bSuccessfulSpark = SwordBloom->TryTriggerSpark();
-        
-        if (bSuccessfulSpark)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("✨ ✅ CRITICAL WINDOW HIT! Processing spark effect"));
-            
-            // If we're not already in a combo, start one
-            if (!bIsInCombo)
-            {
-                bIsInCombo = true;
-                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Starting combo chain from first attack"));
-            }
-            
-            // Advance to the next attack in the combo
-            AdvanceComboChain();
-            
-            // ========== SWORD EFFECT ACTIVATION LOGIC ==========
-            // Activate SwordEffect when hitting critical windows on second montage and beyond
-            if (CurrentAttackIndex == 2) // Only when transitioning from second to third montage
-            {
-                UE_LOG(LogTemp, Warning, TEXT("⚡ 🌟 Critical window hit on second montage - ACTIVATING SwordEffect for third montage!"));
-                ActivateSwordEffect();
-            }
-            else
-            {
-                UE_LOG(LogTemp, Log, TEXT("⚡ Critical window hit on attack %d - SwordEffect remains inactive"), CurrentAttackIndex);
-            }
-            
-            // ========== DRAGON VISIBILITY LOGIC ==========
-            // Show Dragons when transitioning to final attack (fourth montage)
-            if (CurrentAttackIndex == 3) // Only when transitioning to final attack
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🐉 Critical window hit on third montage - SHOWING Dragons for final attack!"));
-                ShowDragons();
-            }
-            
-            // Immediately start the next attack montage if available
-            if (CurrentAttackIndex < MaxComboAttacks)
-            {
-                UAnimMontage* NextMontage = GetCurrentAttackMontage();
-                if (NextMontage)
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ CHAINING to attack montage %d: %s"), 
-                           CurrentAttackIndex + 1, *NextMontage->GetName());
-                    
-                    // Stop current montage and play next one
-                    if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
-                    {
-                        AnimInstance->Montage_Stop(0.1f);
-                    }
-                    
-                    // Small delay to ensure clean transition
-                    FTimerHandle ChainTimer;
-                    GetWorld()->GetTimerManager().SetTimer(
-                        ChainTimer,
-                        [this, NextMontage]()
-                        {
-                            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ CHAINING TIMER CALLBACK: About to play %s for attack index %d"), 
-                                   NextMontage ? *NextMontage->GetName() : TEXT("NULL"), CurrentAttackIndex);
-                            
-                            // Face the nearest enemy before chained attack (like in main attack function)
-                            FaceNearestEnemy();
-                            
-                            // Reset attack notify flag for chained attacks
-                            bAttackNotifyInProgress = false;
-                            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Attack notify flag reset for chained attack"));
-                            
-                            float MontageLength = PlayAnimMontage(NextMontage);
-                            if (MontageLength > 0.0f)
-                            {
-                                // Store the new montage length for bloom timing
-                                CurrentMontageLength = MontageLength;
-                                
-                                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Successfully chained to next attack (duration: %.2f)"), MontageLength);
-                                
-                                // IMPORTANT: Start bloom circle for the chained attack immediately
-                                UE_LOG(LogTemp, Warning, TEXT("🔵 ⚡ BLOOM WINDOW ACTIVATED - Starting for chained attack index %d (%s)"), 
-                                       CurrentAttackIndex, NextMontage ? *NextMontage->GetName() : TEXT("NULL"));
-                                
-                                // CRITICAL FIX: Clear any existing bloom hide timers to prevent conflicts
-                                GetWorld()->GetTimerManager().ClearTimer(SwordBloomHideTimer);
-                                UE_LOG(LogTemp, Warning, TEXT("🔧 Cleared existing bloom hide timers to prevent conflicts"));
-                                
-                                bBloomWindowActive = true;
-                                if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) 
-                                { 
-                                    SwordBloom->StartBloomCircle(); 
-                                    UE_LOG(LogTemp, Warning, TEXT("🔵 ✅ SwordBloom widget found - StartBloomCircle() called for chained attack %s"), 
-                                           NextMontage ? *NextMontage->GetName() : TEXT("NULL")); 
-                                } 
-                                else 
-                                { 
-                                    UE_LOG(LogTemp, Error, TEXT("🔵 ❌ SwordBloom widget NOT found for chained attack %s"), 
-                                           NextMontage ? *NextMontage->GetName() : TEXT("NULL")); 
-                                }
-                                
-                                // CRITICAL FIX: Add backup timer for chained attacks to ensure damage application
-                                // This was missing and causing damage numbers to stop appearing after first combo hit
-                                float NotifyTiming = MontageLength * 0.6f; // Call at 60% through the animation
-                                FTimerHandle AttackNotifyTimer;
-                                GetWorld()->GetTimerManager().SetTimer(
-                                    AttackNotifyTimer,
-                                    FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::OnMeleeAttackNotify),
-                                    NotifyTiming,
-                                    false
-                                );
-                                UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Set backup attack notify timer for chained attack in %.2f seconds"), NotifyTiming);
-                                
-                                StartComboWindow(); // Restart the combo timing window
-                            }
-                            else
-                            {
-                                UE_LOG(LogTemp, Error, TEXT("🗡️ ❌ Failed to play chained montage %s for attack index %d"), 
-                                       NextMontage ? *NextMontage->GetName() : TEXT("NULL"), CurrentAttackIndex);
-                            }
-                        },
-                        0.05f,
-                        false
-                    );
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("🔚 Ending combo chain - resetting to first attack"));
-                ResetComboChain();
-            }
-            
-            return true;
-        }
+        return CombatEffectsManagerComp->TryTriggerSparkEffect();
     }
     
     return false;
@@ -2775,31 +2194,16 @@ UWBP_SwordBloom* AAtlantisEonsCharacter::GetSwordBloomWidget()
 
 void AAtlantisEonsCharacter::ResetComboChain()
 {
-    CurrentAttackIndex = 0;
-    bIsInCombo = false;
-    bHitCriticalWindow = false;
-    
-    // CRITICAL FIX: Reset bloom window when combo chain ends
-    bBloomWindowActive = false;
-    UE_LOG(LogTemp, Warning, TEXT("🔧 Reset bloom window flag when resetting combo chain"));
-    
-    // CAMERA STABILIZATION: Disable when combo chain resets
-    DisableAttackCameraStabilization();
-    
-    // ========== SWORD EFFECT DEACTIVATION LOGIC ==========
-    // Deactivate SwordEffect when reverting to first attack
-    UE_LOG(LogTemp, Warning, TEXT("🔒 🌟 Combo chain reset - DEACTIVATING SwordEffect"));
-    DeactivateSwordEffect();
-    
-    // ========== DRAGON HIDING LOGIC ==========
-    // Hide Dragons when combo ends
-    UE_LOG(LogTemp, Warning, TEXT("🔒 🐉 Combo chain reset - HIDING Dragons"));
-    HideDragons();
-    
-    // Clear combo reset timer
-    GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
-    
-    UE_LOG(LogTemp, Warning, TEXT("🔄 Combo chain reset to first attack"));
+    if (CombatEffectsManagerComp)
+    {
+        CombatEffectsManagerComp->ResetComboChain();
+        
+        // Sync legacy state variables for Blueprint compatibility
+        CurrentAttackIndex = CombatEffectsManagerComp->GetCurrentAttackIndex();
+        bIsInCombo = CombatEffectsManagerComp->IsInCombo();
+        bHitCriticalWindow = CombatEffectsManagerComp->HasHitCriticalWindow();
+        bBloomWindowActive = CombatEffectsManagerComp->IsBloomWindowActive();
+    }
 }
 
 void AAtlantisEonsCharacter::AdvanceComboChain()
@@ -2823,29 +2227,18 @@ bool AAtlantisEonsCharacter::CanContinueCombo() const
 
 void AAtlantisEonsCharacter::StartComboWindow()
 {
-    bIsInCombo = true;
-    
-    // Clear any existing combo reset timer
-    GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
-    
-    // Set timer to reset combo if no critical window is hit
-    GetWorld()->GetTimerManager().SetTimer(
-        ComboResetTimer,
-        FTimerDelegate::CreateUObject(this, &AAtlantisEonsCharacter::EndComboChain),
-        ComboWindowDuration,
-        false
-    );
-    
-    UE_LOG(LogTemp, Warning, TEXT("⏰ Started combo window (%.1fs to hit critical timing)"), ComboWindowDuration);
+    if (CombatEffectsManagerComp)
+    {
+        CombatEffectsManagerComp->StartComboWindow();
+        
+        // Sync legacy state variables for Blueprint compatibility
+        bIsInCombo = CombatEffectsManagerComp->IsInCombo();
+    }
 }
 
 void AAtlantisEonsCharacter::EndComboChain()
 {
     UE_LOG(LogTemp, Warning, TEXT("🔚 Ending combo chain - resetting to first attack"));
-    
-    // CRITICAL FIX: Reset bloom window when combo chain ends
-    bBloomWindowActive = false;
-    UE_LOG(LogTemp, Warning, TEXT("🔧 Reset bloom window flag when ending combo chain"));
     
     // CAMERA STABILIZATION: Disable when combo chain ends
     DisableAttackCameraStabilization();
@@ -2865,9 +2258,16 @@ void AAtlantisEonsCharacter::EndComboChain()
 
 void AAtlantisEonsCharacter::HandleDisarmItem(EItemEquipSlot ItemEquipSlot, const TSoftObjectPtr<UStaticMesh>& StaticMeshID, int32 ItemIndex)
 {
+    // Delegate to Equipment Component for logic and data management
     if (EquipmentComponent)
     {
         EquipmentComponent->HandleDisarmItem(ItemEquipSlot, StaticMeshID, ItemIndex);
+    }
+    
+    // Delegate to Equipment Visuals Component for visual updates
+    if (EquipmentVisualsComp)
+    {
+        EquipmentVisualsComp->DisarmItemFromSlot(ItemEquipSlot, StaticMeshID, ItemIndex);
     }
 }
 
@@ -2893,6 +2293,22 @@ void AAtlantisEonsCharacter::OnInventoryChangedEvent()
 {
     UE_LOG(LogTemp, Log, TEXT("OnInventoryChangedEvent called"));
     UpdateInventorySlots();
+}
+
+void AAtlantisEonsCharacter::OnDamageDealtFromCombat(float DealtDamage, AActor* Target)
+{
+    UE_LOG(LogTemp, Warning, TEXT("🗡️ OnDamageDealtFromCombat: %.1f damage to %s - Event received from CombatEffectsManagerComponent"), 
+           DealtDamage, Target ? *Target->GetName() : TEXT("NULL"));
+    
+    // NOTE: This event is for game logic purposes (achievements, sound effects, etc.)
+    // The CombatEffectsManagerComponent already handles damage number spawning
+    // to prevent duplicate damage numbers.
+    
+    // TODO: Add any additional logic here for when damage is dealt:
+    // - Achievement tracking
+    // - Sound effects that aren't handled by the component
+    // - Screen shake effects
+    // - Other game responses to damage dealt that need character-level handling
 }
 
 float AAtlantisEonsCharacter::GetMaxHealth() const
@@ -3537,11 +2953,3 @@ bool AAtlantisEonsCharacter::ShouldDashForward() const
     // Forward movement is positive Y in CurrentMovementInput
     return CurrentMovementInput.Y > 0.1f;
 }
-
-
-
-
-
-
-
-

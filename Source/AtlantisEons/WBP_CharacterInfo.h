@@ -16,7 +16,7 @@
 #include "Math/Color.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
-#include "UI/CharacterInfoWidget.h"
+#include "CharacterInfoWidget.h"
 #include "WBP_CharacterInfo.generated.h"
 
 class AAtlantisEonsHUD;

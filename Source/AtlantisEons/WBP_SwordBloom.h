@@ -47,9 +47,13 @@ protected:
     UPROPERTY(BlueprintReadOnly, Category = "Combat|Effects")
     float BloomScaleProgress = 0.0f;
     
-    /** Critical timing window threshold (60% progress) */
+    /** Critical timing window threshold (40% progress - original timing) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Effects")
-    float CriticalTimingThreshold = 0.6f;
+    float CriticalTimingThreshold = 0.4f;
+    
+    /** Current bloom duration being used for logging */
+    UPROPERTY(BlueprintReadOnly, Category = "Combat|Effects")
+    float CurrentBloomDuration = 0.8f;
 
 public:
     /** Get SwordSpark image component */

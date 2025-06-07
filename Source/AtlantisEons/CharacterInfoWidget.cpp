@@ -1,6 +1,6 @@
 #include "CharacterInfoWidget.h"
-#include "../AtlantisEonsHUD.h"
-#include "../AtlantisEonsCharacter.h"
+#include "AtlantisEonsHUD.h"
+#include "AtlantisEonsCharacter.h"
 #include "Kismet/GameplayStatics.h"
 
 void UCharacterInfoWidget::HandleResumeClicked()
