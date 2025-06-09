@@ -248,6 +248,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Combat|State")
     bool HasHitCriticalWindow() const { return bHitCriticalWindow; }
     
+    /** Check if critical spark has been triggered for current montage */
+    UFUNCTION(BlueprintPure, Category = "Combat|State")
+    bool HasCriticalSparkBeenTriggered() const { return bCriticalSparkTriggered; }
+    
     /** Get current montage length */
     UFUNCTION(BlueprintPure, Category = "Combat|State")
     float GetCurrentMontageLength() const { return CurrentMontageLength; }
@@ -306,6 +310,10 @@ protected:
     /** Whether the bloom window is currently active */
     UPROPERTY(BlueprintReadOnly, Category = "Combat|Effects")
     bool bBloomWindowActive = false;
+    
+    /** Whether a critical spark has already been triggered for the current montage */
+    UPROPERTY(BlueprintReadOnly, Category = "Combat|Effects")
+    bool bCriticalSparkTriggered = false;
     
     /** Current attack montage duration for bloom effect timing */
     UPROPERTY(BlueprintReadOnly, Category = "Combat|Effects")

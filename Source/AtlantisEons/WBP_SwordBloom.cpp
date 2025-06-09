@@ -321,7 +321,7 @@ bool UWBP_SwordBloom::TryTriggerSpark()
     if (SwordSpark && SwordSpark->GetVisibility() == ESlateVisibility::Visible)
     {
         UE_LOG(LogTemp, Warning, TEXT("WBP_SwordBloom: Spark already visible - preventing duplicate"));
-        return true; // Return true since spark is already active
+        return false; // Return false since this is NOT a new successful spark trigger
     }
     
     // Check if we're in the critical timing window (final 40% of animation)

@@ -35,6 +35,7 @@ UCombatEffectsManagerComponent::UCombatEffectsManagerComponent()
     bIsInCombo = false;
     bHitCriticalWindow = false;
     bBloomWindowActive = false;
+    bCriticalSparkTriggered = false;
     CurrentMontageLength = 0.0f;
     
     // Initialize configuration
@@ -154,6 +155,10 @@ void UCombatEffectsManagerComponent::MeleeAttack(const FInputActionValue& Value)
 
     // NOW reset the critical window flag for this new attack
     bHitCriticalWindow = false;
+    
+    // SPAM PREVENTION: Reset the critical spark flag for the new montage
+    bCriticalSparkTriggered = false;
+    UE_LOG(LogTemp, Warning, TEXT("🔄 Reset critical spark flag for new attack montage"));
 
     // Face the nearest enemy before attacking
     FaceNearestEnemy();
@@ -394,7 +399,8 @@ void UCombatEffectsManagerComponent::ResetComboChain()
     
     // Reset bloom window when combo chain ends
     bBloomWindowActive = false;
-    UE_LOG(LogTemp, Warning, TEXT("🔧 Reset bloom window flag when resetting combo chain"));
+    bCriticalSparkTriggered = false;
+    UE_LOG(LogTemp, Warning, TEXT("🔧 Reset bloom window and critical spark flags when resetting combo chain"));
     
     // Disable camera stabilization when combo chain resets
     DisableAttackCameraStabilization();
@@ -456,7 +462,8 @@ void UCombatEffectsManagerComponent::EndComboChain()
     
     // Reset bloom window when combo chain ends
     bBloomWindowActive = false;
-    UE_LOG(LogTemp, Warning, TEXT("🔧 Reset bloom window flag when ending combo chain"));
+    bCriticalSparkTriggered = false;
+    UE_LOG(LogTemp, Warning, TEXT("🔧 Reset bloom window and critical spark flags when ending combo chain"));
     
     // Disable camera stabilization when combo chain ends
     DisableAttackCameraStabilization();
@@ -505,6 +512,13 @@ bool UCombatEffectsManagerComponent::TryTriggerSparkEffect()
         return false;
     }
     
+    // SPAM PREVENTION: Check if critical spark has already been triggered for this montage
+    if (bCriticalSparkTriggered)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🚫 Critical spark already triggered for this montage - preventing spam"));
+        return false;
+    }
+    
     // Get the SwordBloom widget and check if we hit the critical window
     if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget())
     {
@@ -513,6 +527,10 @@ bool UCombatEffectsManagerComponent::TryTriggerSparkEffect()
         if (bSuccessfulSpark)
         {
             UE_LOG(LogTemp, Warning, TEXT("✨ ✅ CRITICAL WINDOW HIT! Processing spark effect"));
+            
+            // SPAM PREVENTION: Mark that critical spark has been triggered for this montage
+            bCriticalSparkTriggered = true;
+            UE_LOG(LogTemp, Warning, TEXT("🔒 Critical spark flag set - no more sparks allowed for this montage"));
             
             // Mark that we hit the critical window - this enables combo continuation
             bHitCriticalWindow = true;
@@ -568,6 +586,11 @@ bool UCombatEffectsManagerComponent::TryTriggerSparkEffect()
                                 // Start bloom circle for the chained attack
                                 GetWorld()->GetTimerManager().ClearTimer(SwordBloomHideTimer);
                                 bBloomWindowActive = true;
+                                
+                                // SPAM PREVENTION: Reset critical spark flag for chained attack
+                                bCriticalSparkTriggered = false;
+                                UE_LOG(LogTemp, Warning, TEXT("🔄 Reset critical spark flag for chained attack"));
+                                
                                 if (UWBP_SwordBloom* SwordBloom = GetSwordBloomWidget()) 
                                 { 
                                     SwordBloom->StartBloomCircle(); 
