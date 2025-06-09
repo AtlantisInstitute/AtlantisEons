@@ -18,6 +18,56 @@ const serverPort = process.env.MCP_PORT ? parseInt(process.env.MCP_PORT) : 9011;
 const serverName = 'memory-enhanced-analyzer';
 const serverVersion = '2.0.0';
 
+// User Rules Configuration
+const userRulesPath = path.join(projectRoot, 'config', 'user-rules.json');
+
+// Default user rules that match your latest requirements
+const defaultUserRules = {
+    codeStyle: {
+        indentation: "4 spaces for most languages, 2 spaces for web languages",
+        conventions: "Follow language-specific conventions (PEP 8 for Python, Google Style for C++, etc.)",
+        naming: "Use clear, descriptive variable and function names",
+        comments: "Include helpful comments for complex logic",
+        lineLength: "Limit line length to 100 characters when possible",
+        preservation: "Never remove existing working code unless absolutely necessary",
+        modification: "When modifications are needed, prefer adding to or extending existing code rather than replacing it",
+        headers: "Always include proper header files in .cpp and .h files when adding new code to increase efficiency"
+    },
+    projectStructure: {
+        organization: "Organize files logically by feature or functionality",
+        naming: "Use consistent file naming conventions (snake_case for Python, PascalCase for C# classes)",
+        proximity: "Keep related files close together in the directory structure",
+        separation: "Separate source code from tests, documentation, and resources",
+        engine: "Using Unreal Engine 5.5",
+        platform: "On a mac, use the terminal to build the project"
+    },
+    communicationPreferences: {
+        explanations: "Provide concise explanations focused on the task at hand",
+        decisions: "Explain key design decisions and architectural choices",
+        formatting: "Use markdown formatting for better readability",
+        implementation: "Never suggest code - always implement suggestions directly via code edits",
+        issues: "Highlight any potential issues or edge cases"
+    },
+    taskApproach: {
+        breakdown: "Break down complex problems into manageable steps",
+        priorities: "Prioritize readability and maintainability over clever code",
+        performance: "Consider performance implications of solutions",
+        memory: "Never reanalyze code that has already been inspected - create and refer to memories instead",
+        clarification: "Ask for clarification on ambiguous requirements before implementing",
+        assumptions: "Make reasonable assumptions when minor details are missing",
+        building: "Always build yourself without recommending me to do it using this path \"/Users/Shared/Epic Games/UE_5.5/Engine/Build/BatchFiles/Mac/Build.sh\" AtlantisEonsEditor Development Mac -Project=\"/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/AtlantisEons.uproject\" -WaitMutex -FromMsBuild",
+        analysis: "Always analyze code added to make sure no duplicate code is added and there are no potential errors",
+        implementation: "Always implement functionality in C++ instead of blueprints with little to none blueprint implementation if possible",
+        inspection: "Always inspect the code analyzer mcp and scan my entire project index it has so you can get a holistic understanding of the project",
+        fileSize: "Keep file code line size to about 1,000",
+        characterFile: "If possible avoid adding code to the AtlantisEonsCharacter.cpp file as it is already bloated, only if necessary",
+        editorCheck: "First check to see if an editor instance is open before opening another one",
+        codeIntegrity: "When editing code make sure you are not breaking old existing working code"
+    },
+    lastUpdated: new Date().toISOString(),
+    version: "1.0.0"
+};
+
 // Initialize memory manager with auto-sync capabilities
 const memoryManager = new MemoryManager(projectRoot);
 
@@ -44,6 +94,9 @@ class MemoryMCPServer {
         this.loadProjectKnowledge();
         this.setupMemoryWatchers();
         this.scheduleMemorySync();
+        
+        // Initialize user rules
+        this.loadUserRules();
     }
 
     initializeTools() {
@@ -152,6 +205,86 @@ class MemoryMCPServer {
                     affectedSystems: { type: 'array', items: { type: 'string' }, description: 'Affected systems/classes' }
                 },
                 required: ['description']
+            }
+        });
+
+        // User Rules Management Tools
+        this.tools.set('get_user_rules', {
+            name: 'get_user_rules',
+            description: 'Retrieve current user rules configuration',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    category: { type: 'string', description: 'Specific category to retrieve (codeStyle, projectStructure, communicationPreferences, taskApproach)', default: 'all' },
+                    format: { type: 'string', description: 'Return format', enum: ['json', 'markdown', 'plain'], default: 'json' }
+                }
+            }
+        });
+
+        this.tools.set('update_user_rules', {
+            name: 'update_user_rules',
+            description: 'Update user rules configuration',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    category: { type: 'string', description: 'Rule category', enum: ['codeStyle', 'projectStructure', 'communicationPreferences', 'taskApproach'], required: true },
+                    rules: { type: 'object', description: 'Rules to update/add' },
+                    merge: { type: 'boolean', description: 'Merge with existing rules or replace', default: true }
+                },
+                required: ['category', 'rules']
+            }
+        });
+
+        this.tools.set('add_user_rule', {
+            name: 'add_user_rule',
+            description: 'Add a new user rule to a specific category',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    category: { type: 'string', description: 'Rule category', enum: ['codeStyle', 'projectStructure', 'communicationPreferences', 'taskApproach'], required: true },
+                    key: { type: 'string', description: 'Rule key/name' },
+                    value: { type: 'string', description: 'Rule value/description' },
+                    description: { type: 'string', description: 'Optional description of the rule' }
+                },
+                required: ['category', 'key', 'value']
+            }
+        });
+
+        this.tools.set('remove_user_rule', {
+            name: 'remove_user_rule',
+            description: 'Remove a user rule from a specific category',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    category: { type: 'string', description: 'Rule category', enum: ['codeStyle', 'projectStructure', 'communicationPreferences', 'taskApproach'], required: true },
+                    key: { type: 'string', description: 'Rule key/name to remove' }
+                },
+                required: ['category', 'key']
+            }
+        });
+
+        this.tools.set('reset_user_rules', {
+            name: 'reset_user_rules',
+            description: 'Reset user rules to default configuration',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    category: { type: 'string', description: 'Specific category to reset or all', default: 'all' },
+                    backup: { type: 'boolean', description: 'Create backup before reset', default: true }
+                }
+            }
+        });
+
+        this.tools.set('export_user_rules', {
+            name: 'export_user_rules',
+            description: 'Export user rules to a file or return as formatted text',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    format: { type: 'string', description: 'Export format', enum: ['json', 'markdown', 'yaml'], default: 'json' },
+                    filePath: { type: 'string', description: 'Optional file path to save to' },
+                    includeMetadata: { type: 'boolean', description: 'Include metadata like timestamps', default: true }
+                }
             }
         });
 
@@ -317,6 +450,28 @@ class MemoryMCPServer {
             name: 'Problem Tracking',
             description: 'Current and resolved problems with solutions',
             mimeType: 'application/json'
+        });
+
+        // User Rules Resources
+        this.resources.set('user_rules_json', {
+            uri: 'rules://user-rules',
+            name: 'User Rules (JSON)',
+            description: 'Current user rules configuration in JSON format',
+            mimeType: 'application/json'
+        });
+
+        this.resources.set('user_rules_markdown', {
+            uri: 'rules://user-rules/markdown',
+            name: 'User Rules (Markdown)',
+            description: 'Current user rules configuration in Markdown format',
+            mimeType: 'text/markdown'
+        });
+
+        this.resources.set('user_rules_plain', {
+            uri: 'rules://user-rules/plain',
+            name: 'User Rules (Plain Text)',
+            description: 'Current user rules configuration in plain text format',
+            mimeType: 'text/plain'
         });
     }
 
@@ -746,6 +901,102 @@ class MemoryMCPServer {
         return health;
     }
 
+    // User Rules Management Methods
+    loadUserRules() {
+        try {
+            if (fs.existsSync(userRulesPath)) {
+                const rulesData = fs.readFileSync(userRulesPath, 'utf8');
+                return JSON.parse(rulesData);
+            } else {
+                // Create default rules file
+                this.saveUserRules(defaultUserRules);
+                return defaultUserRules;
+            }
+        } catch (error) {
+            console.error('Error loading user rules:', error.message);
+            return defaultUserRules;
+        }
+    }
+
+    saveUserRules(rules) {
+        try {
+            // Ensure config directory exists
+            const configDir = path.dirname(userRulesPath);
+            if (!fs.existsSync(configDir)) {
+                fs.mkdirSync(configDir, { recursive: true });
+            }
+
+            // Update timestamp
+            rules.lastUpdated = new Date().toISOString();
+            
+            fs.writeFileSync(userRulesPath, JSON.stringify(rules, null, 2));
+            
+            // Also save to memory for quick access
+            this.memoryCache.set('user_rules', rules);
+            
+            return true;
+        } catch (error) {
+            console.error('Error saving user rules:', error.message);
+            return false;
+        }
+    }
+
+    formatUserRules(rules, format, category = 'all') {
+        let data = category === 'all' ? rules : { [category]: rules[category] };
+        
+        switch (format) {
+            case 'markdown':
+                let markdown = '# User Rules\n\n';
+                for (const [catKey, catValue] of Object.entries(data)) {
+                    if (catKey === 'lastUpdated' || catKey === 'version') continue;
+                    
+                    markdown += `## ${catKey.charAt(0).toUpperCase() + catKey.slice(1)}\n\n`;
+                    for (const [ruleKey, ruleValue] of Object.entries(catValue)) {
+                        markdown += `- **${ruleKey}**: ${ruleValue}\n`;
+                    }
+                    markdown += '\n';
+                }
+                return markdown;
+                
+            case 'plain':
+                let plain = '';
+                for (const [catKey, catValue] of Object.entries(data)) {
+                    if (catKey === 'lastUpdated' || catKey === 'version') continue;
+                    
+                    plain += `${catKey.toUpperCase()}:\n`;
+                    for (const [ruleKey, ruleValue] of Object.entries(catValue)) {
+                        plain += `  ${ruleKey}: ${ruleValue}\n`;
+                    }
+                    plain += '\n';
+                }
+                return plain;
+                
+            default: // json
+                return JSON.stringify(data, null, 2);
+        }
+    }
+
+    createUserRulesBackup() {
+        try {
+            const backupDir = path.join(projectRoot, 'config', 'backups');
+            if (!fs.existsSync(backupDir)) {
+                fs.mkdirSync(backupDir, { recursive: true });
+            }
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const backupPath = path.join(backupDir, `user-rules-backup-${timestamp}.json`);
+            
+            if (fs.existsSync(userRulesPath)) {
+                fs.copyFileSync(userRulesPath, backupPath);
+                return backupPath;
+            }
+            return null;
+        } catch (error) {
+            console.error('Error creating backup:', error.message);
+            return null;
+        }
+    }
+
     async analyzeAndRememberClass(className) {
         try {
             // Simple class analysis - in a real implementation, this would be more sophisticated
@@ -967,6 +1218,123 @@ class MemoryMCPServer {
             case 'analyze_inventory_system':
                 return await this.analyzeInventorySystem(args.includeUI);
 
+            // User Rules Management Tools
+            case 'get_user_rules':
+                const rules = this.loadUserRules();
+                const formattedRules = this.formatUserRules(rules, args.format, args.category);
+                return {
+                    success: true,
+                    rules: args.category === 'all' ? rules : rules[args.category],
+                    formatted: formattedRules,
+                    category: args.category,
+                    format: args.format,
+                    lastUpdated: rules.lastUpdated
+                };
+
+            case 'update_user_rules':
+                const currentRules = this.loadUserRules();
+                if (args.merge) {
+                    currentRules[args.category] = { ...currentRules[args.category], ...args.rules };
+                } else {
+                    currentRules[args.category] = args.rules;
+                }
+                const saveSuccess = this.saveUserRules(currentRules);
+                return {
+                    success: saveSuccess,
+                    message: saveSuccess ? `${args.category} rules updated successfully` : 'Failed to save rules',
+                    category: args.category,
+                    merge: args.merge,
+                    updatedRules: currentRules[args.category]
+                };
+
+            case 'add_user_rule':
+                const addCurrentRules = this.loadUserRules();
+                if (!addCurrentRules[args.category]) {
+                    addCurrentRules[args.category] = {};
+                }
+                addCurrentRules[args.category][args.key] = args.value;
+                const addSaveSuccess = this.saveUserRules(addCurrentRules);
+                return {
+                    success: addSaveSuccess,
+                    message: addSaveSuccess ? `Rule '${args.key}' added to ${args.category}` : 'Failed to add rule',
+                    category: args.category,
+                    key: args.key,
+                    value: args.value
+                };
+
+            case 'remove_user_rule':
+                const removeCurrentRules = this.loadUserRules();
+                if (removeCurrentRules[args.category] && removeCurrentRules[args.category][args.key]) {
+                    delete removeCurrentRules[args.category][args.key];
+                    const removeSaveSuccess = this.saveUserRules(removeCurrentRules);
+                    return {
+                        success: removeSaveSuccess,
+                        message: removeSaveSuccess ? `Rule '${args.key}' removed from ${args.category}` : 'Failed to remove rule',
+                        category: args.category,
+                        key: args.key
+                    };
+                } else {
+                    return {
+                        success: false,
+                        message: `Rule '${args.key}' not found in ${args.category}`,
+                        category: args.category,
+                        key: args.key
+                    };
+                }
+
+            case 'reset_user_rules':
+                let backupPath = null;
+                if (args.backup) {
+                    backupPath = this.createUserRulesBackup();
+                }
+                
+                let resetRules;
+                if (args.category === 'all') {
+                    resetRules = { ...defaultUserRules };
+                } else {
+                    resetRules = this.loadUserRules();
+                    resetRules[args.category] = defaultUserRules[args.category];
+                }
+                
+                const resetSaveSuccess = this.saveUserRules(resetRules);
+                return {
+                    success: resetSaveSuccess,
+                    message: resetSaveSuccess ? `Rules reset successfully${backupPath ? ` (backup: ${path.basename(backupPath)})` : ''}` : 'Failed to reset rules',
+                    category: args.category,
+                    backup: backupPath,
+                    resetRules: args.category === 'all' ? resetRules : resetRules[args.category]
+                };
+
+            case 'export_user_rules':
+                const exportRules = this.loadUserRules();
+                const exportFormatted = this.formatUserRules(exportRules, args.format);
+                
+                if (args.filePath) {
+                    try {
+                        fs.writeFileSync(args.filePath, exportFormatted);
+                        return {
+                            success: true,
+                            message: `Rules exported to ${args.filePath}`,
+                            filePath: args.filePath,
+                            format: args.format
+                        };
+                    } catch (error) {
+                        return {
+                            success: false,
+                            message: `Failed to export to file: ${error.message}`,
+                            content: exportFormatted,
+                            format: args.format
+                        };
+                    }
+                } else {
+                    return {
+                        success: true,
+                        content: exportFormatted,
+                        format: args.format,
+                        rules: exportRules
+                    };
+                }
+
             default:
                 return {
                     success: false,
@@ -1121,6 +1489,27 @@ class MemoryMCPServer {
                     return {
                         contents: JSON.stringify(recentInsights, null, 2),
                         mimeType: 'application/json'
+                    };
+
+                case 'rules://user-rules':
+                    const userRules = this.loadUserRules();
+                    return {
+                        contents: JSON.stringify(userRules, null, 2),
+                        mimeType: 'application/json'
+                    };
+
+                case 'rules://user-rules/markdown':
+                    const userRulesMarkdown = this.loadUserRules();
+                    return {
+                        contents: this.formatUserRules(userRulesMarkdown, 'markdown'),
+                        mimeType: 'text/markdown'
+                    };
+
+                case 'rules://user-rules/plain':
+                    const userRulesPlain = this.loadUserRules();
+                    return {
+                        contents: this.formatUserRules(userRulesPlain, 'plain'),
+                        mimeType: 'text/plain'
                     };
 
                 case 'memory://problems':

@@ -1,0 +1,45 @@
+{
+  "codeStyle": {
+    "indentation": "4 spaces for most languages, 2 spaces for web languages",
+    "conventions": "Follow language-specific conventions (PEP 8 for Python, Google Style for C++, etc.)",
+    "naming": "Use clear, descriptive variable and function names",
+    "comments": "Include helpful comments for complex logic",
+    "lineLength": "Limit line length to 100 characters when possible",
+    "preservation": "Never remove existing working code unless absolutely necessary",
+    "modification": "When modifications are needed, prefer adding to or extending existing code rather than replacing it",
+    "headers": "Always include proper header files in .cpp and .h files when adding new code to increase efficiency"
+  },
+  "projectStructure": {
+    "organization": "Organize files logically by feature or functionality",
+    "naming": "Use consistent file naming conventions (snake_case for Python, PascalCase for C# classes)",
+    "proximity": "Keep related files close together in the directory structure",
+    "separation": "Separate source code from tests, documentation, and resources",
+    "engine": "Using Unreal Engine 5.5",
+    "platform": "On a mac, use the terminal to build the project"
+  },
+  "communicationPreferences": {
+    "explanations": "Provide concise explanations focused on the task at hand",
+    "decisions": "Explain key design decisions and architectural choices",
+    "formatting": "Use markdown formatting for better readability",
+    "implementation": "Never suggest code - always implement suggestions directly via code edits",
+    "issues": "Highlight any potential issues or edge cases"
+  },
+  "taskApproach": {
+    "breakdown": "Break down complex problems into manageable steps",
+    "priorities": "Prioritize readability and maintainability over clever code",
+    "performance": "Consider performance implications of solutions",
+    "memory": "Never reanalyze code that has already been inspected - create and refer to memories instead",
+    "clarification": "Ask for clarification on ambiguous requirements before implementing",
+    "assumptions": "Make reasonable assumptions when minor details are missing",
+    "building": "Always build yourself without recommending me to do it using this path \"/Users/Shared/Epic Games/UE_5.5/Engine/Build/BatchFiles/Mac/Build.sh\" AtlantisEonsEditor Development Mac -Project=\"/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/AtlantisEons.uproject\" -WaitMutex -FromMsBuild",
+    "analysis": "Always analyze code added to make sure no duplicate code is added and there are no potential errors",
+    "implementation": "Always implement functionality in C++ instead of blueprints with little to none blueprint implementation if possible",
+    "inspection": "Always inspect the code analyzer mcp and scan my entire project index it has so you can get a holistic understanding of the project",
+    "fileSize": "Keep file code line size to about 1,000",
+    "characterFile": "If possible avoid adding code to the AtlantisEonsCharacter.cpp file as it is already bloated, only if necessary",
+    "editorCheck": "First check to see if an editor instance is open before opening another one",
+    "codeIntegrity": "When editing code make sure you are not breaking old existing working code"
+  },
+  "lastUpdated": "2025-06-09T22:17:24.079Z",
+  "version": "1.0.0"
+}
