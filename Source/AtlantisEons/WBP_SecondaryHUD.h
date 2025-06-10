@@ -5,6 +5,7 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/CanvasPanel.h"
+#include "Components/Button.h"
 #include "Animation/WidgetAnimation.h"
 #include "WBP_SecondaryHUD.generated.h"
 
@@ -225,6 +226,24 @@ protected:
     /** Text block for shield label */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UTextBlock* ShieldText;
+
+    // ========== TOUCH INPUT BUTTONS (BIND IN BLUEPRINT) ==========
+
+    /** Menu button for touch input - opens inventory */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    class UButton* MenuButton;
+
+    /** Weapon button for touch input - triggers attack */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    class UButton* WeaponButton;
+
+    /** Dodge button for touch input - activates dash */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    class UButton* DodgeButton;
+
+    /** Shield button for touch input - activates block */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    class UButton* ShieldButton;
 
     // ========== EXPERIENCE SYSTEM PROPERTIES ==========
 

@@ -108,21 +108,27 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block); // Block world geometry
     GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block); // Block dynamic objects
     
-    // BALANCED: Physics prevention with reasonable mass
-    GetCapsuleComponent()->SetSimulatePhysics(false);
-    GetCapsuleComponent()->SetEnableGravity(false); // Let character movement handle gravity
-    GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 1000.0f, true); // Heavy enough to resist pushing
-    GetCapsuleComponent()->SetLinearDamping(30.0f); // High damping for stability
-    GetCapsuleComponent()->SetAngularDamping(30.0f); // High rotational damping
-    GetCapsuleComponent()->SetUseCCD(true); // Enable CCD to prevent penetration during attacks
-    GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // Disable collision events for performance
+    // BALANCED: Physics prevention with reasonable mass (CDO-safe)
+    if (!HasAnyFlags(RF_ClassDefaultObject))
+    {
+        GetCapsuleComponent()->SetSimulatePhysics(false);
+        GetCapsuleComponent()->SetEnableGravity(false); // Let character movement handle gravity
+        GetCapsuleComponent()->SetMassOverrideInKg(NAME_None, 1000.0f, true); // Heavy enough to resist pushing
+        GetCapsuleComponent()->SetLinearDamping(30.0f); // High damping for stability
+        GetCapsuleComponent()->SetAngularDamping(30.0f); // High rotational damping
+        GetCapsuleComponent()->SetUseCCD(true); // Enable CCD to prevent penetration during attacks
+        GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // Disable collision events for performance
+    }
     
-    // ENHANCED: Disable physics simulation to prevent flying when hit
-    GetCapsuleComponent()->SetSimulatePhysics(false);
-    GetCapsuleComponent()->SetEnableGravity(false); // Let character movement handle gravity
+    // ENHANCED: Disable physics simulation to prevent flying when hit (CDO-safe)
+    if (!HasAnyFlags(RF_ClassDefaultObject))
+    {
+        GetCapsuleComponent()->SetSimulatePhysics(false);
+        GetCapsuleComponent()->SetEnableGravity(false); // Let character movement handle gravity
+    }
     
-    // ENHANCED: Configure mesh to prevent clipping during attacks
-    if (GetMesh())
+    // ENHANCED: Configure mesh to prevent clipping during attacks (CDO-safe)
+    if (!HasAnyFlags(RF_ClassDefaultObject) && GetMesh())
     {
         GetMesh()->SetSimulatePhysics(false);
         GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
@@ -182,30 +188,33 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     bUseControllerRotationYaw = false;
     bUseControllerRotationRoll = false;
 
-    // ENHANCED: Configure character movement to resist external forces MORE STRONGLY
-    UCharacterMovementComponent* CharMov = GetCharacterMovement();
-    if (CharMov)
+    // ENHANCED: Configure character movement to resist external forces MORE STRONGLY (CDO-safe)
+    if (!HasAnyFlags(RF_ClassDefaultObject))
     {
-        CharMov->bOrientRotationToMovement = true;
-        CharMov->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
-        CharMov->JumpZVelocity = 700.f;
-        CharMov->AirControl = 0.35f;
-        CharMov->MaxWalkSpeed = 500.f;
-        CharMov->MinAnalogWalkSpeed = 20.f;
-        CharMov->BrakingDecelerationWalking = 2000.f;
-        
-        // BALANCED: Physics resistance settings that work with enemy collision
-        CharMov->bIgnoreBaseRotation = true;
-        CharMov->Mass = 1000.0f; // Heavy enough to resist impulses but not excessive
-        CharMov->GroundFriction = 8.0f; // Good friction without being too sticky
-        CharMov->MaxAcceleration = 2500.0f; // Responsive but controlled acceleration
-        CharMov->BrakingDecelerationWalking = 2500.0f; // Good braking for stability
-        CharMov->bApplyGravityWhileJumping = true; // Keep normal jumping
-        CharMov->bCanWalkOffLedges = true; // Allow normal movement
-        CharMov->bRequestedMoveUseAcceleration = true; // Use acceleration-based movement
-        CharMov->bForceMaxAccel = false; // Controlled acceleration
-        
-        UE_LOG(LogTemp, Warning, TEXT("Player: BALANCED movement physics - Mass: 1000kg, Friction: 8.0"));
+        UCharacterMovementComponent* CharMov = GetCharacterMovement();
+        if (CharMov)
+        {
+            CharMov->bOrientRotationToMovement = true;
+            CharMov->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
+            CharMov->JumpZVelocity = 700.f;
+            CharMov->AirControl = 0.35f;
+            CharMov->MaxWalkSpeed = 500.f;
+            CharMov->MinAnalogWalkSpeed = 20.f;
+            CharMov->BrakingDecelerationWalking = 2000.f;
+            
+            // BALANCED: Physics resistance settings that work with enemy collision
+            CharMov->bIgnoreBaseRotation = true;
+            CharMov->Mass = 1000.0f; // Heavy enough to resist impulses but not excessive
+            CharMov->GroundFriction = 8.0f; // Good friction without being too sticky
+            CharMov->MaxAcceleration = 2500.0f; // Responsive but controlled acceleration
+            CharMov->BrakingDecelerationWalking = 2500.0f; // Good braking for stability
+            CharMov->bApplyGravityWhileJumping = true; // Keep normal jumping
+            CharMov->bCanWalkOffLedges = true; // Allow normal movement
+            CharMov->bRequestedMoveUseAcceleration = true; // Use acceleration-based movement
+            CharMov->bForceMaxAccel = false; // Controlled acceleration
+            
+            UE_LOG(LogTemp, Warning, TEXT("Player: BALANCED movement physics - Mass: 1000kg, Friction: 8.0"));
+        }
     }
 
     // Initialize character stats
@@ -263,6 +272,8 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     ItemDataCreationComp = CreateDefaultSubobject<UItemDataCreationComponent>(TEXT("ItemDataCreationComp"));
     InventoryManagerComp = CreateDefaultSubobject<UInventoryManagerComponent>(TEXT("InventoryManagerComp"));
     CombatEffectsManagerComp = CreateDefaultSubobject<UCombatEffectsManagerComponent>(TEXT("CombatEffectsManagerComp"));
+    TouchInputManagerComp = CreateDefaultSubobject<UTouchInputManager>(TEXT("TouchInputManagerComp"));
+    UITouchInputManagerComp = CreateDefaultSubobject<UUITouchInputManager>(TEXT("UITouchInputManagerComp"));
 
     
     // Create SwordBloom widget component (restored to original approach)
@@ -364,15 +375,16 @@ void AAtlantisEonsCharacter::BeginPlay()
         GetCapsuleComponent()->SetNotifyRigidBodyCollision(false); // Disable collision events for performance
         
 
-        GetCapsuleComponent()->GetBodyInstance()->bOverrideMass = true; // Ensure mass override is applied
-        GetCapsuleComponent()->GetBodyInstance()->SetMassOverride(500.0f); // Reinforce mass setting
-        GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock Z-axis to prevent upward bouncing
-        GetCapsuleComponent()->GetBodyInstance()->SetLinearVelocity(FVector::ZeroVector, false); // Clear any velocity
-        GetCapsuleComponent()->GetBodyInstance()->SetAngularVelocityInRadians(FVector::ZeroVector, false); // Clear angular velocity
-        
-        // ENHANCED: Configure body instance for maximum collision blocking
-        if (GetCapsuleComponent()->GetBodyInstance())
+        // CDO-safe body instance access
+        if (!HasAnyFlags(RF_ClassDefaultObject) && GetCapsuleComponent()->GetBodyInstance())
         {
+            GetCapsuleComponent()->GetBodyInstance()->bOverrideMass = true; // Ensure mass override is applied
+            GetCapsuleComponent()->GetBodyInstance()->SetMassOverride(500.0f); // Reinforce mass setting
+            GetCapsuleComponent()->GetBodyInstance()->bLockZTranslation = true; // Lock Z-axis to prevent upward bouncing
+            GetCapsuleComponent()->GetBodyInstance()->SetLinearVelocity(FVector::ZeroVector, false); // Clear any velocity
+            GetCapsuleComponent()->GetBodyInstance()->SetAngularVelocityInRadians(FVector::ZeroVector, false); // Clear angular velocity
+            
+            // ENHANCED: Configure body instance for maximum collision blocking
             GetCapsuleComponent()->GetBodyInstance()->SetResponseToAllChannels(ECR_Block);
             GetCapsuleComponent()->GetBodyInstance()->SetResponseToChannel(ECC_Pawn, ECR_Block); // COMBAT FIX: Block pawns but prevent bouncing with physics constraints
             GetCapsuleComponent()->GetBodyInstance()->bLockXTranslation = false; // Allow controlled movement
@@ -613,6 +625,14 @@ void AAtlantisEonsCharacter::Move(const FInputActionValue& Value)
     // Input is a Vector2D
     FVector2D MovementVector = Value.Get<FVector2D>();
     
+    // Check if TouchInputManager should process this input
+    if (TouchInputManagerComp && TouchInputManagerComp->IsInMobileInputMode())
+    {
+        // Let TouchInputManager handle mobile-specific processing
+        TouchInputManagerComp->ProcessMobileMovementInput(MovementVector);
+        return; // TouchInputManager will call our movement internally
+    }
+    
     // BREAKABLE STABILIZATION: Track movement input for camera stabilization override
     CurrentMovementInput = MovementVector;
     bool bWasTryingToMove = bIsPlayerTryingToMove;
@@ -670,6 +690,14 @@ void AAtlantisEonsCharacter::Look(const FInputActionValue& Value)
 {
     // Input is a Vector2D
     FVector2D LookAxisVector = Value.Get<FVector2D>();
+
+    // Check if TouchInputManager should process this input
+    if (TouchInputManagerComp && TouchInputManagerComp->IsInMobileInputMode())
+    {
+        // Let TouchInputManager handle mobile-specific processing (sensitivity, inversion, etc.)
+        TouchInputManagerComp->ProcessMobileLookInput(LookAxisVector);
+        return; // TouchInputManager will handle camera movement internally
+    }
 
     if (Controller != nullptr)
     {
@@ -1553,6 +1581,13 @@ void AAtlantisEonsCharacter::SetMainWidget(UWBP_Main* NewWidget)
         if (MainWidget->GetCharacterInfoWidget())
         {
             WBP_CharacterInfo = MainWidget->GetCharacterInfoWidget();
+        }
+        
+        // Initialize UI touch input manager for comprehensive touch support
+        if (UITouchInputManagerComp)
+        {
+            UITouchInputManagerComp->InitializeUITouchInput(MainWidget);
+            UE_LOG(LogTemp, Warning, TEXT("🎮 Character: UI Touch Input Manager initialized with MainWidget"));
         }
     }
 }
@@ -3075,6 +3110,13 @@ void AAtlantisEonsCharacter::CreateSecondaryHUD()
                 // Force immediate initialization
                 SecondaryHUDWidget->InitializeHUD(this);
                 UE_LOG(LogTemp, Warning, TEXT("🔧 SecondaryHUD: Manual initialization completed"));
+                
+                // Initialize touch input manager for mobile devices
+                if (TouchInputManagerComp)
+                {
+                    TouchInputManagerComp->InitializeTouchInput(SecondaryHUDWidget);
+                    UE_LOG(LogTemp, Warning, TEXT("🎮 SecondaryHUD: Touch input manager initialized"));
+                }
             }
             else
             {

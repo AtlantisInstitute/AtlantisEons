@@ -31,6 +31,8 @@ class UWBP_CharacterInfo;
 #include "ItemDataCreationComponent.h"
 #include "InventoryManagerComponent.h"
 #include "CombatEffectsManagerComponent.h"
+#include "TouchInputManager.h"
+#include "UITouchInputManager.h"
 #include "WBP_SecondaryHUD.h"
 
 #include "AtlantisEonsCharacter.generated.h"
@@ -155,6 +157,14 @@ public:
     /** Combat Effects Manager component - handles all combat systems, attack chains, visual effects, and damage management */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     class UCombatEffectsManagerComponent* CombatEffectsManagerComp;
+
+    /** Touch Input Manager component - handles touch-based input for mobile UI buttons */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UTouchInputManager* TouchInputManagerComp;
+
+    /** UI Touch Input Manager component - handles touch-based input for all UI elements */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    class UUITouchInputManager* UITouchInputManagerComp;
 
     // ========== BLUEPRINT-VISIBLE STATS (MUST STAY - Blueprint reads/writes) ==========
     
@@ -854,6 +864,10 @@ public:
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Debug")
     void ApplyDebugDamage();
+
+    /** Blueprint implementable event for touch dash input */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Movement")
+    void OnTouchDashPressed();
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
     void ShowDamageNumber(float InDamageAmount, FVector Location, bool bIsCritical = false);

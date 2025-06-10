@@ -66,6 +66,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Character")
     class UWBP_CharacterInfo* GetCharacterInfoWidget() const { return WBP_CharacterInfo; }
 
+    // Get the store widget
+    UFUNCTION(BlueprintCallable, Category = "Store")
+    class UWBP_Store* GetStoreWidget() const { return StoreWidget; }
+
+    // Get the store popup widget
+    UFUNCTION(BlueprintCallable, Category = "Store")
+    class UWBP_StorePopup* GetStorePopupWidget() const { return WBP_StorePopup; }
+
 protected:
     UFUNCTION()
     virtual void NativePreConstruct() override;

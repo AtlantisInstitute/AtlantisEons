@@ -220,7 +220,8 @@ bool UStoreSystemFix::TryExtractWithStructureItemInfo(int32 ItemIndex, FStructur
 
     for (const FString& Pattern : RowPatterns)
     {
-        try
+        // Use safe approach without exceptions
+        if (ItemDataTable->GetRowStruct() && ItemDataTable->GetRowStruct()->IsChildOf(FStructure_ItemInfo::StaticStruct()))
         {
             FStructure_ItemInfo* FoundRow = ItemDataTable->FindRow<FStructure_ItemInfo>(*Pattern, TEXT(""), false);
             if (FoundRow)
@@ -230,9 +231,9 @@ bool UStoreSystemFix::TryExtractWithStructureItemInfo(int32 ItemIndex, FStructur
                 return true;
             }
         }
-        catch (...)
+        else
         {
-            UE_LOG(LogTemp, Warning, TEXT("StoreSystemFix: Exception during FStructure_ItemInfo extraction for pattern '%s'"), *Pattern);
+            UE_LOG(LogTemp, Warning, TEXT("StoreSystemFix: Struct mismatch during FStructure_ItemInfo extraction for pattern '%s'"), *Pattern);
         }
     }
 
@@ -255,7 +256,8 @@ bool UStoreSystemFix::TryExtractWithBlueprintItemInfo(int32 ItemIndex, FStructur
 
     for (const FString& Pattern : RowPatterns)
     {
-        try
+        // Use safe approach without exceptions
+        if (ItemDataTable->GetRowStruct() && ItemDataTable->GetRowStruct()->IsChildOf(FBlueprintItemInfo::StaticStruct()))
         {
             FBlueprintItemInfo* FoundRow = ItemDataTable->FindRow<FBlueprintItemInfo>(*Pattern, TEXT(""), false);
             if (FoundRow)
@@ -266,9 +268,9 @@ bool UStoreSystemFix::TryExtractWithBlueprintItemInfo(int32 ItemIndex, FStructur
                 return true;
             }
         }
-        catch (...)
+        else
         {
-            UE_LOG(LogTemp, Warning, TEXT("StoreSystemFix: Exception during FBlueprintItemInfo extraction for pattern '%s'"), *Pattern);
+            UE_LOG(LogTemp, Warning, TEXT("StoreSystemFix: Struct mismatch during FBlueprintItemInfo extraction for pattern '%s'"), *Pattern);
         }
     }
 

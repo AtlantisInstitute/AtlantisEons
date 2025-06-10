@@ -77,13 +77,14 @@ bool UAtlantisEonsGameInstance::GetItemInfoBlueprint(int32 ItemIndex, FFStructur
     // Try to find the row using the EXACT blueprint structure
     FFStructure_ItemInfo* FoundRow = nullptr;
     
-    try
+    // Use safe approach without exceptions
+    if (ItemDataTable->GetRowStruct() && ItemDataTable->GetRowStruct()->IsChildOf(FFStructure_ItemInfo::StaticStruct()))
     {
         FoundRow = ItemDataTable->FindRow<FFStructure_ItemInfo>(*RowName, TEXT(""), false);
     }
-    catch(...)
+    else
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Exception occurred during FindRow with FFStructure_ItemInfo"), *GetName());
+        UE_LOG(LogTemp, Warning, TEXT("%s: Row structure mismatch for FFStructure_ItemInfo"), *GetName());
     }
     
     if (FoundRow)
@@ -132,13 +133,14 @@ bool UAtlantisEonsGameInstance::GetItemInfo(int32 ItemIndex, Structure_ItemInfo&
     FString RowName = FString::FromInt(ItemIndex);
     Structure_ItemInfo* FoundRow = nullptr;
     
-    try
+    // Use safe approach without exceptions
+    if (ItemDataTable->GetRowStruct() && ItemDataTable->GetRowStruct()->IsChildOf(Structure_ItemInfo::StaticStruct()))
     {
         FoundRow = ItemDataTable->FindRow<Structure_ItemInfo>(*RowName, TEXT(""), false);
     }
-    catch(...)
+    else
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s: Exception occurred during FindRow, using unchecked approach"), *GetName());
+        UE_LOG(LogTemp, Warning, TEXT("%s: Row structure mismatch, using unchecked approach"), *GetName());
     }
     
     if (FoundRow)

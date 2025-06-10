@@ -131,7 +131,7 @@ void UStoreDataTableInspector::TestStructureCompatibility()
     UE_LOG(LogTemp, Warning, TEXT("   🎯 Testing with row: %s"), *TestRowName);
 
     // Test FStructure_ItemInfo
-    try
+    if (ItemDataTable->GetRowStruct() && ItemDataTable->GetRowStruct()->IsChildOf(FStructure_ItemInfo::StaticStruct()))
     {
         FStructure_ItemInfo* Row1 = ItemDataTable->FindRow<FStructure_ItemInfo>(*TestRowName, TEXT(""), false);
         if (Row1)
@@ -146,13 +146,13 @@ void UStoreDataTableInspector::TestStructureCompatibility()
             UE_LOG(LogTemp, Warning, TEXT("   ❌ FStructure_ItemInfo: NOT COMPATIBLE"));
         }
     }
-    catch (...)
+    else
     {
-        UE_LOG(LogTemp, Warning, TEXT("   ❌ FStructure_ItemInfo: EXCEPTION THROWN"));
+        UE_LOG(LogTemp, Warning, TEXT("   ❌ FStructure_ItemInfo: STRUCT MISMATCH"));
     }
 
     // Test FBlueprintItemInfo
-    try
+    if (ItemDataTable->GetRowStruct() && ItemDataTable->GetRowStruct()->IsChildOf(FBlueprintItemInfo::StaticStruct()))
     {
         FBlueprintItemInfo* Row2 = ItemDataTable->FindRow<FBlueprintItemInfo>(*TestRowName, TEXT(""), false);
         if (Row2)
@@ -167,9 +167,9 @@ void UStoreDataTableInspector::TestStructureCompatibility()
             UE_LOG(LogTemp, Warning, TEXT("   ❌ FBlueprintItemInfo: NOT COMPATIBLE"));
         }
     }
-    catch (...)
+    else
     {
-        UE_LOG(LogTemp, Warning, TEXT("   ❌ FBlueprintItemInfo: EXCEPTION THROWN"));
+        UE_LOG(LogTemp, Warning, TEXT("   ❌ FBlueprintItemInfo: STRUCT MISMATCH"));
     }
 }
 
