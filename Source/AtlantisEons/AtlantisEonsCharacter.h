@@ -418,6 +418,10 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Input State")
     bool bDashKeyPressed = false;
     
+    /** Whether jump is disabled for mobile devices */
+    UPROPERTY(BlueprintReadOnly, Category = "Input State")
+    bool bJumpDisabledForMobile = false;
+    
     /** Check if any movement or dash keys are currently pressed */
     UFUNCTION(BlueprintPure, Category = "Input State")
     bool IsAnyMovementKeyPressed() const;
@@ -707,6 +711,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Character|Input")
     UInputMappingContext* GetDefaultMappingContext() const { return DefaultMappingContext; }
 
+    /** Disable jump input for mobile (called by TouchInputManager) */
+    UFUNCTION(BlueprintCallable, Category = "Character|Input")
+    void DisableJumpForMobile();
+
     // Input handling
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
@@ -726,6 +734,24 @@ public:
 
     /** Called for looking input */
     void Look(const FInputActionValue& Value);
+    
+    // ========== LEGACY INPUT FUNCTIONS (for virtual joystick support) ==========
+    
+    /** Legacy movement functions for virtual joystick gamepad input */
+    void MoveForwardLegacy(float Value);
+    void MoveRightLegacy(float Value);
+    
+    /** Legacy camera functions for virtual joystick gamepad input */
+    void TurnLegacy(float Value);
+    void LookUpLegacy(float Value);
+    void TurnRateLegacy(float Value);
+    void LookUpRateLegacy(float Value);
+    
+    /** Store combined legacy movement input from virtual joystick */
+    FVector2D LegacyMovementInput = FVector2D::ZeroVector;
+    
+    /** Apply legacy movement directly without Enhanced Input system (prevents recursion) */
+    void ApplyLegacyMovement();
 
     /** Called when controller changes */
     virtual void NotifyControllerChanged() override;

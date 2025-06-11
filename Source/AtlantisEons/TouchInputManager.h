@@ -84,6 +84,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Touch Input|Movement")
     void ProcessMobileMovementInput(const FVector2D& MovementInput);
 
+    // ========== SIMPLE MOBILE INPUT FUNCTIONS ==========
+    
+    /** Simple function to trigger Move input action with mobile joystick values */
+    UFUNCTION(BlueprintCallable, Category = "Touch Input|Simple")
+    void TriggerMoveInput(const FVector2D& MovementVector);
+    
+    /** Simple function to trigger Look input action with mobile touch delta */
+    UFUNCTION(BlueprintCallable, Category = "Touch Input|Simple")
+    void TriggerLookInput(const FVector2D& LookDelta);
+
     // ========== MOBILE INPUT SETUP ==========
 
     /** Setup mobile input mapping context for touch controls */
@@ -382,6 +392,12 @@ private:
     /** Get owner character safely */
     AAtlantisEonsCharacter* GetOwnerCharacter();
 
+    /** Disable touch-to-jump behavior on mobile platforms */
+    void DisableTouchToJump();
+
     /** Internal flag to track mobile input mode */
     bool bMobileInputModeActive = false;
+    
+    /** Internal flag to control movement processing (disabled to prevent recursion) */
+    bool bTouchMovementProcessingEnabled = false;
 }; 

@@ -33,7 +33,7 @@ UTouchInputManager::UTouchInputManager()
     // Camera control defaults
     bTouchCameraEnabled = true;
     TouchCameraSensitivity = 1.0f;
-    bInvertTouchCameraY = false;
+    bInvertTouchCameraY = true;  // Inverted for mobile touch controls
     MinCameraTouchDistance = 5.0f;
     
     // Virtual joystick defaults
@@ -53,41 +53,108 @@ void UTouchInputManager::BeginPlay()
 {
     Super::BeginPlay();
     
-    // Get owner character
-    OwnerCharacter = GetOwnerCharacter();
-    
-    if (OwnerCharacter)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: BeginPlay - Owner character found: %s"), *OwnerCharacter->GetName());
-        
-        // Check platform and touch capabilities
-        bool bIsTouchPlatform = IsTouchPlatform();
-        UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Platform check - IsTouchPlatform: %s"), bIsTouchPlatform ? TEXT("TRUE") : TEXT("FALSE"));
-        
-        // Always enable mobile input mode for enhanced behavior
-        EnableMobileInputMode(true);
-        
-        // Auto-enable touch input if configured for mobile platforms
-        if (bAutoEnableOnMobile && bIsTouchPlatform)
+    // Add delay to ensure character is fully initialized
+    FTimerHandle InitializationTimer;
+    GetWorld()->GetTimerManager().SetTimer(
+        InitializationTimer,
+        [this]()
         {
-            bTouchInputEnabled = true;
-            SetupTouchEventBindings();
-            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Auto-enabled enhanced touch input for mobile platform"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Mobile input mode enabled for unified behavior (desktop mode)"));
-        }
-        
-        // Debug log the current state
-        UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Final state - TouchEnabled: %s, MobileMode: %s"), 
-               bTouchInputEnabled ? TEXT("TRUE") : TEXT("FALSE"),
-               bMobileInputModeActive ? TEXT("TRUE") : TEXT("FALSE"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("🎮 TouchInputManager: BeginPlay - No owner character found!"));
-    }
+            // Get owner character
+            OwnerCharacter = GetOwnerCharacter();
+            
+            if (OwnerCharacter)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: BeginPlay - Owner character found: %s"), *OwnerCharacter->GetName());
+                
+                // Check platform and touch capabilities
+                bool bIsTouchPlatform = IsTouchPlatform();
+                UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Platform check - IsTouchPlatform: %s"), bIsTouchPlatform ? TEXT("TRUE") : TEXT("FALSE"));
+                
+                // Enable TouchInputManager for buttons AND camera on mobile platforms
+                if (bAutoEnableOnMobile && bIsTouchPlatform)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: BUTTONS + CAMERA mode on mobile (engine handles virtual joystick movement)"));
+                    
+                    // Enable button functionality + camera controls (movement handled by engine's axis mappings)
+                    bTouchInputEnabled = true;      // Enable for UI buttons
+                    bMobileInputModeActive = true;  // Enable for camera processing only
+                    
+                    if (OwnerCharacter->GetController())
+                    {
+                        // Setup for camera controls while letting engine handle virtual joystick
+                        if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
+                        {
+                            // Keep touch events enabled for camera controls AND multi-touch
+                            PC->bShowMouseCursor = false;
+                            PC->bEnableTouchEvents = true;  // Enable for camera processing
+                            PC->bEnableTouchOverEvents = true;  // Enable for multi-touch support
+                            
+                            // Set input mode but keep touch events enabled
+                            FInputModeGameOnly GameOnlyMode;
+                            PC->SetInputMode(GameOnlyMode);
+                            
+                            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Mobile setup - buttons + camera, engine handles virtual joystick"));
+                        }
+                        
+                        // Disable jump on mobile to prevent touch-to-jump
+                        OwnerCharacter->DisableJumpForMobile();
+                    }
+                    return;
+                }
+                
+                // Enable minimal TouchInputManager functionality on desktop only
+                if (bAutoEnableOnMobile && !bIsTouchPlatform)
+                {
+                    // Add additional safety check
+                    if (OwnerCharacter->GetController())
+                    {
+                        // Enable ONLY essential mobile features to prevent crashes
+                        bTouchInputEnabled = true;  // Enable for button handling
+                        bMobileInputModeActive = true;  // CRITICAL: Enable mobile input mode for camera control
+                        
+                        // Configure PlayerController to prevent touch-to-jump
+                        if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
+                        {
+                            PC->bShowMouseCursor = false;
+                            PC->bEnableClickEvents = false;
+                            PC->bEnableMouseOverEvents = false;
+                            PC->bEnableTouchEvents = false;  // Critical: Disable to prevent jump
+                            PC->bEnableTouchOverEvents = false;
+                            
+                            FInputModeGameOnly GameOnlyMode;
+                            PC->SetInputMode(GameOnlyMode);
+                            
+                            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Configured PlayerController to prevent touch-to-jump"));
+                        }
+                        
+                        // Additional steps to prevent touch-to-jump
+                        DisableTouchToJump();
+                        
+                        UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Minimal mobile input enabled (buttons only)"));
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Controller not ready, will retry mobile setup"));
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Desktop mode - keeping default input behavior"));
+                }
+                
+                // Debug log the current state
+                UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Final state - TouchEnabled: %s, MobileMode: %s"), 
+                       bTouchInputEnabled ? TEXT("TRUE") : TEXT("FALSE"),
+                       bMobileInputModeActive ? TEXT("TRUE") : TEXT("FALSE"));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("🎮 TouchInputManager: BeginPlay - No owner character found!"));
+            }
+        },
+        0.1f,  // 100ms delay
+        false  // Don't loop
+    );
 }
 
 void UTouchInputManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -128,14 +195,13 @@ void UTouchInputManager::TickComponent(float DeltaTime, ELevelTick TickType, FAc
         return;
     }
     
-    // Process touch input continuously
-    HandleTouchInput();
+    // Process camera input on mobile (movement handled by engine's virtual joystick)
+    if (bMobileInputModeActive && bTouchCameraEnabled)
+    {
+        ProcessTouchCameraInput(DeltaTime);
+    }
     
-    // Process camera input
-    ProcessTouchCameraInput(DeltaTime);
-    
-    // Process virtual joystick input
-    ProcessVirtualJoystickInput(DeltaTime);
+    // Note: Movement processing disabled to prevent recursion with virtual joystick axis mappings
 }
 
 void UTouchInputManager::InitializeTouchInput(UWBP_SecondaryHUD* SecondaryHUD)
@@ -250,13 +316,9 @@ void UTouchInputManager::ProcessMobileLookInput(const FVector2D& LookInput)
         ScaledInput.Y *= -1.0f;
     }
     
-    // Apply camera movement directly to controller (bypass mobile check to avoid recursion)
-    if (APlayerController* PlayerController = Cast<APlayerController>(OwnerCharacter->GetController()))
-    {
-        // Use the character's camera sensitivity settings for consistency
-        PlayerController->AddYawInput(ScaledInput.X * OwnerCharacter->CameraYawSensitivity);
-        PlayerController->AddPitchInput(ScaledInput.Y * OwnerCharacter->CameraPitchSensitivity);
-    }
+    // Call the character's Look function directly with Enhanced Input value
+    FInputActionValue LookValue(ScaledInput);
+    OwnerCharacter->Look(LookValue);
     
     UE_LOG(LogTemp, Log, TEXT("🎮 TouchInputManager: Applied mobile look input - Raw(%f, %f) Scaled(%f, %f)"), 
            LookInput.X, LookInput.Y, ScaledInput.X, ScaledInput.Y);
@@ -337,6 +399,11 @@ void UTouchInputManager::SetVirtualJoystickEnabled(bool bEnabled)
 
 void UTouchInputManager::ProcessMobileMovementInput(const FVector2D& MovementInput)
 {
+    // DISABLED: Movement processing handled by engine's virtual joystick axis mappings to prevent recursion
+    UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: ProcessMobileMovementInput called but disabled to prevent recursion"));
+    return;
+    
+    /*
     if (!bVirtualJoystickEnabled || !OwnerCharacter)
     {
         return;
@@ -361,26 +428,9 @@ void UTouchInputManager::ProcessMobileMovementInput(const FVector2D& MovementInp
     // Apply sensitivity
     ProcessedInput *= VirtualJoystickSensitivity;
     
-    // Update character's movement tracking variables
-    OwnerCharacter->CurrentMovementInput = ProcessedInput;
-    const float MovementInputThreshold = 0.1f;
-    OwnerCharacter->bIsPlayerTryingToMove = ProcessedInput.Size() > MovementInputThreshold;
-    
-    // Apply movement directly to character (bypass mobile check to avoid recursion)
-    if (OwnerCharacter->GetController() != nullptr)
-    {
-        // Find out which way is forward
-        const FRotator Rotation = OwnerCharacter->GetController()->GetControlRotation();
-        const FRotator YawRotation(0, Rotation.Yaw, 0);
-
-        // Get forward and right vectors
-        const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-        const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
-        // Add movement 
-        OwnerCharacter->AddMovementInput(ForwardDirection, ProcessedInput.Y);
-        OwnerCharacter->AddMovementInput(RightDirection, ProcessedInput.X);
-    }
+    // Call the character's Move function directly with Enhanced Input value
+    FInputActionValue MovementValue(ProcessedInput);
+    OwnerCharacter->Move(MovementValue);
     
     // Update internal state
     CurrentJoystickInput = ProcessedInput;
@@ -389,6 +439,64 @@ void UTouchInputManager::ProcessMobileMovementInput(const FVector2D& MovementInp
     OnTouchMovement.Broadcast(ProcessedInput.X, ProcessedInput.Y);
     
     UE_LOG(LogTemp, Verbose, TEXT("🎮 TouchInputManager: Mobile movement input (%f, %f)"), ProcessedInput.X, ProcessedInput.Y);
+    */
+}
+
+// ========== SIMPLE MOBILE INPUT FUNCTIONS ==========
+
+void UTouchInputManager::TriggerMoveInput(const FVector2D& MovementVector)
+{
+    if (!OwnerCharacter || !OwnerCharacter->GetController() || !IsValid(OwnerCharacter))
+    {
+        return;
+    }
+    
+    // Apply deadzone
+    FVector2D ProcessedInput = MovementVector;
+    if (ProcessedInput.Size() < VirtualJoystickDeadzone)
+    {
+        ProcessedInput = FVector2D::ZeroVector;
+    }
+    
+    // Safely call the character's Move function with Enhanced Input value
+    if (!ensure(IsValid(OwnerCharacter)))
+    {
+        UE_LOG(LogTemp, Error, TEXT("🎮 TouchInputManager: Invalid character in TriggerMoveInput"));
+        return;
+    }
+    
+    FInputActionValue MovementValue(ProcessedInput);
+    OwnerCharacter->Move(MovementValue);
+    
+    UE_LOG(LogTemp, Verbose, TEXT("🎮 TouchInputManager: TriggerMoveInput (%f, %f)"), ProcessedInput.X, ProcessedInput.Y);
+}
+
+void UTouchInputManager::TriggerLookInput(const FVector2D& LookDelta)
+{
+    if (!OwnerCharacter || !OwnerCharacter->GetController() || !IsValid(OwnerCharacter))
+    {
+        return;
+    }
+    
+    // Scale the input for appropriate sensitivity
+    FVector2D ScaledInput = LookDelta * TouchCameraSensitivity;
+    
+    if (bInvertTouchCameraY)
+    {
+        ScaledInput.Y *= -1.0f;
+    }
+    
+    // Safely call the character's Look function with Enhanced Input value
+    if (!ensure(IsValid(OwnerCharacter)))
+    {
+        UE_LOG(LogTemp, Error, TEXT("🎮 TouchInputManager: Invalid character in TriggerLookInput"));
+        return;
+    }
+    
+    FInputActionValue LookValue(ScaledInput);
+    OwnerCharacter->Look(LookValue);
+    
+    UE_LOG(LogTemp, Verbose, TEXT("🎮 TouchInputManager: TriggerLookInput (%f, %f)"), ScaledInput.X, ScaledInput.Y);
 }
 
 // ========== MOBILE INPUT SETUP ==========
@@ -413,6 +521,13 @@ void UTouchInputManager::EnableMobileInputMode(bool bEnable)
     
     if (OwnerCharacter && bEnable)
     {
+        // Ensure world exists before proceeding
+        if (!GetWorld())
+        {
+            UE_LOG(LogTemp, Error, TEXT("🎮 TouchInputManager: No world available for mobile input setup"));
+            return;
+        }
+        
         // Enable touch camera controls
         SetTouchCameraEnabled(true);
         SetVirtualJoystickEnabled(true);
@@ -424,24 +539,28 @@ void UTouchInputManager::EnableMobileInputMode(bool bEnable)
         // Configure player controller for proper mobile input
         if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
         {
-            // Disable default touch interface to prevent conflicts
+            // IMPORTANT: Disable default touch-to-jump behavior
             PC->bShowMouseCursor = false;
             PC->bEnableClickEvents = false;
             PC->bEnableMouseOverEvents = false;
             
-            // Enable touch events for our custom handling
-            PC->bEnableTouchEvents = true;
-            PC->bEnableTouchOverEvents = true;
+            // Enable touch events but prevent default jump behavior
+            PC->bEnableTouchEvents = false; // Disable to prevent conflicts
+            PC->bEnableTouchOverEvents = false;
             
             // Set proper input mode for mobile-like behavior
             FInputModeGameOnly GameOnlyMode;
             PC->SetInputMode(GameOnlyMode);
             
-            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Configured PlayerController for mobile input"));
+            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Configured PlayerController for mobile input (touch events disabled to prevent jump)"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: PlayerController not available for mobile input setup"));
         }
         
-        // Setup direct Enhanced Input integration for mobile
-        SetupMobileEnhancedInputIntegration();
+        // Don't setup touch event bindings - we'll use Enhanced Input only
+        // SetupMobileEnhancedInputIntegration();
     }
     
     UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Mobile input mode %s"), bEnable ? TEXT("ENABLED") : TEXT("DISABLED"));
@@ -713,36 +832,80 @@ void UTouchInputManager::OnShieldButtonReleased()
 
 void UTouchInputManager::ProcessTouchCameraInput(float DeltaTime)
 {
-    if (!bTouchCameraEnabled || CameraTouchIndex == -1 || !OwnerCharacter)
+    if (!bTouchCameraEnabled || !OwnerCharacter)
     {
         return;
     }
     
-    // Get current and previous touch positions
-    FVector2D* CurrentPos = ActiveTouches.Find(CameraTouchIndex);
-    FVector2D* PreviousPos = PreviousTouchPositions.Find(CameraTouchIndex);
-    
-    if (CurrentPos && PreviousPos)
+    // Use polling approach to detect touch input for camera
+    if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
     {
-        FVector2D TouchDelta = *CurrentPos - *PreviousPos;
-        
-        // Check if movement is significant enough
-        if (TouchDelta.Size() >= MinCameraTouchDistance)
+        // Check for any active touch that's not in the virtual joystick area
+        for (int32 TouchIndex = 0; TouchIndex < 5; ++TouchIndex) // Check first 5 fingers
         {
-            // Scale delta based on screen resolution for consistent behavior
-            FVector2D ScreenRes = GetScreenResolution();
-            if (ScreenRes.X > 0 && ScreenRes.Y > 0)
-            {
-                TouchDelta.X /= ScreenRes.X;
-                TouchDelta.Y /= ScreenRes.Y;
-                TouchDelta *= 100.0f; // Scale for reasonable sensitivity
-            }
+            FVector TouchLocation;
+            bool bIsPressed;
+            PC->GetInputTouchState(ETouchIndex::Type(TouchIndex), TouchLocation.X, TouchLocation.Y, bIsPressed);
             
-            HandleTouchCameraInput(TouchDelta);
+            if (bIsPressed)
+            {
+                FVector2D CurrentTouchPos = FVector2D(TouchLocation.X, TouchLocation.Y);
+                FVector2D NormalizedPos = ScreenToNormalized(CurrentTouchPos);
+                
+                // Only process touches outside the virtual joystick area (right side for camera)
+                // Virtual joystick is typically on the left 40% of screen
+                if (NormalizedPos.X > 0.4f) // Right side of screen
+                {
+                    // Store previous position for delta calculation
+                    FVector2D* PreviousPos = PreviousTouchPositions.Find(TouchIndex);
+                    if (PreviousPos)
+                    {
+                        FVector2D TouchDelta = CurrentTouchPos - *PreviousPos;
+                        
+                        // Check if movement is significant enough
+                        if (TouchDelta.Size() >= MinCameraTouchDistance)
+                        {
+                            // Scale delta for camera sensitivity
+                            FVector2D ScreenRes = GetScreenResolution();
+                            if (ScreenRes.X > 0 && ScreenRes.Y > 0)
+                            {
+                                TouchDelta.X /= ScreenRes.X;
+                                TouchDelta.Y /= ScreenRes.Y;
+                                TouchDelta *= 100.0f; // Scale for reasonable sensitivity
+                            }
+                            
+                            // Apply camera movement directly to controller
+                            float YawInput = TouchDelta.X * TouchCameraSensitivity;
+                            float PitchInput = TouchDelta.Y * TouchCameraSensitivity;
+                            
+                            if (bInvertTouchCameraY)
+                            {
+                                PitchInput *= -1.0f;
+                            }
+                            
+                            PC->AddYawInput(YawInput);
+                            PC->AddPitchInput(-PitchInput); // Invert for proper camera behavior
+                            
+                            UE_LOG(LogTemp, Verbose, TEXT("🎮 Touch Camera: Delta(%f, %f) Applied(%f, %f)"), 
+                                   TouchDelta.X, TouchDelta.Y, YawInput, PitchInput);
+                        }
+                        
+                        // Update previous position
+                        *PreviousPos = CurrentTouchPos;
+                    }
+                    else
+                    {
+                        // First touch - just store position
+                        PreviousTouchPositions.Add(TouchIndex, CurrentTouchPos);
+                    }
+                }
+            }
+            else
+            {
+                // Touch released - remove from tracking
+                PreviousTouchPositions.Remove(TouchIndex);
+            }
         }
-        
-        // Update previous position for next frame
-        *PreviousPos = *CurrentPos;
     }
 }
 
@@ -785,6 +948,12 @@ void UTouchInputManager::HandleTouchInput()
 
 void UTouchInputManager::ProcessActiveTouches()
 {
+    // Don't process active touches to avoid memory access issues on mobile
+    // This function was causing SIGBUS crashes on iOS when trying to access
+    // touch state while touch events are disabled
+    return;
+    
+    /*
     if (!OwnerCharacter)
     {
         return;
@@ -826,6 +995,7 @@ void UTouchInputManager::ProcessActiveTouches()
             }
         }
     }
+    */
 }
 
 void UTouchInputManager::SetupTouchEventBindings()
@@ -835,18 +1005,13 @@ void UTouchInputManager::SetupTouchEventBindings()
         return;
     }
     
-    // Get the player controller
+    // Setup basic touch event bindings for camera controls only
     if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
     {
-        // Enable touch events in the player controller
-        PC->bEnableTouchEvents = true;
-        PC->bEnableTouchOverEvents = true;
-        
-        // Note: UE5.5 PlayerController touch events are handled differently
-        // We'll poll for touch state in TickComponent instead of binding events
-        
+        // We'll use polling approach for camera touch input instead of event bindings
+        // This is safer and avoids the previous crashes
         bTouchEventsBound = true;
-        UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Touch event bindings setup complete"));
+        UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Touch event system ready for camera input (polling mode)"));
     }
 }
 
@@ -1175,4 +1340,52 @@ AAtlantisEonsCharacter* UTouchInputManager::GetOwnerCharacter()
         OwnerCharacter = Cast<AAtlantisEonsCharacter>(GetOwner());
     }
     return OwnerCharacter;
+}
+
+void UTouchInputManager::DisableTouchToJump()
+{
+    if (!OwnerCharacter)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🎮 TouchInputManager: Cannot disable touch-to-jump - no owner character"));
+        return;
+    }
+    
+    // Get the player controller
+    APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController());
+    if (!PC)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🎮 TouchInputManager: Cannot disable touch-to-jump - no player controller"));
+        return;
+    }
+    
+    // Get Enhanced Input subsystem
+    if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+    {
+        // Try to remove jump action mappings temporarily
+        // We need to modify the mapping context to exclude touch->jump mappings
+        if (UInputMappingContext* DefaultContext = OwnerCharacter->GetDefaultMappingContext())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Found default mapping context for touch-to-jump removal"));
+            
+            // Clear all mappings first
+            Subsystem->ClearAllMappings();
+            
+            // Re-add the context (this should restore all mappings)
+            Subsystem->AddMappingContext(DefaultContext, 0);
+            
+            UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Refreshed input mapping context"));
+        }
+    }
+    
+    // Additional measures to prevent touch-to-jump
+    // Call the character's public function to disable jump on mobile
+    OwnerCharacter->DisableJumpForMobile();
+    
+    // Set additional player controller flags to prevent touch input from triggering actions
+    PC->bEnableTouchEvents = false;
+    PC->bEnableTouchOverEvents = false;
+    PC->bEnableClickEvents = false;
+    PC->bEnableMouseOverEvents = false;
+    
+    UE_LOG(LogTemp, Warning, TEXT("🎮 TouchInputManager: Touch-to-jump prevention measures applied"));
 } 

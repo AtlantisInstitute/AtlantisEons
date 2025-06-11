@@ -1,157 +1,154 @@
-# Enhanced Mobile Touch Controls Setup Guide
+# Mobile Touch Controls Setup Guide
 
 ## Overview
-The Enhanced Touch Input System provides proper mobile 3rd person game controls including:
-- **Touch Camera Movement**: Drag to look around (like most mobile games)
-- **Virtual Movement**: Touch-based movement controls
-- **Multi-touch Support**: Move and attack/dash simultaneously  
-- **Action Buttons**: Attack, Dash, Shield, Menu buttons
-- **Proper Touch Zones**: Prevents accidental jumping when touching empty space
+The TouchInputManager provides enhanced mobile touch controls for AtlantisEons, working alongside the engine's built-in mobile touch interface to provide a proper mobile 3rd person game experience.
 
-## Issues Fixed
-✅ **Quit button in profile menu now works**  
-✅ **Empty space touch moves camera instead of jumping**  
-✅ **Simultaneous movement + attack/dash support**  
-✅ **Proper mobile 3rd person camera behavior**
+## Key Features
+- **No jumping on touch** - Default touch-to-jump behavior is disabled on mobile platforms
+- **Virtual joystick movement** - Left side virtual joystick for character movement using existing `IA_Move` action
+- **Touch camera controls** - Right side touch area for camera look using existing `IA_Look` action
+- **Multi-touch support** - Simultaneous movement and camera control
+- **Button actions** - Menu, Attack, Dash, and Shield buttons work on mobile
 
-## ⭐ AUTOMATIC INTEGRATION ⭐
+## Automatic Setup
+The system automatically configures itself for mobile platforms:
 
-**No Blueprint Changes Required!** The system automatically integrates with your existing `IA_Look` and `IA_Move` actions in C++.
+1. **Mobile Platform Detection**: TouchInputManager detects iOS/Android platforms automatically
+2. **Touch-to-Jump Disabled**: Prevents character jumping when touching empty screen areas
+3. **Mobile Touch Interface**: Engine's built-in `LeftVirtualJoystickOnly` interface is restored
+4. **Enhanced Input Integration**: Works with existing `IA_Move` and `IA_Look` actions
 
-### How It Works:
-1. **TouchInputManager** automatically detects when mobile input mode should be active
-2. **Character's `Move()` function** checks if TouchInputManager should handle the input
-3. **Character's `Look()` function** checks if TouchInputManager should handle the input  
-4. **Desktop controls** continue working exactly as before
-5. **Mobile controls** get enhanced processing (sensitivity, deadzone, etc.)
+## Configuration
 
-### Code Integration:
-```cpp
-// In AAtlantisEonsCharacter::Move()
-if (TouchInputManagerComp && TouchInputManagerComp->IsInMobileInputMode())
-{
-    TouchInputManagerComp->ProcessMobileMovementInput(MovementVector);
-    return; // TouchInputManager handles it
-}
-// ...existing desktop code continues...
+### Engine Settings (Already Configured)
+The following settings are automatically configured in `Config/DefaultInput.ini`:
 
-// In AAtlantisEonsCharacter::Look()  
-if (TouchInputManagerComp && TouchInputManagerComp->IsInMobileInputMode())
-{
-    TouchInputManagerComp->ProcessMobileLookInput(LookAxisVector);
-    return; // TouchInputManager handles it
-}
-// ...existing desktop code continues...
-```
-
-## Setup Instructions
-
-### 1. Enhanced Input Setup (Existing Actions)
-
-**Your existing `IA_Move` and `IA_Look` actions work automatically!**
-
-No changes needed to:
-- ✅ Input Actions (IA_Move, IA_Look)
-- ✅ Input Mapping Context  
-- ✅ Character Blueprint setup
-- ✅ Desktop controls
-
-### 2. Project Settings Configuration
-
-#### Input Settings:
 ```ini
-[/Script/Engine.InputSettings]
 bAlwaysShowTouchInterface=True
-bShowConsoleOnFourFingerTap=True
 DefaultTouchInterface=/Engine/MobileResources/HUD/LeftVirtualJoystickOnly.LeftVirtualJoystickOnly
 ```
 
-### 3. TouchInputManager Configuration
+### Enhanced Input Actions (Already Setup)
+The system uses your existing Enhanced Input actions:
+- **IA_Move** - Character movement (Vector2D)
+- **IA_Look** - Camera look input (Vector2D)
 
-#### Blueprint Accessible Settings:
+No additional input actions are needed!
+
+## How It Works
+
+### 1. Mobile Platform Detection
+When the game starts on iOS/Android:
+- TouchInputManager automatically enables mobile input mode
+- Default touch-to-jump behavior is disabled via PlayerController settings
+- Mobile touch interface is activated
+
+### 2. Virtual Joystick Movement
+- Engine's built-in virtual joystick (left side) sends movement input
+- TouchInputManager processes this via `TriggerMoveInput()` function
+- Input is passed to character's `Move()` function using existing `IA_Move` action
+
+### 3. Touch Camera Controls
+- Right side of screen captures touch delta for camera movement
+- TouchInputManager processes this via `TriggerLookInput()` function  
+- Input is passed to character's `Look()` function using existing `IA_Look` action
+
+### 4. Button Actions
+- Menu, Weapon, Dodge, Shield buttons work as expected
+- No changes needed to existing button setup
+
+## Blueprint Integration
+
+### Simple Functions (Recommended)
+For custom mobile touch interfaces, use these Blueprint-callable functions:
+
 ```cpp
-// Camera Controls
-TouchCameraSensitivity = 1.0f      // Adjust camera sensitivity
-bInvertTouchCameraY = false        // Invert Y-axis if needed
-MinCameraTouchDistance = 5.0f      // Minimum touch distance for camera
+// For movement input from virtual joystick
+TouchInputManager->TriggerMoveInput(FVector2D(X, Y));
 
-// Virtual Joystick
-VirtualJoystickSensitivity = 1.0f  // Movement sensitivity
-VirtualJoystickDeadzone = 0.1f     // Deadzone for joystick
+// For camera input from touch delta
+TouchInputManager->TriggerLookInput(FVector2D(DeltaX, DeltaY));
 ```
 
-## Key Benefits
+### Advanced Functions (If Needed)
+More detailed control functions are also available:
 
-✅ **Zero Blueprint Changes**: Everything works automatically  
-✅ **Existing Actions**: Uses your current IA_Look and IA_Move  
-✅ **Desktop Unchanged**: Your desktop controls work exactly the same  
-✅ **Mobile Enhanced**: Touch input gets proper sensitivity and processing  
-✅ **Unified System**: One input system handles both desktop and mobile seamlessly  
-
-## How Mobile Processing Works
-
-### Movement Input:
-1. **IA_Move triggered** → Character's `Move()` function called
-2. **TouchInputManager check**: Is mobile mode active?
-3. **Mobile**: ProcessMobileMovementInput() → applies deadzone, sensitivity, etc.
-4. **Desktop**: Normal processing continues unchanged
-
-### Camera Input:
-1. **IA_Look triggered** → Character's `Look()` function called
-2. **TouchInputManager check**: Is mobile mode active?
-3. **Mobile**: ProcessMobileLookInput() → applies mobile sensitivity, inversion
-4. **Desktop**: Normal processing continues unchanged
-
-## Testing the System
-
-### Desktop Testing:
-1. **Mouse/Keyboard**: Everything works exactly as before
-2. **No Changes**: Your existing controls are unchanged
-3. **Action Buttons**: TouchInputManager buttons work if UI is setup
-
-### Mobile Testing:
-1. **Automatic Mode**: Mobile input mode activates automatically on touch devices
-2. **Enhanced Input**: Touch input gets proper processing
-3. **Action Buttons**: Tap to attack/dash/shield (if UI buttons exist)
-
-## Advanced Configuration
-
-### Platform-Specific Sensitivity:
 ```cpp
-// In Blueprint or C++
-if (IsTouchPlatform())
-{
-    TouchInputManagerComp->SetTouchCameraSensitivity(2.0f);
-}
-else
-{
-    TouchInputManagerComp->SetTouchCameraSensitivity(1.0f);
-}
+// Advanced movement processing with deadzone and sensitivity
+TouchInputManager->ProcessMobileMovementInput(FVector2D(X, Y));
+
+// Advanced camera processing with invert and sensitivity
+TouchInputManager->ProcessMobileLookInput(FVector2D(DeltaX, DeltaY));
 ```
 
-### Manual Mobile Mode Control:
-```cpp
-// Force enable/disable mobile mode
-TouchInputManagerComp->EnableMobileInputMode(true);
-```
+## Settings
+
+### Touch Camera Settings
+- `TouchCameraSensitivity` (0.1-5.0): Camera movement sensitivity
+- `bInvertTouchCameraY`: Invert Y-axis for camera
+- `MinCameraTouchDistance`: Minimum touch distance to register movement
+
+### Virtual Joystick Settings  
+- `VirtualJoystickSensitivity` (0.1-5.0): Movement sensitivity
+- `VirtualJoystickDeadzone` (0.0-1.0): Deadzone for joystick input
+
+### Touch Zones (For Custom Implementation)
+- `MovementZoneWidth`: Left side movement zone width (0.0-1.0)
+- `CameraZoneWidth`: Right side camera zone width (0.0-1.0)
+- `UIZoneHeight`: Top UI zone height (0.0-1.0)
+
+## Testing
+
+### Mobile Device
+1. Deploy to iOS/Android device
+2. Virtual joystick should appear on left side
+3. Touch and drag left side to move character
+4. Touch and drag right side to move camera
+5. UI buttons should work for actions
+
+### Desktop (For Testing)
+1. Mobile input mode is disabled by default on desktop
+2. Use `EnableMobileInputMode(true)` to test mobile behavior
+3. Standard mouse/keyboard input continues to work
 
 ## Troubleshooting
 
-### Issue: No Difference on Mobile
-**Solution**: Check that TouchInputManager component exists on your character
+### Character Jumps on Touch
+- Check that `bEnableClickEvents = false` in PlayerController
+- Verify `DefaultTouchInterface` is not set to `None`
+- Ensure TouchInputManager detected mobile platform correctly
 
-### Issue: Desktop Controls Feel Different  
-**Solution**: Mobile mode is enabled by default - you can disable it with `EnableMobileInputMode(false)`
+### No Virtual Joystick
+- Check `DefaultTouchInterface` in `DefaultInput.ini`
+- Verify `bAlwaysShowTouchInterface=True`
+- Make sure mobile platform is detected
 
-### Issue: Touch Sensitivity Issues
-**Solution**: Adjust `TouchCameraSensitivity` and `VirtualJoystickSensitivity` in TouchInputManager
+### Movement Not Working
+- Ensure `IA_Move` action is properly bound in character
+- Check that TouchInputManager has valid owner character
+- Verify virtual joystick is sending input values
 
-## Implementation Details
+### Camera Not Working
+- Ensure `IA_Look` action is properly bound in character
+- Check touch camera sensitivity settings
+- Verify right side touch area is being detected
 
-The system uses **intelligent input routing**:
-- When `TouchInputManager->IsInMobileInputMode()` returns `true`, mobile processing is used
-- When `false`, your existing desktop code runs unchanged
-- **Mobile processing** applies deadzone, sensitivity scaling, and mobile-specific behavior
-- **Desktop processing** continues exactly as it was before
+## Implementation Status
 
-This provides the best of both worlds: enhanced mobile experience while keeping desktop controls pristine! 
+✅ **Working Features:**
+- Mobile platform detection
+- Touch-to-jump prevention
+- Virtual joystick movement integration
+- Touch camera controls integration
+- Button actions (Menu, Weapon, Dodge, Shield)
+- Enhanced Input integration with existing actions
+
+✅ **Advantages of This Approach:**
+- Uses engine's built-in mobile touch interface (reliable)
+- No duplicate input actions needed
+- Single unified input system for desktop + mobile
+- Simpler Blueprint setup
+- Less maintenance overhead
+- Better compatibility with engine updates
+
+The mobile touch controls are now properly integrated and should provide a smooth mobile 3rd person gaming experience without the touch-to-jump issue. 

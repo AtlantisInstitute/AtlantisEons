@@ -195,7 +195,7 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
         if (CharMov)
         {
             CharMov->bOrientRotationToMovement = true;
-            CharMov->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
+            CharMov->RotationRate = FRotator(0.0f, 720.0f, 0.0f); // Faster rotation for mobile responsiveness
             CharMov->JumpZVelocity = 700.f;
             CharMov->AirControl = 0.35f;
             CharMov->MaxWalkSpeed = 500.f;
@@ -618,6 +618,22 @@ void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
     {
         UE_LOG(LogTemp, Error, TEXT("Character - Failed to get Enhanced Input Component! No input will work"));
     }
+    
+    // CRITICAL: Add legacy axis bindings for virtual joystick support
+    // The virtual joystick sends Gamepad_LeftX/Y input, but we need to bind these to our functions
+    UE_LOG(LogTemp, Warning, TEXT("Character - Adding legacy axis bindings for virtual joystick support"));
+    
+    // Movement axis bindings (for virtual joystick → MoveForward/MoveRight)
+    PlayerInputComponent->BindAxis(TEXT("MoveForward"), this, &AAtlantisEonsCharacter::MoveForwardLegacy);
+    PlayerInputComponent->BindAxis(TEXT("MoveRight"), this, &AAtlantisEonsCharacter::MoveRightLegacy);
+    
+    // Camera axis bindings (for virtual joystick → Turn/LookUp)  
+    PlayerInputComponent->BindAxis(TEXT("Turn"), this, &AAtlantisEonsCharacter::TurnLegacy);
+    PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &AAtlantisEonsCharacter::LookUpLegacy);
+    PlayerInputComponent->BindAxis(TEXT("TurnRate"), this, &AAtlantisEonsCharacter::TurnRateLegacy);
+    PlayerInputComponent->BindAxis(TEXT("LookUpRate"), this, &AAtlantisEonsCharacter::LookUpRateLegacy);
+    
+    UE_LOG(LogTemp, Warning, TEXT("Character - Legacy axis bindings added for virtual joystick compatibility"));
 }
 
 void AAtlantisEonsCharacter::Move(const FInputActionValue& Value)
@@ -625,13 +641,7 @@ void AAtlantisEonsCharacter::Move(const FInputActionValue& Value)
     // Input is a Vector2D
     FVector2D MovementVector = Value.Get<FVector2D>();
     
-    // Check if TouchInputManager should process this input
-    if (TouchInputManagerComp && TouchInputManagerComp->IsInMobileInputMode())
-    {
-        // Let TouchInputManager handle mobile-specific processing
-        TouchInputManagerComp->ProcessMobileMovementInput(MovementVector);
-        return; // TouchInputManager will call our movement internally
-    }
+    // TouchInputManager no longer processes movement - use legacy axis mappings for virtual joystick
     
     // BREAKABLE STABILIZATION: Track movement input for camera stabilization override
     CurrentMovementInput = MovementVector;
@@ -709,12 +719,132 @@ void AAtlantisEonsCharacter::Look(const FInputActionValue& Value)
 
 void AAtlantisEonsCharacter::Jump()
 {
+    // Prevent jumping on mobile platforms if disabled
+    if (bJumpDisabledForMobile)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("🎮 Jump: Blocked on mobile platform"));
+        return;
+    }
+    
     Super::Jump();
 }
 
 void AAtlantisEonsCharacter::StopJumping()
 {
     Super::StopJumping();
+}
+
+// ========== LEGACY INPUT FUNCTIONS (for virtual joystick support) ==========
+
+void AAtlantisEonsCharacter::MoveForwardLegacy(float Value)
+{
+    if (Controller)
+    {
+        // Store the forward input component
+        LegacyMovementInput.Y = Value;
+        
+        // Apply movement directly to avoid TouchInputManager recursion
+        ApplyLegacyMovement();
+        
+        UE_LOG(LogTemp, Verbose, TEXT("🕹️ Legacy MoveForward: %f (Combined: %s)"), Value, *LegacyMovementInput.ToString());
+    }
+}
+
+void AAtlantisEonsCharacter::MoveRightLegacy(float Value)
+{
+    if (Controller)
+    {
+        // Store the right input component
+        LegacyMovementInput.X = Value;
+        
+        // Apply movement directly to avoid TouchInputManager recursion
+        ApplyLegacyMovement();
+        
+        UE_LOG(LogTemp, Verbose, TEXT("🕹️ Legacy MoveRight: %f (Combined: %s)"), Value, *LegacyMovementInput.ToString());
+    }
+}
+
+void AAtlantisEonsCharacter::TurnLegacy(float Value)
+{
+    if (!FMath::IsNearlyZero(Value) && Controller)
+    {
+        // Mouse-like input - direct to controller
+        AddControllerYawInput(Value * CameraYawSensitivity);
+        UE_LOG(LogTemp, Verbose, TEXT("🕹️ Legacy Turn: %f"), Value);
+    }
+}
+
+void AAtlantisEonsCharacter::LookUpLegacy(float Value)
+{
+    if (!FMath::IsNearlyZero(Value) && Controller)
+    {
+        // Mouse-like input - direct to controller
+        AddControllerPitchInput(Value * CameraPitchSensitivity);
+        UE_LOG(LogTemp, Verbose, TEXT("🕹️ Legacy LookUp: %f"), Value);
+    }
+}
+
+void AAtlantisEonsCharacter::TurnRateLegacy(float Value)
+{
+    if (!FMath::IsNearlyZero(Value) && Controller)
+    {
+        // Gamepad-like input with rate scaling
+        float TurnRate = 45.0f; // Degrees per second
+        AddControllerYawInput(Value * TurnRate * GetWorld()->GetDeltaSeconds());
+        UE_LOG(LogTemp, Verbose, TEXT("🕹️ Legacy TurnRate: %f"), Value);
+    }
+}
+
+void AAtlantisEonsCharacter::LookUpRateLegacy(float Value)
+{
+    if (!FMath::IsNearlyZero(Value) && Controller)
+    {
+        // Gamepad-like input with rate scaling
+        float LookUpRate = 45.0f; // Degrees per second
+        AddControllerPitchInput(Value * LookUpRate * GetWorld()->GetDeltaSeconds());
+        UE_LOG(LogTemp, Verbose, TEXT("🕹️ Legacy LookUpRate: %f"), Value);
+    }
+}
+
+void AAtlantisEonsCharacter::ApplyLegacyMovement()
+{
+    if (!Controller || LegacyMovementInput.IsNearlyZero())
+    {
+        return;
+    }
+    
+    // Apply movement directly to character without going through Enhanced Input system
+    // This avoids the TouchInputManager recursion that was causing crashes
+    
+    // Find out which way is forward based on camera
+    const FRotator Rotation = Controller->GetControlRotation();
+    const FRotator YawRotation(0, Rotation.Yaw, 0);
+
+    // Get forward and right vectors relative to camera
+    const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+    const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+    // Calculate movement direction
+    const FVector MovementDirection = (ForwardDirection * LegacyMovementInput.Y) + (RightDirection * LegacyMovementInput.X);
+    
+    // Add movement input directly
+    AddMovementInput(ForwardDirection, LegacyMovementInput.Y);
+    AddMovementInput(RightDirection, LegacyMovementInput.X);
+    
+    // Make character face movement direction (same as Enhanced Input version)
+    if (!MovementDirection.IsNearlyZero() && GetCharacterMovement())
+    {
+        // Use the same rotation logic as the main Move() function
+        GetCharacterMovement()->bOrientRotationToMovement = true;
+        GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
+        
+        UE_LOG(LogTemp, Verbose, TEXT("🕹️ Legacy Movement: Applied rotation to movement direction"));
+    }
+    
+    // Update movement tracking for camera stabilization
+    CurrentMovementInput = LegacyMovementInput;
+    const float MovementInputThreshold = 0.1f;
+    bIsPlayerTryingToMove = LegacyMovementInput.Size() > MovementInputThreshold;
 }
 
 void AAtlantisEonsCharacter::InitializeUI()
@@ -3142,4 +3272,11 @@ void AAtlantisEonsCharacter::DestroySecondaryHUD()
         SecondaryHUDWidget->RemoveFromParent();
         SecondaryHUDWidget = nullptr;
     }
+}
+
+void AAtlantisEonsCharacter::DisableJumpForMobile()
+{
+    // Set flag to disable jump on mobile platforms
+    bJumpDisabledForMobile = true;
+    UE_LOG(LogTemp, Warning, TEXT("🎮 DisableJumpForMobile: Jump disabled for mobile platform"));
 }
