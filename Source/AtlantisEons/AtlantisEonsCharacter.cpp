@@ -255,6 +255,8 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     DefaultCameraLag = 15.0f;
     DefaultCameraRotationLag = 10.0f;
 
+
+
     // Initialize combo system
     CurrentAttackIndex = 0;
     MaxComboAttacks = 4;
@@ -326,6 +328,20 @@ void AAtlantisEonsCharacter::ForceSetInventoryState(bool bNewIsOpen)
 void AAtlantisEonsCharacter::BeginPlay()
 {
     Super::BeginPlay();
+    
+    // Load Input Actions if not set in Blueprint (auto-fallback)
+    if (!DodgeAction)
+    {
+        DodgeAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/AtlantisEons/Input/Actions/IA_Dodge.IA_Dodge"));
+        if (DodgeAction)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Character: Auto-loaded IA_Dodge input action"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character: Failed to auto-load IA_Dodge input action"));
+        }
+    }
     
     // Create and set up SwordBloom widget (restored to original approach)
     CreateSwordBloomWidget();
@@ -612,6 +628,17 @@ void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
         else
         {
             UE_LOG(LogTemp, Error, TEXT("Character - BlockAction is null! Block functionality won't work"));
+        }
+
+        // Dodge/Dash
+        if (DodgeAction)
+        {
+            EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &AAtlantisEonsCharacter::PerformDodge);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Dodge action"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character - DodgeAction is null! Dodge functionality won't work"));
         }
     }
     else
@@ -2901,6 +2928,83 @@ void AAtlantisEonsCharacter::ReleaseBlock(const FInputActionValue& Value)
 {
     UE_LOG(LogTemp, Warning, TEXT("🛡️ Block released"));
     StopBlocking();
+}
+
+void AAtlantisEonsCharacter::PerformDodge(const FInputActionValue& Value)
+{
+    UE_LOG(LogTemp, Warning, TEXT("💨 Character: PerformDodge called via Enhanced Input"));
+    
+    // Use the direct C++ implementation for reliability
+    PerformDashDirect();
+}
+
+void AAtlantisEonsCharacter::PerformDashDirect()
+{
+    UE_LOG(LogTemp, Warning, TEXT("💨 Character: PerformDashDirect called - executing C++ dash"));
+    
+    // Check if character can dash (not attacking, not blocking, etc.)
+    if (bIsAttacking || bIsBlocking || bIsDead)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("💨 Character: Cannot dash - character is busy (attacking, blocking, or dead)"));
+        return;
+    }
+    
+    // Get the character movement component
+    UCharacterMovementComponent* MovementComp = GetCharacterMovement();
+    if (!MovementComp)
+    {
+        UE_LOG(LogTemp, Error, TEXT("💨 Character: No movement component found for dash"));
+        return;
+    }
+    
+    // Determine dash direction based on current movement input
+    FVector DashDirection = FVector::ZeroVector;
+    
+    if (CurrentMovementInput.Size() > 0.1f)
+    {
+        // Dash in the direction the player is currently moving
+        FVector ForwardVector = GetActorForwardVector();
+        FVector RightVector = GetActorRightVector();
+        
+        DashDirection = (ForwardVector * CurrentMovementInput.Y) + (RightVector * CurrentMovementInput.X);
+        DashDirection.Normalize();
+        
+        UE_LOG(LogTemp, Warning, TEXT("💨 Character: Dashing in movement direction: %s"), *DashDirection.ToString());
+    }
+    else
+    {
+        // If not moving, dash backward as default
+        DashDirection = -GetActorForwardVector();
+        UE_LOG(LogTemp, Warning, TEXT("💨 Character: Dashing backward (default): %s"), *DashDirection.ToString());
+    }
+    
+    // Apply dash impulse
+    float DashForce = 1200.0f;  // Adjust this value as needed
+    FVector DashImpulse = DashDirection * DashForce;
+    
+    // Launch the character
+    MovementComp->AddImpulse(DashImpulse, true);
+    
+    UE_LOG(LogTemp, Warning, TEXT("💨 Character: Applied dash impulse: %s (Force: %.1f)"), *DashImpulse.ToString(), DashForce);
+    
+    // Update input state for compatibility with existing systems
+    UpdateInputState(bWKeyPressed, bAKeyPressed, bSKeyPressed, bDKeyPressed, true);
+    
+    // Also call the Blueprint event in case there are additional effects
+    OnTouchDashPressed();
+    
+    // Reset dash state after a short delay
+    FTimerHandle DashResetTimer;
+    GetWorld()->GetTimerManager().SetTimer(
+        DashResetTimer,
+        [this]()
+        {
+            UpdateInputState(bWKeyPressed, bAKeyPressed, bSKeyPressed, bDKeyPressed, false);
+            UE_LOG(LogTemp, Warning, TEXT("💨 Character: Dash state reset"));
+        },
+        0.2f,  // Reset after 0.2 seconds
+        false  // Don't loop
+    );
 }
 
 // ========== BLOCKING SYSTEM IMPLEMENTATION ==========

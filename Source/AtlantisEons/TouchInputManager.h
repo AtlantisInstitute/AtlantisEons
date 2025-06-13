@@ -4,6 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "Components/Button.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
 #include "Blueprint/UserWidget.h"
 #include "InputActionValue.h"
 #include "Components/Widget.h"
@@ -17,7 +18,19 @@ class UWidget;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTouchCameraMove, float, DeltaX, float, DeltaY);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTouchMovement, float, X, float, Y);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTouchButton);
 
+/**
+ * Enhanced Touch Input Manager for mobile platforms with multi-touch support
+ * 
+ * Features:
+ * - Platform-aware touch input (iOS/Android runtime, disabled in Mac editor for safety)
+ * - Multi-touch support (movement + camera + buttons simultaneously)
+ * - Virtual joystick integration with existing Enhanced Input actions
+ * - Safe editor handling to prevent crashes during play mode transitions
+ * - Button touch detection with cooldown system
+ * - Touch zone management for movement/camera areas
+ */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class ATLANTISEONS_API UTouchInputManager : public UActorComponent
 {
@@ -42,7 +55,7 @@ public:
 
     /** Check if touch input is currently enabled */
     UFUNCTION(BlueprintPure, Category = "Touch Input")
-    bool IsTouchInputEnabled() const { return bTouchInputEnabled; }
+    bool IsTouchInputEnabled() const { return bTouchInputEnabled && IsSafeToProcessTouch(); }
 
     // ========== MOBILE CAMERA CONTROLS ==========
 
@@ -172,6 +185,22 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Touch Input Events")
     FOnTouchMovement OnTouchMovement;
 
+    /** Event fired when menu button is pressed */
+    UPROPERTY(BlueprintAssignable, Category = "Touch Input Events")
+    FOnTouchButton OnMenuButton;
+
+    /** Event fired when weapon button is pressed */
+    UPROPERTY(BlueprintAssignable, Category = "Touch Input Events")
+    FOnTouchButton OnWeaponButton;
+
+    /** Event fired when dodge button is pressed */
+    UPROPERTY(BlueprintAssignable, Category = "Touch Input Events")
+    FOnTouchButton OnDodgeButton;
+
+    /** Event fired when shield button is pressed */
+    UPROPERTY(BlueprintAssignable, Category = "Touch Input Events")
+    FOnTouchButton OnShieldButton;
+
 protected:
     // ========== TOUCH INPUT CONFIGURATION ==========
 
@@ -297,6 +326,10 @@ protected:
     UPROPERTY()
     int32 CameraTouchIndex = -1;
 
+    /** Map of which button each touch is handling to prevent repeat triggers */
+    UPROPERTY()
+    TMap<int32, FString> ButtonTouchMap;
+
     // ========== VIRTUAL JOYSTICK STATE ==========
 
     /** Current virtual joystick input value */
@@ -352,6 +385,12 @@ protected:
     /** Check if a screen position is within a widget's bounds */
     bool IsPositionInWidget(const FVector2D& ScreenPosition, UWidget* Widget) const;
 
+    /** Check if a touch position is over any UI button */
+    bool IsTouchOverUIButton(const FVector2D& ScreenPosition) const;
+
+    /** Get the name of the button at a specific screen location */
+    FString GetButtonAtLocation(const FVector2D& ScreenPosition) const;
+
     /** Handle raw touch events */
     void HandleTouchInput();
 
@@ -379,8 +418,14 @@ protected:
     /** Setup mobile Enhanced Input integration */
     void SetupMobileEnhancedInputIntegration();
 
-    /** Trigger Enhanced Input Action manually for mobile devices */
-    void TriggerEnhancedInputAction(class UInputAction* Action, const FInputActionValue& Value);
+    /** Check if we're running on a touch-capable platform and it's safe to process touch */
+    bool IsSafeToProcessTouch() const;
+    
+    /** Check if we're in editor mode (not PIE) */
+    bool IsInEditor() const;
+    
+    /** Check if we're running on a mobile platform */
+    bool IsMobilePlatform() const;
 
 private:
     /** Internal flag to track if buttons are currently bound */
@@ -394,10 +439,20 @@ private:
 
     /** Disable touch-to-jump behavior on mobile platforms */
     void DisableTouchToJump();
+    
+    /** Test multi-touch configuration for debugging */
+    void TestMultiTouchConfiguration();
 
     /** Internal flag to track mobile input mode */
     bool bMobileInputModeActive = false;
     
     /** Internal flag to control movement processing (disabled to prevent recursion) */
     bool bTouchMovementProcessingEnabled = false;
+    
+    /** Internal flag to track if component is being destroyed */
+    bool bIsBeingDestroyed = false;
+    
+    /** Cache the platform type at startup */
+    bool bIsMobilePlatformCached = false;
+    bool bPlatformCacheInitialized = false;
 }; 

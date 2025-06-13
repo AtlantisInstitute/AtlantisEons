@@ -376,6 +376,10 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
     class UInputAction* BlockAction;
 
+    /** Dodge/Dash input action */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
+    class UInputAction* DodgeAction;
+
     // ========== COMBAT STATE (MUST STAY - Blueprint reads these) ==========
     
     /** Combat state flags - Blueprint checks these for UI and logic */
@@ -711,6 +715,19 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Character|Input")
     UInputMappingContext* GetDefaultMappingContext() const { return DefaultMappingContext; }
 
+    /** Get input actions for TouchInputManager */
+    UFUNCTION(BlueprintPure, Category = "Character|Input")
+    UInputAction* GetDodgeAction() const { return DodgeAction; }
+    
+    UFUNCTION(BlueprintPure, Category = "Character|Input")
+    UInputAction* GetMeleeAttackAction() const { return MeleeAttackAction; }
+    
+    UFUNCTION(BlueprintPure, Category = "Character|Input")
+    UInputAction* GetBlockAction() const { return BlockAction; }
+    
+    UFUNCTION(BlueprintPure, Category = "Character|Input")
+    UInputAction* GetJumpAction() const { return JumpAction; }
+
     /** Disable jump input for mobile (called by TouchInputManager) */
     UFUNCTION(BlueprintCallable, Category = "Character|Input")
     void DisableJumpForMobile();
@@ -772,6 +789,13 @@ public:
 
     /** Called when block input is released */
     void ReleaseBlock(const FInputActionValue& Value);
+
+    /** Called for dodge/dash input */
+    void PerformDodge(const FInputActionValue& Value);
+
+    /** Direct C++ dash implementation for reliable touch input */
+    UFUNCTION(BlueprintCallable, Category = "Movement|Dash")
+    void PerformDashDirect();
     
     // ========== DASH DIRECTION HELPER FUNCTIONS FOR BLUEPRINT ==========
     
