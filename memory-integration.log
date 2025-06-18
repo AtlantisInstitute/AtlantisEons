@@ -1,0 +1,197 @@
+Started new session: f63232d8-9b1a-470d-b4ef-c882fe53d7b9
+Memory-Enhanced MCP Server running on port 9011
+Session ID: f63232d8-9b1a-470d-b4ef-c882fe53d7b9
+Available at: http://localhost:9011
+Memory cache synced - undefined items
+Memory file changed: project-memory.json
+Memory cache synced - undefined items
+Memory cache synced - undefined items
+Memory cache synced - undefined items
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Server error: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.handleToolCall (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1180:48)
+    at IncomingMessage.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1636:53)
+    at IncomingMessage.emit (node:events:507:28)
+    at endReadableNT (node:internal/streams/readable:1696:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Server error: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.handleToolCall (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1180:48)
+    at IncomingMessage.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1636:53)
+    at IncomingMessage.emit (node:events:507:28)
+    at endReadableNT (node:internal/streams/readable:1696:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Memory file changed: project-memory.json
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:582:41)
+    at StatWatcher.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:565:26)
+    at StatWatcher.emit (node:events:507:28)
+    at StatWatcher.onchange (node:internal/fs/watchers:92:8)
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Server error: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.handleToolCall (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1180:48)
+    at IncomingMessage.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1636:53)
+    at IncomingMessage.emit (node:events:507:28)
+    at endReadableNT (node:internal/streams/readable:1696:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Server error: Error: Unknown method: get_user_rules
+    at IncomingMessage.<anonymous> (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:1689:31)
+    at IncomingMessage.emit (node:events:507:28)
+    at endReadableNT (node:internal/streams/readable:1696:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:582:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:575:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:582:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:575:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Failed to save memory: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:582:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:575:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:582:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:575:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:582:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:575:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+Error syncing memory cache: TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'contextWindows' -> object with constructor 'Array'
+    |     index 8 -> object with constructor 'Object'
+    |     ...
+    |     property 'data' -> object with constructor 'Object'
+    --- property 'memory' closes the circle
+    at JSON.stringify (<anonymous>)
+    at MemoryManager.getMemoryStats (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-manager.js:475:30)
+    at MemoryMCPServer.syncMemoryCache (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:582:41)
+    at Timeout._onTimeout (/Users/danielvargas/Documents/Unreal Projects/AtlantisEons/scripts/memory-mcp-server.js:575:18)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
