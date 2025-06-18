@@ -135,6 +135,33 @@ void UCombatEffectsManagerComponent::MeleeAttack(const FInputActionValue& Value)
     // COMBO LOGIC: Check if this should be a combo continuation
     bool bShouldContinueCombo = (bIsInCombo && bHitCriticalWindow && CurrentAttackIndex < MaxComboAttacks - 1);
     
+    // MANA COST CHECK: Determine what the next attack index will be and check mana cost
+    int32 NextAttackIndex = CurrentAttackIndex;
+    if (bShouldContinueCombo)
+    {
+        NextAttackIndex = CurrentAttackIndex + 1; // This will be the new attack index after advancing
+    }
+    else if (bIsInCombo && !bHitCriticalWindow)
+    {
+        NextAttackIndex = 0; // Reset to first attack
+    }
+    else if (!bIsInCombo)
+    {
+        NextAttackIndex = 0; // Starting fresh
+    }
+
+    // Check mana cost for the attack we're about to perform
+    if (OwnerCharacter && NextAttackIndex > 0)
+    {
+        int32 ManaCost = (NextAttackIndex == 1) ? OwnerCharacter->SecondAttackManaCost : OwnerCharacter->SubsequentAttackManaCost;
+        if (!OwnerCharacter->HasEnoughMana(ManaCost))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚠️ Not enough mana for attack sequence %d (required: %d, current: %d)"), 
+                   NextAttackIndex, ManaCost, OwnerCharacter->GetCurrentMP());
+            return;
+        }
+    }
+    
     if (bShouldContinueCombo)
     {
         // This is a combo continuation - advance to next attack
@@ -151,6 +178,14 @@ void UCombatEffectsManagerComponent::MeleeAttack(const FInputActionValue& Value)
     {
         // Starting a new attack sequence
         UE_LOG(LogTemp, Warning, TEXT("🗡️ 🆕 Starting new attack sequence"));
+    }
+
+    // MANA CONSUMPTION: Consume mana for second and subsequent attacks
+    if (OwnerCharacter && CurrentAttackIndex > 0)
+    {
+        int32 ManaCost = (CurrentAttackIndex == 1) ? OwnerCharacter->SecondAttackManaCost : OwnerCharacter->SubsequentAttackManaCost;
+        OwnerCharacter->ConsumeMana(ManaCost);
+        UE_LOG(LogTemp, Warning, TEXT("🔵 Consumed %d mana for attack sequence %d"), ManaCost, CurrentAttackIndex);
     }
 
     // NOW reset the critical window flag for this new attack
@@ -547,6 +582,14 @@ bool UCombatEffectsManagerComponent::TryTriggerSparkEffect()
             // If we're already in a combo chain, advance to the next attack
             UE_LOG(LogTemp, Warning, TEXT("🗡️ ⚡ Combo chain critical hit - advancing to next attack"));
             AdvanceComboChain();
+            
+            // MANA CONSUMPTION: Consume mana for the attack we're chaining to
+            if (OwnerCharacter && CurrentAttackIndex > 0)
+            {
+                int32 ManaCost = (CurrentAttackIndex == 1) ? OwnerCharacter->SecondAttackManaCost : OwnerCharacter->SubsequentAttackManaCost;
+                OwnerCharacter->ConsumeMana(ManaCost);
+                UE_LOG(LogTemp, Warning, TEXT("🔵 Consumed %d mana for chained attack sequence %d"), ManaCost, CurrentAttackIndex);
+            }
             
             // Activate SwordEffect when hitting critical windows on second montage and beyond
             if (CurrentAttackIndex == 2)

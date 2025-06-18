@@ -157,6 +157,7 @@ void UWBP_SecondaryHUD::UpdateAllElements()
 {
     UpdateHealthBar();
     UpdateExperienceBar();
+    UpdateManaBar();
     
     UE_LOG(LogTemp, Log, TEXT("WBP_SecondaryHUD: Updated all UI elements"));
 }
@@ -468,6 +469,64 @@ void UWBP_SecondaryHUD::UpdateHealthBarColor()
     
     FLinearColor BarColor = GetHealthBarColor();
     HealthBar->SetFillColorAndOpacity(BarColor);
+}
+
+void UWBP_SecondaryHUD::UpdateManaBar()
+{
+    if (!ManaBar || !Character)
+    {
+        return;
+    }
+
+    // Get current and max mana from character
+    float CurrentMana = Character->GetCurrentMP();
+    float MaxMana = Character->GetMaxMP();
+    bool bHasValidStatsComponent = (Character->GetStatsComponent() != nullptr);
+    float StatsCurrentMana = 0.0f;
+    float StatsMaxMana = 0.0f;
+    if (bHasValidStatsComponent)
+    {
+        StatsCurrentMana = static_cast<float>(Character->GetStatsComponent()->GetCurrentMP());
+        StatsMaxMana = static_cast<float>(Character->GetStatsComponent()->GetMaxMP());
+    }
+
+    float FinalCurrentMana = CurrentMana;
+    float FinalMaxMana = MaxMana;
+
+    // Prefer StatsComponent values if character's values are invalid or zero
+    if ((MaxMana <= 0.0f || CurrentMana < 0.0f) && bHasValidStatsComponent && StatsMaxMana > 0.0f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🔵 🔄 Using StatsComponent values because Character values are invalid"));
+        FinalCurrentMana = StatsCurrentMana;
+        FinalMaxMana = StatsMaxMana;
+    }
+    else if (CurrentMana == 0.0f && MaxMana == 0.0f && bHasValidStatsComponent && StatsMaxMana > 0.0f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("🔵 🔄 Using StatsComponent values because Character has zero mana"));
+        FinalCurrentMana = StatsCurrentMana;
+        FinalMaxMana = StatsMaxMana;
+    }
+    else if (FinalMaxMana <= 0.0f)
+    {
+        UE_LOG(LogTemp, Error, TEXT("🔵 ⚠️ No valid mana values available - Character may not be fully initialized yet"));
+        UE_LOG(LogTemp, Error, TEXT("🔵 ⚠️ Skipping mana bar update until valid values are available"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("🔵 ✅ FINAL Mana values chosen: Current=%.1f / Max=%.1f"), FinalCurrentMana, FinalMaxMana);
+
+    // Calculate percentage
+    float ManaPercentage = (FinalMaxMana > 0.0f) ? (FinalCurrentMana / FinalMaxMana) : 0.0f;
+    ManaPercentage = FMath::Clamp(ManaPercentage, 0.0f, 1.0f);
+
+    UE_LOG(LogTemp, Warning, TEXT("🔵 Setting mana bar percentage to: %.3f (%.1f%%)"), ManaPercentage, ManaPercentage * 100.0f);
+
+    // Update progress bar
+    ManaBar->SetPercent(ManaPercentage);
+    ManaBar->SetFillColorAndOpacity(ManaBarColor);
+
+    UE_LOG(LogTemp, Warning, TEXT("🔵 Mana bar updated - %.1f/%.1f (%.1f%%)"), 
+           FinalCurrentMana, FinalMaxMana, ManaPercentage * 100.0f);
 }
 
 FLinearColor UWBP_SecondaryHUD::GetHealthBarColor() const
@@ -973,6 +1032,7 @@ void UWBP_SecondaryHUD::ForceRefreshSecondaryHUD()
     // Force update all UI elements
     UpdateHealthBar();
     UpdateExperienceBar();
+    UpdateManaBar();
     
     // Force widget visibility and bring to front
     if (GetParent())

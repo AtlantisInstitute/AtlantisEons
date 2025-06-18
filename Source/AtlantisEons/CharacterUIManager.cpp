@@ -179,6 +179,14 @@ void UCharacterUIManager::SettingCircularBar_MP()
         }
     }
     
+    // Method 3: Use Secondary HUD if available
+    if (OwnerCharacter->SecondaryHUDWidget)
+    {
+        OwnerCharacter->SecondaryHUDWidget->UpdateManaBar();
+        bUpdated = true;
+        UE_LOG(LogTemp, Log, TEXT("Updated MP bar via SecondaryHUD"));
+    }
+    
     if (!bUpdated)
     {
         UE_LOG(LogTemp, VeryVerbose, TEXT("SettingCircularBar_MP: Could not update MP bar - no valid UI references"));
@@ -520,8 +528,6 @@ void UCharacterUIManager::SetMainWidget(UWBP_Main* NewWidget)
         UE_LOG(LogTemp, Warning, TEXT("CharacterUIManager: Attempted to set null Main widget"));
     }
 }
-
-
 
 void UCharacterUIManager::CacheUIReferences()
 {

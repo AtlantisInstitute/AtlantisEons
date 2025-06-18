@@ -59,6 +59,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Secondary HUD")
     void UpdateExperienceBar();
 
+    /** Update only the mana bar */
+    UFUNCTION(BlueprintCallable, Category = "Secondary HUD")
+    void UpdateManaBar();
+
     // ========== EXPERIENCE SYSTEM ==========
 
     /** Add experience points to the character */
@@ -198,6 +202,10 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UProgressBar* HealthBar;
 
+    /** Mana bar widget */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    UProgressBar* ManaBar;
+
     /** Experience progress bar widget */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UProgressBar* ExpBar;
@@ -269,6 +277,10 @@ protected:
     /** Health bar color when critically low */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health Bar|Appearance")
     FLinearColor CriticalColor = FLinearColor::Red;
+
+    /** Mana bar color */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mana Bar|Appearance")
+    FLinearColor ManaBarColor = FLinearColor(0.5f, 0.8f, 1.0f, 1.0f); // Light blue
 
     /** Experience bar color */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Bar|Appearance")

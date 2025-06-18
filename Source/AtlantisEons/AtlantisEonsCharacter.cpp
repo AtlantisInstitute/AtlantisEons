@@ -213,6 +213,7 @@ AAtlantisEonsCharacter::AAtlantisEonsCharacter()
     CurrentHealth = BaseHealth;
     BaseMP = 100;
     CurrentMP = BaseMP;
+    MaxMP = BaseMP;
     
 
 
@@ -764,10 +765,25 @@ void AAtlantisEonsCharacter::RecoverHealth(int32 Amount)
     SettingCircularBar_HP();
 }
 
-void AAtlantisEonsCharacter::RecoverHP(int32 Amount)
+void AAtlantisEonsCharacter::RecoverMP(int32 Amount)
 {
-    CurrentHealth = FMath::Min(CurrentHealth + Amount, MaxHealth);
-    SettingCircularBar_HP();
+    CurrentMP = FMath::Clamp(CurrentMP + Amount, 0, MaxMP);
+    SettingCircularBar_MP();
+}
+
+bool AAtlantisEonsCharacter::HasEnoughMana(int32 ManaCost) const
+{
+    return CurrentMP >= ManaCost;
+}
+
+void AAtlantisEonsCharacter::ConsumeMana(int32 ManaCost)
+{
+    if (ManaCost <= 0) return;
+    
+    CurrentMP = FMath::Max(CurrentMP - ManaCost, 0);
+    SettingCircularBar_MP();
+    
+    UE_LOG(LogTemp, Log, TEXT("Mana consumed: %d (%d/%d remaining)"), ManaCost, CurrentMP, MaxMP);
 }
 
 void AAtlantisEonsCharacter::ApplyDamage(float InDamageAmount)
@@ -1199,12 +1215,6 @@ void AAtlantisEonsCharacter::DragAndDropExchangeItem(UBP_ItemInfo* FromInventory
     {
         InventoryComp->HandleDragAndDrop(FromInventoryItemRef, FromInventorySlotRef, ToInventoryItemRef, ToInventorySlotRef);
     }
-}
-
-void AAtlantisEonsCharacter::RecoverMP(int32 Amount)
-{
-    CurrentMP = FMath::Clamp(CurrentMP + Amount, 0, MaxMP);
-    SettingCircularBar_MP();
 }
 
 UBP_ItemInfo* AAtlantisEonsCharacter::GetInventoryItemRef() const
@@ -3100,4 +3110,64 @@ void AAtlantisEonsCharacter::DestroySecondaryHUD()
         SecondaryHUDWidget->RemoveFromParent();
         SecondaryHUDWidget = nullptr;
     }
+}
+
+void AAtlantisEonsCharacter::Attack()
+{
+    if (!bCanAttack || bIsAttacking || bIsDead)
+    {
+        return;
+    }
+
+    // Check if we have enough mana for second or subsequent attacks
+    if (AttackSequence > 0)
+    {
+        int32 ManaCost = (AttackSequence == 1) ? SecondAttackManaCost : SubsequentAttackManaCost;
+        if (!HasEnoughMana(ManaCost))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Not enough mana for attack sequence %d (required: %d, current: %d)"), 
+                   AttackSequence, ManaCost, CurrentMP);
+            return;
+        }
+    }
+
+    bIsAttacking = true;
+    bCanAttack = false;
+
+    // Play the appropriate attack montage based on sequence
+    UAnimMontage* AttackMontage = nullptr;
+    switch (AttackSequence)
+    {
+        case 0:
+            AttackMontage = AttackMontage1;
+            break;
+        case 1:
+            AttackMontage = AttackMontage2;
+            ConsumeMana(SecondAttackManaCost);
+            break;
+        default:
+            AttackMontage = AttackMontage3;
+            ConsumeMana(SubsequentAttackManaCost);
+            break;
+    }
+
+    if (AttackMontage)
+    {
+        PlayAnimMontage(AttackMontage);
+        AttackSequence = (AttackSequence + 1) % 3;
+    }
+
+    // Set up recovery timer
+    GetWorldTimerManager().SetTimer(AttackRecoveryTimer, this, &AAtlantisEonsCharacter::ResetAttackState, AttackRecoveryTime);
+}
+
+void AAtlantisEonsCharacter::ResetAttackState()
+{
+    bIsAttacking = false;
+    bCanAttack = true;
+}
+
+void AAtlantisEonsCharacter::RecoverHP(int32 RecoverHP)
+{
+    RecoverHealth(RecoverHP);
 }

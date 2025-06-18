@@ -225,6 +225,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     int32 MaxMP;
 
+    /** Mana cost for second attack sequence */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    int32 SecondAttackManaCost = 10;
+
+    /** Mana cost for subsequent attacks */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    int32 SubsequentAttackManaCost = 10;
+
     // ========== INVENTORY PROPERTIES (MUST STAY - Blueprint direct access) ==========
     
     /** Inventory arrays - Blueprint needs direct access for drag/drop and UI */
@@ -1243,4 +1251,41 @@ public:
     /** Check if Dragons should be visible based on current attack index */
     UFUNCTION(BlueprintPure, Category = "Combat|Effects")
     bool ShouldDragonsBeVisible() const;
+
+    /** Whether the character has enough mana for an attack */
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    bool HasEnoughMana(int32 ManaCost) const;
+
+    /** Consume mana for an attack */
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void ConsumeMana(int32 ManaCost);
+
+    /** Attack montage for first attack */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    UAnimMontage* AttackMontage1;
+
+    /** Attack montage for second attack */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    UAnimMontage* AttackMontage2;
+
+    /** Attack montage for third attack */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    UAnimMontage* AttackMontage3;
+
+    /** Current attack sequence (0-2) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    int32 AttackSequence;
+
+    /** Attack recovery timer handle */
+    FTimerHandle AttackRecoveryTimer;
+
+    /** Attack recovery time */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    float AttackRecoveryTime;
+
+    /** Reset attack state */
+    void ResetAttackState();
+
+    /** Perform attack */
+    void Attack();
 };
