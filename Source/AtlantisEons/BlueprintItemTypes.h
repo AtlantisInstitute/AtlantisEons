@@ -85,7 +85,7 @@ struct ATLANTISEONS_API FBlueprintItemInfo : public FTableRowBase
         bIsStackable = false;
         StackNumber = 0;
         ItemType = EItemType::Equip;
-        ItemEquipSlot = EItemEquipSlot::None;
+        ItemEquipSlot = EItemEquipSlot::Consumable;
         RecoveryHP = 0;
         RecoveryMP = 0;
         Damage = 0;

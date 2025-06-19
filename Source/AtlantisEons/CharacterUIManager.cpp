@@ -377,7 +377,7 @@ void UCharacterUIManager::UpdateAllEquipmentSlotsUI()
     // Update all equipment slots based on currently equipped items
     for (int32 i = 0; i < OwnerCharacter->EquipmentSlots.Num(); ++i)
     {
-        EItemEquipSlot SlotType = EItemEquipSlot::None;
+        EItemEquipSlot SlotType = EItemEquipSlot::Consumable;
         
         // Map array index to equipment slot type
         switch (i)
@@ -572,6 +572,9 @@ UWBP_InventorySlot* UCharacterUIManager::GetEquipmentSlotWidget(EItemEquipSlot E
             return OwnerCharacter->SuitSlot;
         case EItemEquipSlot::Accessory:
             return OwnerCharacter->CollectableSlot;
+        case EItemEquipSlot::Consumable:
+            // Consumables don't have a dedicated equipment slot widget as they're used immediately
+            return nullptr;
         default:
             return nullptr;
     }

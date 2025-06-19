@@ -59,6 +59,29 @@ void UWBP_Store::NativeConstruct()
     {
         NoneButton->OnClicked.Clear();
         NoneButton->OnClicked.AddDynamic(this, &UWBP_Store::OnNoneButtonClicked);
+        
+        // Update button text to show "CONSUMABLE" instead of "NONE"
+        // Try multiple approaches to find and update the text
+        
+        // Method 1: Check if button has direct text property
+        FText NewButtonText = FText::FromString(TEXT("CONSUMABLE"));
+        
+        // Method 2: Look for TextBlock children recursively
+        TArray<UWidget*> ChildWidgets = NoneButton->GetAllChildren();
+        
+        for (UWidget* Child : ChildWidgets)
+        {
+            if (UTextBlock* TextBlock = Cast<UTextBlock>(Child))
+            {
+                FText CurrentText = TextBlock->GetText();
+                if (CurrentText.ToString().Contains(TEXT("NONE")) || CurrentText.ToString().Contains(TEXT("None")))
+                {
+                    TextBlock->SetText(NewButtonText);
+                    UE_LOG(LogTemp, Warning, TEXT("Store: Updated button text from '%s' to 'CONSUMABLE'"), *CurrentText.ToString());
+                    break;
+                }
+            }
+        }
     }
 
     // Initialize store elements
@@ -209,7 +232,7 @@ FStructure_ItemInfo UWBP_Store::CreateFallbackItemData(int32 ItemIndex)
     {
         // Consumables
         ItemInfo.ItemType = (ItemIndex % 2 == 1) ? EItemType::Consume_HP : EItemType::Consume_MP;
-        ItemInfo.ItemEquipSlot = EItemEquipSlot::None;
+        ItemInfo.ItemEquipSlot = EItemEquipSlot::Consumable;
         ItemInfo.bIsStackable = true;
         ItemInfo.StackNumber = 99;
         ItemInfo.RecoveryHP = (ItemInfo.ItemType == EItemType::Consume_HP) ? 50 : 0;
@@ -429,9 +452,11 @@ void UWBP_Store::PopulateStoreElementUI(UWBP_StoreItemElement* Element, const FS
             case EItemEquipSlot::Accessory:
                 SlotTypeString = TEXT("Accessory");
                 break;
-            case EItemEquipSlot::None:
+            case EItemEquipSlot::Consumable:
+                SlotTypeString = TEXT("Consumable");
+                break;
             default:
-                SlotTypeString = bIsConsumable ? TEXT("Consumable") : TEXT("Misc");
+                SlotTypeString = TEXT("Misc");
                 break;
         }
         SlotTypeText->SetText(FText::FromString(SlotTypeString));
@@ -524,9 +549,9 @@ void UWBP_Store::OnSuitButtonClicked()
 void UWBP_Store::OnNoneButtonClicked()
 {
     UE_LOG(LogTemp, Log, TEXT("Store: Filtering by consumables"));
-    UpdateElementVisibility(static_cast<uint8>(EItemEquipSlot::None));
+    UpdateElementVisibility(static_cast<uint8>(EItemEquipSlot::Consumable));
     
-    // Show border for None button (assuming this should show consumables)
+    // Show border for Consumable button
     if (BottomBorder0) BottomBorder0->SetVisibility(ESlateVisibility::Collapsed);
     if (BottomBorder1) BottomBorder1->SetVisibility(ESlateVisibility::Collapsed);
     if (BottomBorder2) BottomBorder2->SetVisibility(ESlateVisibility::Collapsed);
@@ -585,17 +610,23 @@ FText UWBP_Store::GetItemNumber(EItemEquipSlot ItemEquipSlotType, FText& TotalNu
     return FText::AsNumber(Count);
 }
 
-FText UWBP_Store::GetText_NONE()
+FText UWBP_Store::GetText_CONSUMABLE()
 {
     int32 Count = 0;
     for (const auto* Element : StoreElements)
     {
-        if (Element && Element->GetItemInfo().ItemEquipSlot == EItemEquipSlot::None)
+        if (Element && Element->GetItemInfo().ItemEquipSlot == EItemEquipSlot::Consumable)
         {
             Count++;
         }
     }
     return FText::AsNumber(Count);
+}
+
+// Backward compatibility function
+FText UWBP_Store::GetText_NONE()
+{
+    return GetText_CONSUMABLE();
 }
 
 FText UWBP_Store::GetText_WEAPON()

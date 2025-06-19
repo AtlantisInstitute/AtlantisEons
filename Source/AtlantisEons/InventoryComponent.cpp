@@ -617,7 +617,7 @@ FStructure_ItemInfo UInventoryComponent::CreateHardcodedItemData(int32 ItemIndex
             ItemInfo.bIsStackable = true;
             ItemInfo.StackNumber = 1;
             ItemInfo.ItemType = EItemType::Consume_HP;
-            ItemInfo.ItemEquipSlot = EItemEquipSlot::None;
+            ItemInfo.ItemEquipSlot = EItemEquipSlot::Consumable;
             ItemInfo.RecoveryHP = 30;
             ItemInfo.RecoveryMP = 0;
             ItemInfo.ItemThumbnail = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/AtlantisEons/Sources/Images/ItemThumbnail/IMG_BasicHealingPotion")));

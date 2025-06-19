@@ -39,7 +39,7 @@ public:
     FText GetItemNumber(EItemEquipSlot ItemEquipSlotType, FText& TotalNumber);
 
     UFUNCTION(BlueprintPure, Category = "Store")
-    FText GetText_NONE();
+    FText GetText_CONSUMABLE();
 
     UFUNCTION(BlueprintPure, Category = "Store")
     FText GetText_WEAPON();
@@ -126,6 +126,10 @@ public:
     // Open purchase popup
     UFUNCTION(BlueprintCallable, Category = "Store")
     void OpenPurchasePopup(const FStructure_ItemInfo& ItemInfo);
+
+    // Backward compatibility - calls GetText_CONSUMABLE()
+    UFUNCTION(BlueprintPure, Category = "Store")
+    FText GetText_NONE();
 
 protected:
     virtual void NativeConstruct() override;

@@ -365,7 +365,7 @@ FStructure_ItemInfo UItemDataCreationComponent::CreateHardcodedItemData(int32 It
         ItemInfo.ItemIndex = ItemIndex;
         ItemInfo.ItemName = TEXT("Basic Item");
         ItemInfo.ItemType = EItemType::Consume_HP;
-        ItemInfo.ItemEquipSlot = EItemEquipSlot::None;
+        ItemInfo.ItemEquipSlot = EItemEquipSlot::Consumable;
         ItemInfo.bIsValid = true;
         ItemInfo.bIsStackable = true;
         ItemInfo.StackNumber = 1;

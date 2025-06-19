@@ -13,7 +13,7 @@ UBP_ItemInfo::UBP_ItemInfo()
     bIsValid = false;
     bIsStackable = false;
     ItemType = EItemType::Equip;
-    ItemEquipSlot = EItemEquipSlot::None;
+    ItemEquipSlot = EItemEquipSlot::Consumable;
     RecoveryHP = 0;
     RecoveryMP = 0;
 

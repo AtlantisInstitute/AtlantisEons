@@ -358,7 +358,7 @@ void UEquipmentComponent::UpdateAllEquipmentSlotsUI()
     for (int32 i = 0; i < EquipmentSlots.Num(); ++i)
     {
         EItemEquipSlot SlotType = GetEquipSlotFromIndex(i);
-        if (SlotType != EItemEquipSlot::None)
+        if (SlotType != EItemEquipSlot::Consumable)
         {
             // Update the UI slot with the equipped item (or clear if none)
             UpdateEquipmentSlotUI(SlotType, EquipmentSlots[i]);
@@ -675,10 +675,10 @@ void UEquipmentComponent::EquipInventoryItem(UBP_ItemInfo* ItemInfoRef)
     // Apply equipment hotfixes
     ApplyEquipmentHotfixes(ItemInfoRef, ItemData);
 
-    // Check if the item has a valid equipment slot
-    if (ItemData.ItemEquipSlot == EItemEquipSlot::None)
+    // Check if the item has a valid equipment slot (Consumables are not equippable)
+    if (ItemData.ItemEquipSlot == EItemEquipSlot::Consumable)
     {
-        UE_LOG(LogTemp, Error, TEXT("🔧 ❌ Item %s has no valid equipment slot"), *ItemData.ItemName);
+        UE_LOG(LogTemp, Error, TEXT("🔧 ❌ Item %s is a consumable and cannot be equipped"), *ItemData.ItemName);
         return;
     }
 
@@ -871,10 +871,10 @@ void UEquipmentComponent::EquipInventoryItemWithCharacter(UBP_ItemInfo* ItemInfo
     // Apply equipment hotfixes
     ApplyEquipmentHotfixes(ItemInfoRef, ItemData);
 
-    // Check if the item has a valid equipment slot
-    if (ItemData.ItemEquipSlot == EItemEquipSlot::None)
+    // Check if the item has a valid equipment slot (Consumables are not equippable)
+    if (ItemData.ItemEquipSlot == EItemEquipSlot::Consumable)
     {
-        UE_LOG(LogTemp, Error, TEXT("🔧🔄 ❌ Item %s has no valid equipment slot"), *ItemData.ItemName);
+        UE_LOG(LogTemp, Error, TEXT("🔧🔄 ❌ Item %s is a consumable and cannot be equipped"), *ItemData.ItemName);
         return;
     }
 
@@ -1295,7 +1295,7 @@ EItemEquipSlot UEquipmentComponent::GetEquipSlotFromIndex(int32 SlotIndex) const
         case 3:
             return EItemEquipSlot::Accessory;
         default:
-            return EItemEquipSlot::None;
+            return EItemEquipSlot::Consumable;
     }
 }
 
@@ -1324,7 +1324,7 @@ EItemEquipSlot UEquipmentComponent::DetermineEquipSlot(UBP_ItemInfo* ItemInfo) c
 {
     if (!ItemInfo)
     {
-        return EItemEquipSlot::None;
+        return EItemEquipSlot::Consumable;
     }
     
     // Get item data
@@ -1334,7 +1334,7 @@ EItemEquipSlot UEquipmentComponent::DetermineEquipSlot(UBP_ItemInfo* ItemInfo) c
     
     if (!bFound)
     {
-        return EItemEquipSlot::None;
+        return EItemEquipSlot::Consumable;
     }
     
     // Apply hotfixes and return the determined slot
@@ -1374,6 +1374,8 @@ FString UEquipmentComponent::GetSlotName(EItemEquipSlot EquipSlot) const
 {
     switch (EquipSlot)
     {
+        case EItemEquipSlot::Consumable:
+            return TEXT("Consumable");
         case EItemEquipSlot::Head:
             return TEXT("Head");
         case EItemEquipSlot::Body:

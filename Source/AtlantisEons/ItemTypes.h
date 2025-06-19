@@ -18,7 +18,7 @@ enum class EItemType : uint8
 UENUM(BlueprintType)
 enum class EItemEquipSlot : uint8
 {
-    None        UMETA(DisplayName = "None"),
+    Consumable  UMETA(DisplayName = "Consumable"),
     Head        UMETA(DisplayName = "Head"),
     Body        UMETA(DisplayName = "Body"),
     Weapon      UMETA(DisplayName = "Weapon"),
@@ -100,7 +100,7 @@ struct ATLANTISEONS_API FStructure_ItemInfo : public FTableRowBase
         bIsStackable = false;
         StackNumber = 0;
         ItemType = EItemType::Equip;
-        ItemEquipSlot = EItemEquipSlot::None;
+        ItemEquipSlot = EItemEquipSlot::Consumable;
         RecoveryHP = 0;
         RecoveryMP = 0;
         Damage = 0;

@@ -588,7 +588,7 @@ FStructure_ItemInfo UStoreSystemFix::ExtractItemInfoWithMapping(void* RowData, c
     
     // Extract enum values
     ItemInfo.ItemType = ExtractEnumProperty<EItemType>(RowData, RowStruct, PropertyMapping, TEXT("ItemType"), EItemType::Consume_HP);
-    ItemInfo.ItemEquipSlot = ExtractEnumProperty<EItemEquipSlot>(RowData, RowStruct, PropertyMapping, TEXT("ItemEquipSlot"), EItemEquipSlot::None);
+    ItemInfo.ItemEquipSlot = ExtractEnumProperty<EItemEquipSlot>(RowData, RowStruct, PropertyMapping, TEXT("ItemEquipSlot"), EItemEquipSlot::Consumable);
     
     // Extract stats
     ItemInfo.RecoveryHP = ExtractIntProperty(RowData, RowStruct, PropertyMapping, TEXT("RecoveryHP"), 0);
@@ -758,7 +758,7 @@ T UStoreSystemFix::ExtractEnumProperty(void* RowData, const UScriptStruct* RowSt
             UE_LOG(LogTemp, Verbose, TEXT("   Found ItemEquipSlot = '%s'"), *StringValue);
             
             // Map data table strings to our enum values
-            EItemEquipSlot MappedSlot = EItemEquipSlot::None;
+            EItemEquipSlot MappedSlot = EItemEquipSlot::Consumable;
             if (StringValue == TEXT("Weapon"))
             {
                 MappedSlot = EItemEquipSlot::Weapon;
@@ -775,14 +775,14 @@ T UStoreSystemFix::ExtractEnumProperty(void* RowData, const UScriptStruct* RowSt
             {
                 MappedSlot = EItemEquipSlot::Body; // Map Suit to Body
             }
-            else if (StringValue == TEXT("(INVALID)") || StringValue.IsEmpty())
+            else if (StringValue == TEXT("Consumable") || StringValue == TEXT("(INVALID)") || StringValue.IsEmpty())
             {
-                MappedSlot = EItemEquipSlot::None;
+                MappedSlot = EItemEquipSlot::Consumable;
             }
             else
             {
                 UE_LOG(LogTemp, Warning, TEXT("   Unknown ItemEquipSlot: '%s'"), *StringValue);
-                MappedSlot = EItemEquipSlot::None;
+                MappedSlot = EItemEquipSlot::Consumable;
             }
             
             UE_LOG(LogTemp, Verbose, TEXT("   Mapped '%s' to %d"), *StringValue, static_cast<int32>(MappedSlot));

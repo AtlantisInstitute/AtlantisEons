@@ -56,9 +56,8 @@ void UWBP_StoreItemElement::UpdateItemDisplay()
         FString SlotTypeString;
         switch (ItemInfo.ItemEquipSlot)
         {
-            case EItemEquipSlot::None:
-                SlotTypeString = (ItemInfo.ItemType == EItemType::Consume_HP || ItemInfo.ItemType == EItemType::Consume_MP) ? 
-                    TEXT("Consumable") : TEXT("None");
+            case EItemEquipSlot::Consumable:
+                SlotTypeString = TEXT("Consumable");
                 break;
             case EItemEquipSlot::Weapon:
                 SlotTypeString = TEXT("Weapon");
