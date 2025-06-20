@@ -374,6 +374,10 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
     class UInputAction* BlockAction;
 
+    /** Zoom input action for mouse wheel scrolling */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Input", meta = (AllowPrivateAccess = "true"))
+    class UInputAction* ZoomAction;
+
     // ========== COMBAT STATE (MUST STAY - Blueprint reads these) ==========
     
     /** Combat state flags - Blueprint checks these for UI and logic */
@@ -744,6 +748,9 @@ public:
 
     /** Called when block input is released */
     void ReleaseBlock(const FInputActionValue& Value);
+
+    /** Called for zoom input (mouse wheel) */
+    void Zoom(const FInputActionValue& Value);
     
     // ========== DASH DIRECTION HELPER FUNCTIONS FOR BLUEPRINT ==========
     
@@ -1288,4 +1295,22 @@ public:
 
     /** Perform attack */
     void Attack();
+
+    // ========== CAMERA ZOOM CONFIGURATION ==========
+    
+    /** Minimum zoom distance (closest to character) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom", meta = (ClampMin = "100.0", ClampMax = "2000.0"))
+    float MinZoomDistance = 300.0f;
+    
+    /** Maximum zoom distance (farthest from character) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom", meta = (ClampMin = "100.0", ClampMax = "2000.0"))
+    float MaxZoomDistance = 1500.0f;
+    
+    /** Zoom speed multiplier */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom", meta = (ClampMin = "0.1", ClampMax = "10.0"))
+    float ZoomSpeed = 50.0f;
+    
+    /** Smooth zoom interpolation speed */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom", meta = (ClampMin = "1.0", ClampMax = "20.0"))
+    float ZoomInterpSpeed = 10.0f;
 };

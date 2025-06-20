@@ -602,6 +602,17 @@ void AAtlantisEonsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
         {
             UE_LOG(LogTemp, Error, TEXT("Character - BlockAction is null! Block functionality won't work"));
         }
+
+        // Zoom
+        if (ZoomAction)
+        {
+            EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Triggered, this, &AAtlantisEonsCharacter::Zoom);
+            UE_LOG(LogTemp, Warning, TEXT("Character - Bound Zoom action"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Character - ZoomAction is null! Zoom functionality won't work"));
+        }
     }
     else
     {
@@ -677,6 +688,35 @@ void AAtlantisEonsCharacter::Look(const FInputActionValue& Value)
         // Apply the input to the controller rotation
         AddControllerYawInput(LookAxisVector.X * CameraYawSensitivity);
         AddControllerPitchInput(LookAxisVector.Y * CameraPitchSensitivity);
+    }
+}
+
+void AAtlantisEonsCharacter::Zoom(const FInputActionValue& Value)
+{
+    // Input is a scalar (float) for mouse wheel
+    float ZoomValue = Value.Get<float>();
+    
+    // Always log zoom input to help debug
+    UE_LOG(LogTemp, Warning, TEXT("🔍 ZOOM INPUT RECEIVED: Value=%.2f"), ZoomValue);
+    
+    if (CameraBoom)
+    {
+        // Calculate the new target arm length
+        float CurrentDistance = CameraBoom->TargetArmLength;
+        float NewDistance = CurrentDistance - (ZoomValue * ZoomSpeed);
+        
+        // Clamp the distance to our min/max values
+        NewDistance = FMath::Clamp(NewDistance, MinZoomDistance, MaxZoomDistance);
+        
+        // Apply the new distance
+        CameraBoom->TargetArmLength = NewDistance;
+        
+        UE_LOG(LogTemp, Warning, TEXT("🔍 Camera Zoom Applied: Input=%.2f, Distance: %.1f -> %.1f, Speed=%.1f, Range=[%.1f-%.1f]"), 
+               ZoomValue, CurrentDistance, NewDistance, ZoomSpeed, MinZoomDistance, MaxZoomDistance);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("🔍 ZOOM FAILED: CameraBoom is NULL!"));
     }
 }
 

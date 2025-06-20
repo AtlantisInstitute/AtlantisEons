@@ -201,4 +201,10 @@ private:
     UStaticMeshComponent* GetMeshComponentForSlot(EItemEquipSlot EquipSlot) const;
     FString GetSlotName(EItemEquipSlot EquipSlot) const;
     void ApplyEquipmentHotfixes(UBP_ItemInfo* ItemInfo, FStructure_ItemInfo& ItemData) const;
+    
+    /** Apply weapon loading system (scale, materials, and other configurations) for all weapons */
+    void ApplyWeaponLoadingSystem(UStaticMeshComponent* MeshComponent, int32 ItemIndex, EItemEquipSlot EquipSlot);
+    
+    /** Load and apply standard weapon materials to weapon mesh components */
+    void LoadWeaponMaterials(UStaticMeshComponent* MeshComponent, int32 ItemIndex);
 }; 

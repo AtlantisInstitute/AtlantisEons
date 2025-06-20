@@ -156,6 +156,9 @@ void UEquipmentComponent::EquipItemInSlot(EItemEquipSlot ItemEquipSlot, const TS
                     TargetComponent->SetMaterial(1, MaterialInterface2);
                 }
                 
+                // Apply weapon loading system (scale, materials, and configurations)
+                ApplyWeaponLoadingSystem(TargetComponent, ItemIndex, ItemEquipSlot);
+                
                 UE_LOG(LogTemp, Warning, TEXT("EquipmentComponent: ✅ Successfully equipped mesh in %s slot (Item %d)"), *SlotName, ItemIndex);
             }
             else
@@ -1486,6 +1489,21 @@ void UEquipmentComponent::OnMeshLoadedAsync(UStaticMeshComponent* TargetComponen
         {
             TargetComponent->SetStaticMesh(LoadedMesh);
             TargetComponent->SetVisibility(true);
+            
+            // Apply weapon loading system for async-loaded meshes
+            // Note: We need to determine the EquipSlot from the component
+            EItemEquipSlot EquipSlot = EItemEquipSlot::Consumable;
+            if (OwnerCharacter)
+            {
+                if (TargetComponent == OwnerCharacter->Weapon)
+                    EquipSlot = EItemEquipSlot::Weapon;
+                else if (TargetComponent == OwnerCharacter->Helmet)
+                    EquipSlot = EItemEquipSlot::Head;
+                else if (TargetComponent == OwnerCharacter->Shield)
+                    EquipSlot = EItemEquipSlot::Accessory;
+            }
+            ApplyWeaponLoadingSystem(TargetComponent, ItemIndex, EquipSlot);
+            
             UE_LOG(LogTemp, Log, TEXT("EquipmentComponent: ✅ Async mesh loaded and set for %s slot (Item %d)"), *SlotName, ItemIndex);
         }
         else
@@ -1497,4 +1515,99 @@ void UEquipmentComponent::OnMeshLoadedAsync(UStaticMeshComponent* TargetComponen
     {
         UE_LOG(LogTemp, Warning, TEXT("EquipmentComponent: ❌ Target component null for async mesh load (%s slot, Item %d)"), *SlotName, ItemIndex);
     }
+}
+
+void UEquipmentComponent::ApplyWeaponLoadingSystem(UStaticMeshComponent* MeshComponent, int32 ItemIndex, EItemEquipSlot EquipSlot)
+{
+    if (!MeshComponent)
+    {
+        return;
+    }
+    
+    // Log what item we're processing in the weapon loading system
+    UE_LOG(LogTemp, Warning, TEXT("⚙️ Weapon Loading System: Processing Item Index %d, Slot: %d"), ItemIndex, (int32)EquipSlot);
+    
+    // Apply weapon loading system based on equipment slot
+    switch (EquipSlot)
+    {
+        case EItemEquipSlot::Weapon:
+        {
+            FVector NewScale;
+            
+            // Apply smaller scaling for items in the range 11-46
+            if (ItemIndex >= 11 && ItemIndex <= 46)
+            {
+                // Smaller scaling for items in range 11-46 (12% instead of 25%)
+                NewScale = FVector(0.12f, 0.12f, 0.12f);
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Weapon Loading System: Applied 12%% scaling to Item Index %d (Range 11-46): Scale set to %f"), ItemIndex, NewScale.X);
+            }
+            else
+            {
+                // Standard 25% scaling for other weapons
+                NewScale = FVector(0.25f, 0.25f, 0.25f);
+                UE_LOG(LogTemp, Warning, TEXT("🗡️ Weapon Loading System: Applied 25%% scaling to Item Index %d: Scale set to %f"), ItemIndex, NewScale.X);
+            }
+            
+            MeshComponent->SetRelativeScale3D(NewScale);
+            
+            // Load and apply standard weapon materials to all weapons
+            LoadWeaponMaterials(MeshComponent, ItemIndex);
+            
+            break;
+        }
+        
+        case EItemEquipSlot::Head:
+        case EItemEquipSlot::Body:
+        case EItemEquipSlot::Accessory:
+        case EItemEquipSlot::Consumable:
+        default:
+        {
+            // For non-weapon items, use default scale (no weapon loading system applied)
+            MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+            UE_LOG(LogTemp, Log, TEXT("🔧 Weapon Loading System: Applied default scaling to Item Index %d (Slot: %d): Scale set to 1.0"), ItemIndex, (int32)EquipSlot);
+            break;
+        }
+    }
+}
+
+void UEquipmentComponent::LoadWeaponMaterials(UStaticMeshComponent* MeshComponent, int32 ItemIndex)
+{
+    if (!MeshComponent)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("⚠️ Weapon Loading System: MeshComponent is null for Item %d"), ItemIndex);
+        return;
+    }
+
+    // Define the standard weapon material paths for the loading system
+    TArray<FString> MaterialPaths = {
+        TEXT("/Game/AtlantisEons/Sources/Material/Swords/Materials/M_gold"),             // Element 0
+        TEXT("/Game/AtlantisEons/Sources/Material/Swords/Materials/M_gold_silver"),      // Element 1
+        TEXT("/Game/AtlantisEons/Sources/Material/Swords/Materials/M_gold_blue"),        // Element 2
+        TEXT("/Game/AtlantisEons/Sources/Material/Swords/Materials/M_chrome_black"),     // Element 3
+        TEXT("/Game/AtlantisEons/Sources/Material/Swords/Materials/M_chrome_white")      // Element 4
+    };
+
+    // Apply each material to its corresponding material slot
+    for (int32 MaterialIndex = 0; MaterialIndex < MaterialPaths.Num(); MaterialIndex++)
+    {
+        // Load the material
+        UMaterialInterface* LoadedMaterial = Cast<UMaterialInterface>(
+            StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, *MaterialPaths[MaterialIndex])
+        );
+
+        if (LoadedMaterial)
+        {
+            // Apply the material to the mesh component
+            MeshComponent->SetMaterial(MaterialIndex, LoadedMaterial);
+            UE_LOG(LogTemp, Log, TEXT("✅ Weapon Loading System: Loaded material %d (%s) for weapon Item %d"), 
+                   MaterialIndex, *MaterialPaths[MaterialIndex], ItemIndex);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("❌ Weapon Loading System: Failed to load material %d (%s) for weapon Item %d"), 
+                   MaterialIndex, *MaterialPaths[MaterialIndex], ItemIndex);
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("🎨 Weapon Loading System: Successfully loaded all materials for Item Index %d"), ItemIndex);
 } 
